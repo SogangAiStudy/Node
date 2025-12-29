@@ -1,0 +1,238 @@
+// Bottleneck Radar - Database Schema
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User model - authenticated users
+model User {
+  id        String   @id @default(cuid())
+  name      String?
+  email     String   @unique
+  image     String?
+  createdAt DateTime @default(now())
+
+  // Relations
+  projectMemberships ProjectMember[]
+  ownedNodes         Node[]          @relation("NodeOwner")
+  createdRequests    Request[]       @relation("RequestCreator")
+  assignedRequests   Request[]       @relation("RequestAssignee")
+  approvedRequests   Request[]       @relation("RequestApprover")
+  activityLogs       ActivityLog[]
+  accounts           Account[]
+  sessions           Session[]
+
+  @@map("users")
+}
+
+// NextAuth Account model
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+// NextAuth Session model
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+// NextAuth Verification Token model
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// Project model
+model Project {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+
+  // Relations
+  members      ProjectMember[]
+  nodes        Node[]
+  edges        Edge[]
+  requests     Request[]
+  activityLogs ActivityLog[]
+
+  @@map("projects")
+}
+
+// Project membership with team assignment
+model ProjectMember {
+  id        String   @id @default(cuid())
+  projectId String
+  userId    String
+  team      String?  // Team tag (nullable)
+  createdAt DateTime @default(now())
+
+  // Relations
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@map("project_members")
+}
+
+// Node types enum
+enum NodeType {
+  TASK
+  DECISION
+  BLOCKER
+  INFOREQ
+}
+
+// Manual status enum (user-set status)
+enum ManualStatus {
+  TODO
+  DOING
+  DONE
+}
+
+// Node model - represents work items in the graph
+model Node {
+  id           String       @id @default(cuid())
+  projectId    String
+  title        String
+  description  String?      @db.Text
+  type         NodeType     @default(TASK)
+  manualStatus ManualStatus @default(TODO)
+  ownerId      String?
+  team         String? // Team tag (nullable)
+  priority     Int          @default(3) // 1=highest, 5=lowest
+  dueAt        DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  // Relations
+  project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  owner          User?     @relation("NodeOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  edgesFrom      Edge[]    @relation("EdgeFrom")
+  edgesTo        Edge[]    @relation("EdgeTo")
+  linkedRequests Request[]
+
+  @@index([projectId])
+  @@index([ownerId])
+  @@map("nodes")
+}
+
+// Edge relation types
+enum EdgeRelation {
+  DEPENDS_ON // A depends on B (A cannot start until B is done)
+  HANDOFF_TO // A hands off to B
+  NEEDS_INFO_FROM // A needs information from B
+  APPROVAL_BY // A needs approval by B
+}
+
+// Edge model - represents relationships between nodes
+model Edge {
+  id         String       @id @default(cuid())
+  projectId  String
+  fromNodeId String
+  toNodeId   String
+  relation   EdgeRelation
+  createdAt  DateTime     @default(now())
+
+  // Relations
+  project  Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  fromNode Node    @relation("EdgeFrom", fields: [fromNodeId], references: [id], onDelete: Cascade)
+  toNode   Node    @relation("EdgeTo", fields: [toNodeId], references: [id], onDelete: Cascade)
+
+  // Prevent duplicate edges
+  @@unique([projectId, fromNodeId, toNodeId, relation])
+  @@index([projectId])
+  @@index([fromNodeId])
+  @@index([toNodeId])
+  @@map("edges")
+}
+
+// Request status enum
+enum RequestStatus {
+  OPEN // Created, waiting for response
+  RESPONDED // Draft response provided
+  APPROVED // Response approved and finalized
+  CLOSED // Request closed
+}
+
+// Request model - represents information requests
+model Request {
+  id            String        @id @default(cuid())
+  projectId     String
+  linkedNodeId  String
+  question      String        @db.Text
+  fromUserId    String
+  toUserId      String? // Null for team requests until claimed
+  toTeam        String? // Null for personal requests
+  status        RequestStatus @default(OPEN)
+  responseDraft String?       @db.Text
+  responseFinal String?       @db.Text
+  approvedById  String?
+  approvedAt    DateTime?
+  claimedAt     DateTime? // When team request was claimed
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Relations
+  project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  linkedNode Node    @relation(fields: [linkedNodeId], references: [id], onDelete: Cascade)
+  fromUser   User    @relation("RequestCreator", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser     User?   @relation("RequestAssignee", fields: [toUserId], references: [id], onDelete: SetNull)
+  approvedBy User?   @relation("RequestApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@index([linkedNodeId])
+  @@index([fromUserId])
+  @@index([toUserId])
+  @@index([status])
+  @@map("requests")
+}
+
+// Activity log for audit trail
+model ActivityLog {
+  id         String   @id @default(cuid())
+  projectId  String
+  userId     String
+  action     String // e.g., "CREATE_NODE", "UPDATE_NODE", "DELETE_EDGE", "APPROVE_REQUEST"
+  entityType String // e.g., "NODE", "EDGE", "REQUEST"
+  entityId   String
+  details    Json? // Additional details in JSON format
+  createdAt  DateTime @default(now())
+
+  // Relations
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("activity_logs")
+}

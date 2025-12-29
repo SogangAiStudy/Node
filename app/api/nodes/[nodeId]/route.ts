@@ -1,0 +1,158 @@
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/db/prisma";
+import { requireAuth, requireProjectMembership } from "@/lib/utils/auth";
+import { createActivityLog } from "@/lib/utils/activity-log";
+import { z } from "zod";
+import { NodeType, ManualStatus } from "@prisma/client";
+
+const UpdateNodeSchema = z.object({
+  title: z.string().min(1).max(200).optional(),
+  description: z.string().optional(),
+  type: z.nativeEnum(NodeType).optional(),
+  manualStatus: z.nativeEnum(ManualStatus).optional(),
+  ownerId: z.string().nullable().optional(),
+  team: z.string().nullable().optional(),
+  priority: z.number().int().min(1).max(5).optional(),
+  dueAt: z.string().datetime().nullable().optional(),
+});
+
+// PATCH /api/nodes/[nodeId] - Update node
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ nodeId: string }> }
+) {
+  try {
+    const user = await requireAuth();
+    const { nodeId } = await params;
+
+    const body = await request.json();
+    const validated = UpdateNodeSchema.parse(body);
+
+    // Get existing node
+    const existingNode = await prisma.node.findUnique({
+      where: { id: nodeId },
+    });
+
+    if (!existingNode) {
+      return NextResponse.json({ error: "Node not found" }, { status: 404 });
+    }
+
+    await requireProjectMembership(existingNode.projectId, user.id);
+
+    // If ownerId provided, verify they are a project member
+    if (validated.ownerId !== undefined && validated.ownerId !== null) {
+      await requireProjectMembership(existingNode.projectId, validated.ownerId);
+    }
+
+    // Update node
+    const node = await prisma.node.update({
+      where: { id: nodeId },
+      data: {
+        ...(validated.title !== undefined && { title: validated.title }),
+        ...(validated.description !== undefined && { description: validated.description }),
+        ...(validated.type !== undefined && { type: validated.type }),
+        ...(validated.manualStatus !== undefined && { manualStatus: validated.manualStatus }),
+        ...(validated.ownerId !== undefined && { ownerId: validated.ownerId }),
+        ...(validated.team !== undefined && { team: validated.team }),
+        ...(validated.priority !== undefined && { priority: validated.priority }),
+        ...(validated.dueAt !== undefined && {
+          dueAt: validated.dueAt ? new Date(validated.dueAt) : null,
+        }),
+      },
+      include: {
+        owner: {
+          select: {
+            name: true,
+          },
+        },
+      },
+    });
+
+    // Log activity
+    await createActivityLog({
+      projectId: existingNode.projectId,
+      userId: user.id,
+      action: "UPDATE_NODE",
+      entityType: "NODE",
+      entityId: node.id,
+      details: validated,
+    });
+
+    return NextResponse.json({
+      id: node.id,
+      projectId: node.projectId,
+      title: node.title,
+      description: node.description,
+      type: node.type,
+      manualStatus: node.manualStatus,
+      ownerId: node.ownerId,
+      ownerName: node.owner?.name || null,
+      team: node.team,
+      priority: node.priority,
+      dueAt: node.dueAt?.toISOString() || null,
+      createdAt: node.createdAt.toISOString(),
+      updatedAt: node.updatedAt.toISOString(),
+    });
+  } catch (error) {
+    console.error("PATCH /api/nodes/[nodeId] error:", error);
+
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: "Invalid input", details: error.errors }, { status: 400 });
+    }
+
+    if (error instanceof Error && error.message === "Not a member of this project") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    return NextResponse.json({ error: "Failed to update node" }, { status: 500 });
+  }
+}
+
+// DELETE /api/nodes/[nodeId] - Delete node (cascade edges and requests)
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ nodeId: string }> }
+) {
+  try {
+    const user = await requireAuth();
+    const { nodeId } = await params;
+
+    // Get existing node
+    const existingNode = await prisma.node.findUnique({
+      where: { id: nodeId },
+    });
+
+    if (!existingNode) {
+      return NextResponse.json({ error: "Node not found" }, { status: 404 });
+    }
+
+    await requireProjectMembership(existingNode.projectId, user.id);
+
+    // Delete node (cascade will handle edges and requests)
+    await prisma.node.delete({
+      where: { id: nodeId },
+    });
+
+    // Log activity
+    await createActivityLog({
+      projectId: existingNode.projectId,
+      userId: user.id,
+      action: "DELETE_NODE",
+      entityType: "NODE",
+      entityId: nodeId,
+      details: {
+        title: existingNode.title,
+      },
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("DELETE /api/nodes/[nodeId] error:", error);
+
+    if (error instanceof Error && error.message === "Not a member of this project") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    return NextResponse.json({ error: "Failed to delete node" }, { status: 500 });
+  }
+}
