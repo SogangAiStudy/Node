@@ -41,7 +41,7 @@ Create a PostgreSQL database (locally or use a service like Supabase/Neon):
 
 ```bash
 # If using local PostgreSQL
-createdb bottleneck_radar
+createdb node_db
 ```
 
 ### 3. Configure Environment Variables
