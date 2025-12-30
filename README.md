@@ -1,103 +1,150 @@
-# Node
+# Node (Bottleneck Radar) — Local Run Guide
 
-A Node Graph-based collaboration tool that automatically surfaces bottlenecks and provides a "what to do now" view, with an official Request → Respond → Approve workflow.
+A Node Graph-based collaboration tool that automatically surfaces bottlenecks and provides a **Request → Respond → Approve** workflow.
 
-## Features
+This README is written so you can run the project **only by following it** (Windows-first, with macOS/Linux notes).
 
-- **Graph View**: Visual workflow with nodes and edges, auto-computed status (BLOCKED/WAITING/TODO/DOING/DONE)
-- **Now View**: Personal queue showing "My Todos", "My Waiting", and "I'm Blocking Others"
-- **Requests Inbox**: Structured info request workflow with approval mechanism
-- **Status Auto-Derivation**: Automatically detects blocked and waiting states based on dependencies
-- **Cycle Detection**: Prevents circular dependencies in DEPENDS_ON relationships
+---
 
-## Tech Stack
+## 0) What you need (versions matter)
 
-- **Frontend**: Next.js 15 (App Router), React, TypeScript, TailwindCSS
-- **UI Components**: shadcn/ui, React Flow
-- **State Management**: TanStack Query
-- **Backend**: Next.js API Routes
-- **Database**: PostgreSQL with Prisma ORM
-- **Authentication**: NextAuth.js v5 with Google OAuth
-- **Deployment**: Vercel-compatible
+### Node.js (IMPORTANT)
+Prisma `v7.2.0` requires **Node.js 20.19+ or 22.12+ or 24+**.
 
-## Prerequisites
+✅ Recommended: **Node.js 22.12+ (LTS)**  
+Check:
+```bash
+node -v
+npm -v
+```
 
-- Node.js 18+ and npm
-- PostgreSQL database (local or cloud)
-- Google OAuth credentials (for authentication)
+If you see `v22.11.x` (or older), Prisma install will fail with “only supports Node.js versions 20.19+, 22.12+, 24+”.
 
-## Local Development Setup
+### PostgreSQL
+Any recent PostgreSQL works (you used `18.1`, which is OK).  
+Check:
+```bash
+psql --version
+createdb --version
+```
 
-### 1. Clone and Install Dependencies
+---
+
+## 1) Install PostgreSQL (Windows)
+
+1. Install PostgreSQL from the official installer (EDB)
+2. During install, make sure **Command Line Tools** are included (so `psql`, `createdb` exist).
+3. After installation, open a **new** PowerShell/Terminal and verify:
+```bash
+psql --version
+createdb --version
+```
+
+> If `createdb` is “not recognized”, add PostgreSQL `bin` to PATH (usually `C:\Program Files\PostgreSQL\<version>\bin`) and reopen terminal.
+
+---
+
+## 2) Clone & install dependencies
 
 ```bash
+git clone <YOUR_REPO_URL>
+cd Node
 npm install
+```
+
+If your project requires extra dev deps (some setups do), run:
+```bash
 npm install -D tsx @types/dagre
 ```
 
-### 2. Set Up Database
+---
 
-Create a PostgreSQL database (locally or use a service like Supabase/Neon):
+## 3) Create local database (PostgreSQL)
+
+### 3-1) Create DB (recommended: use postgres user)
+Create a database named `node_db`:
 
 ```bash
-# If using local PostgreSQL
-createdb node_db
+createdb -U postgres node_db
 ```
 
-### 3. Configure Environment Variables
+If it says the database already exists, that’s fine.
 
-Copy the example environment file and fill in your values:
+### 3-2) Test DB connection
+```bash
+psql -U postgres -d node_db -c "SELECT 1;"
+```
 
+---
+
+## 4) Configure environment variables
+
+Copy env file:
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env` with your actual values:
+> Windows PowerShell also supports `cp` as an alias. If not, use:
+> `copy .env.example .env`
+
+Edit `.env` and set at least:
 
 ```env
-# Database
-DATABASE_URL="postgresql://user:password@localhost:5432/bottleneck_radar?schema=public"
+# Database (example)
+DATABASE_URL="postgresql://postgres:<YOUR_POSTGRES_PASSWORD>@localhost:5432/node_db?schema=public"
 
 # NextAuth
 NEXTAUTH_SECRET="generate-with: openssl rand -base64 32"
 NEXTAUTH_URL="http://localhost:3000"
 
-# Google OAuth (get from Google Cloud Console)
+# Google OAuth (optional for local; required if you use Google login)
 GOOGLE_CLIENT_ID="your-google-client-id"
 GOOGLE_CLIENT_SECRET="your-google-client-secret"
 ```
 
-### 4. Set Up Google OAuth
+### Generate NEXTAUTH_SECRET
+- macOS/Linux:
+```bash
+openssl rand -base64 32
+```
+- Windows (PowerShell):
+```powershell
+[Convert]::ToBase64String((1..32 | ForEach-Object {Get-Random -Max 256}))
+```
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project or select an existing one
-3. Enable Google+ API
-4. Go to "Credentials" and create OAuth 2.0 Client ID
-5. Add authorized redirect URI: `http://localhost:3000/api/auth/callback/google`
-6. Copy the Client ID and Client Secret to your `.env` file
+---
 
-### 5. Initialize Database
+## 5) Initialize DB schema + seed
+
+Run these in order:
 
 ```bash
-# Generate Prisma Client
+# 1) Generate Prisma Client
 npm run db:generate
 
-# Push schema to database
+# 2) Sync schema to database (dev)
 npm run db:push
 
-# Seed with sample data
+# 3) Insert sample data
 npm run db:seed
 ```
 
-### 6. Run Development Server
+You should see logs like “Seed completed successfully!”.
+
+---
+
+## 6) Run the development server
 
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open:
+- http://localhost:3000
 
-## Database Management
+---
+
+## 7) Database management scripts
 
 ```bash
 # Generate Prisma Client after schema changes
@@ -106,7 +153,7 @@ npm run db:generate
 # Push schema changes to database (dev)
 npm run db:push
 
-# Create and run migrations (production)
+# Create and run migrations (production-style)
 npm run db:migrate
 
 # Seed database with sample data
@@ -116,117 +163,64 @@ npm run db:seed
 npm run db:studio
 ```
 
-## Deployment to Vercel
+---
 
-### 1. Set Up PostgreSQL Database
+## Optional: Google OAuth setup (only if you use Google login)
 
-Use a cloud PostgreSQL provider:
-- **Supabase** (recommended): https://supabase.com
-- **Neon**: https://neon.tech
-- **Railway**: https://railway.app
+1. Go to Google Cloud Console → APIs & Services → Credentials
+2. Create OAuth 2.0 Client ID
+3. Add redirect URI:
+   - Local: `http://localhost:3000/api/auth/callback/google`
+4. Put Client ID/Secret into `.env`
 
-### 2. Deploy to Vercel
-
-```bash
-# Install Vercel CLI
-npm i -g vercel
-
-# Deploy
-vercel
-```
-
-### 3. Configure Environment Variables in Vercel
-
-In your Vercel project dashboard, add the following environment variables:
-
-- `DATABASE_URL`: Your PostgreSQL connection string
-- `NEXTAUTH_SECRET`: Generate with `openssl rand -base64 32`
-- `NEXTAUTH_URL`: Your production URL (e.g., `https://your-app.vercel.app`)
-- `GOOGLE_CLIENT_ID`: Your Google OAuth Client ID
-- `GOOGLE_CLIENT_SECRET`: Your Google OAuth Client Secret
-
-**Important**: Update your Google OAuth settings:
-- Add production redirect URI: `https://your-app.vercel.app/api/auth/callback/google`
-
-### 4. Run Database Migrations
-
-After deployment, run migrations:
-
-```bash
-# Connect to your production database
-DATABASE_URL="your-production-db-url" npx prisma migrate deploy
-
-# Optionally seed data
-DATABASE_URL="your-production-db-url" npm run db:seed
-```
-
-## Core Concepts
-
-### Node Types
-
-- **TASK**: Regular work item
-- **DECISION**: Requires decision making
-- **BLOCKER**: Represents a blocking issue
-- **INFOREQ**: Information request needed
-
-### Edge Relations
-
-- **DEPENDS_ON**: Node A depends on Node B (A waits for B to complete)
-- **HANDOFF_TO**: Work handoff relationship
-- **NEEDS_INFO_FROM**: Information dependency
-- **APPROVAL_BY**: Requires approval
-
-### Status Computation
-
-Computed status follows this priority:
-
-1. **BLOCKED**: Has DEPENDS_ON edge to non-DONE node
-2. **WAITING**: Has OPEN/RESPONDED request OR APPROVAL_BY edge without approved request
-3. Otherwise: Returns manual status (TODO/DOING/DONE)
-
-### Request Workflow
-
-1. **Create**: User creates a request linked to a node
-2. **Respond**: Assignee provides a draft response
-3. **Claim** (for team requests): Team member claims ownership
-4. **Approve**: Assignee finalizes and approves the response
-5. **Close**: Request can be closed at any time
-
-## Sample Users (Development)
-
-The seed script creates three test users:
-
-- alice@example.com (Engineering team)
-- bob@example.com (Design team)
-- charlie@example.com (Marketing team)
+---
 
 ## Troubleshooting
 
-### Database Connection Issues
-
-- Verify `DATABASE_URL` is correct
-- Ensure PostgreSQL is running
-- Check firewall/network settings
-
-### OAuth Issues
-
-- Verify Google OAuth redirect URIs match your environment
-- Check Client ID and Secret are correct
-- Ensure Google+ API is enabled
-
-### Build Errors
-
+### A) Prisma EBADENGINE / “Prisma only supports Node.js versions …”
+✅ Fix: upgrade Node to **22.12+** (or 20.19+/24+), then reinstall:
 ```bash
-# Clear Next.js cache
-rm -rf .next
-
-# Regenerate Prisma Client
-npm run db:generate
-
-# Rebuild
-npm run build
+node -v
+rm -rf node_modules package-lock.json
+npm install
+```
+Windows:
+```bat
+rmdir /s /q node_modules
+del /f /q package-lock.json
+npm install
 ```
 
-## License
+### B) `createdb node_db` asks password and fails for user like `wjddb`
+By default, `createdb` tries your OS username as DB role. Use postgres explicitly:
+```bash
+createdb -U postgres node_db
+```
 
-MIT
+### C) `createdb` / `psql` not recognized
+PostgreSQL `bin` not in PATH. Add:
+`C:\Program Files\PostgreSQL\<version>\bin`  
+Then reopen terminal.
+
+### D) Next.js warning about “multiple lockfiles / wrong workspace root”
+If you see something like:
+- selected root = `C:\Users\<you>\package-lock.json`
+- detected additional lockfile in your repo
+
+✅ Fix: remove the unintended lockfile in your home directory if it’s not needed:
+```bat
+del C:\Users\<YOU>\package-lock.json
+```
+Then run `npm run dev` again.
+
+### E) Weird broken Korean text in errors (PowerShell encoding)
+Use Windows Terminal/PowerShell 7, or set UTF-8:
+```powershell
+chcp 65001
+```
+
+---
+
+## Notes on “push” vs “migrate”
+- `db:push` is convenient for **local dev** (no migration history)
+- `db:migrate` is recommended for **production/team workflows** (keeps migration history)
