@@ -9,23 +9,23 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
   const params = useParams();
   const projectId = params.projectId as string;
 
-  const currentTab = pathname.includes("/graph")
-    ? "graph"
-    : pathname.includes("/now")
-      ? "now"
+  const currentTab = pathname.includes("/now")
+    ? "now"
+    : pathname.includes("/graph")
+      ? "graph"
       : pathname.includes("/inbox")
         ? "inbox"
-        : "graph";
+        : "now";
 
   return (
     <div className="container mx-auto px-4 py-8">
       <Tabs value={currentTab} className="mb-6">
         <TabsList>
-          <Link href={`/projects/${projectId}/graph`}>
-            <TabsTrigger value="graph">Graph</TabsTrigger>
-          </Link>
           <Link href={`/projects/${projectId}/now`}>
             <TabsTrigger value="now">Now</TabsTrigger>
+          </Link>
+          <Link href={`/projects/${projectId}/graph`}>
+            <TabsTrigger value="graph">Graph</TabsTrigger>
           </Link>
           <Link href={`/projects/${projectId}/inbox`}>
             <TabsTrigger value="inbox">Inbox</TabsTrigger>

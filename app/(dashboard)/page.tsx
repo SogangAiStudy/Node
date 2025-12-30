@@ -42,7 +42,7 @@ export default function DashboardPage() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {data?.projects.map((project) => (
-            <Link key={project.id} href={`/projects/${project.id}/graph`}>
+            <Link key={project.id} href={`/projects/${project.id}/now`}>
               <Card className="transition-shadow hover:shadow-md">
                 <CardHeader>
                   <CardTitle>{project.name}</CardTitle>

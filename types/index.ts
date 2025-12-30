@@ -1,5 +1,8 @@
 import { NodeType, ManualStatus, EdgeRelation, RequestStatus } from "@prisma/client";
 
+// Export Prisma types for convenience
+export { type NodeType, type ManualStatus, type EdgeRelation, type RequestStatus };
+
 // Computed status (derived from graph state)
 export type ComputedStatus = "BLOCKED" | "WAITING" | "TODO" | "DOING" | "DONE";
 
