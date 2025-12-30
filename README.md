@@ -1,27 +1,61 @@
-# Node (Bottleneck Radar) — Local Run Guide
+# Node (Bottleneck Radar) — Node Graph Collaboration Tool
 
-A Node Graph-based collaboration tool that automatically surfaces bottlenecks and provides a **Request → Respond → Approve** workflow.
-
-This README is written so you can run the project **only by following it** (Windows-first, with macOS/Linux notes).
+A **Node Graph-based collaboration tool** that automatically surfaces bottlenecks and provides a **“what to do now”** view, with an official **Request → Respond → Approve** workflow.
 
 ---
 
-## 0) What you need (versions matter)
+## Project Overview
 
-### Node.js (IMPORTANT)
+### Purpose
+In collaboration, work often stalls because:
+- It’s unclear **where the bottleneck is** (what is blocked by what),
+- And unclear whether an answer is **official/final** or just a draft.
+
+**Node** models work as **Nodes + Edges (relations)** and derives status automatically so you can instantly see:
+- What you should do **now**
+- What you are **waiting on**
+- Who you are **blocking**
+
+### Key Features
+- **Graph View**: Visual workflow with nodes and edges, auto-computed status (**BLOCKED / WAITING / TODO / DOING / DONE**)
+- **Now View**: Personal queue showing **My Todos**, **My Waiting**, and **I'm Blocking Others**
+- **Requests Inbox**: Structured info request workflow with an approval mechanism
+- **Status Auto-Derivation**: Detects blocked/waiting states based on dependencies
+- **Cycle Detection**: Prevents circular dependencies in `DEPENDS_ON` relationships
+
+### Tech Stack
+- **Frontend**: Next.js (App Router), React, TypeScript, TailwindCSS
+- **UI**: shadcn/ui, React Flow
+- **State**: TanStack Query
+- **Backend**: Next.js API Routes
+- **DB**: PostgreSQL + Prisma ORM
+- **Auth**: NextAuth.js (Google OAuth optional for local)
+- **Deployment**: Vercel-compatible
+
+---
+
+## Quick Start (Run Locally)
+
+This guide is written so you can run the project **only by following this README**.
+
+### Requirements (versions matter)
+
+#### 1) Node.js (IMPORTANT)
 Prisma `v7.2.0` requires **Node.js 20.19+ or 22.12+ or 24+**.
 
-✅ Recommended: **Node.js 22.12+ (LTS)**  
+✅ Recommended: **Node.js 22.12+ (LTS)**
+
 Check:
 ```bash
 node -v
 npm -v
 ```
 
-If you see `v22.11.x` (or older), Prisma install will fail with “only supports Node.js versions 20.19+, 22.12+, 24+”.
+> If you’re on `v22.11.x` (or older), `npm install` will fail for Prisma with an engine/version error.
 
-### PostgreSQL
-Any recent PostgreSQL works (you used `18.1`, which is OK).  
+#### 2) PostgreSQL
+Any recent PostgreSQL works (you used `18.1`, which is OK).
+
 Check:
 ```bash
 psql --version
@@ -32,15 +66,23 @@ createdb --version
 
 ## 1) Install PostgreSQL (Windows)
 
-1. Install PostgreSQL from the official installer (EDB)
-2. During install, make sure **Command Line Tools** are included (so `psql`, `createdb` exist).
-3. After installation, open a **new** PowerShell/Terminal and verify:
+1) Install PostgreSQL using the official Windows installer (EDB).
+2) During install, ensure **Command Line Tools** are included (so `psql`, `createdb` are available).
+3) Open a **new** terminal and verify:
 ```bash
 psql --version
 createdb --version
 ```
 
-> If `createdb` is “not recognized”, add PostgreSQL `bin` to PATH (usually `C:\Program Files\PostgreSQL\<version>\bin`) and reopen terminal.
+### If `createdb` / `psql` is “not recognized”
+Add PostgreSQL `bin` to PATH (common path):
+- `C:\Program Files\PostgreSQL\<version>\bin`
+
+Then reopen terminal and re-check:
+```bash
+where psql
+where createdb
+```
 
 ---
 
@@ -52,16 +94,13 @@ cd Node
 npm install
 ```
 
-If your project requires extra dev deps (some setups do), run:
-```bash
-npm install -D tsx @types/dagre
-```
+> If you get Windows `EPERM` while deleting/installing, see **Troubleshooting → EPERM**.
 
 ---
 
 ## 3) Create local database (PostgreSQL)
 
-### 3-1) Create DB (recommended: use postgres user)
+### 3-1) Create DB
 Create a database named `node_db`:
 
 ```bash
@@ -79,22 +118,24 @@ psql -U postgres -d node_db -c "SELECT 1;"
 
 ## 4) Configure environment variables
 
-Copy env file:
+Copy env:
 ```bash
 cp .env.example .env
 ```
 
-> Windows PowerShell also supports `cp` as an alias. If not, use:
-> `copy .env.example .env`
+Windows alternative:
+```bat
+copy .env.example .env
+```
 
 Edit `.env` and set at least:
 
 ```env
-# Database (example)
+# Database
 DATABASE_URL="postgresql://postgres:<YOUR_POSTGRES_PASSWORD>@localhost:5432/node_db?schema=public"
 
-# NextAuth
-NEXTAUTH_SECRET="generate-with: openssl rand -base64 32"
+# NextAuth (local dev)
+NEXTAUTH_SECRET="generate-with-openssl-or-powershell"
 NEXTAUTH_URL="http://localhost:3000"
 
 # Google OAuth (optional for local; required if you use Google login)
@@ -103,33 +144,34 @@ GOOGLE_CLIENT_SECRET="your-google-client-secret"
 ```
 
 ### Generate NEXTAUTH_SECRET
-- macOS/Linux:
+macOS/Linux:
 ```bash
 openssl rand -base64 32
 ```
-- Windows (PowerShell):
+
+Windows (PowerShell):
 ```powershell
 [Convert]::ToBase64String((1..32 | ForEach-Object {Get-Random -Max 256}))
 ```
 
 ---
 
-## 5) Initialize DB schema + seed
+## 5) Initialize the database
 
 Run these in order:
 
 ```bash
-# 1) Generate Prisma Client
+# Generate Prisma Client
 npm run db:generate
 
-# 2) Sync schema to database (dev)
+# Push schema to database (dev sync)
 npm run db:push
 
-# 3) Insert sample data
+# Seed with sample data
 npm run db:seed
 ```
 
-You should see logs like “Seed completed successfully!”.
+You should see: `Seed completed successfully!`
 
 ---
 
@@ -144,7 +186,7 @@ Open:
 
 ---
 
-## 7) Database management scripts
+## Database Management (scripts)
 
 ```bash
 # Generate Prisma Client after schema changes
@@ -167,32 +209,41 @@ npm run db:studio
 
 ## Optional: Google OAuth setup (only if you use Google login)
 
-1. Go to Google Cloud Console → APIs & Services → Credentials
-2. Create OAuth 2.0 Client ID
-3. Add redirect URI:
-   - Local: `http://localhost:3000/api/auth/callback/google`
-4. Put Client ID/Secret into `.env`
+1) Google Cloud Console → APIs & Services → Credentials  
+2) Create OAuth 2.0 Client ID  
+3) Add Authorized redirect URI (local):
+- `http://localhost:3000/api/auth/callback/google`
+4) Put the Client ID/Secret into `.env`
 
 ---
 
 ## Troubleshooting
 
-### A) Prisma EBADENGINE / “Prisma only supports Node.js versions …”
-✅ Fix: upgrade Node to **22.12+** (or 20.19+/24+), then reinstall:
+### A) Prisma engine/version error (EBADENGINE)
+Symptom:
+- Prisma says Node must be `20.19+ / 22.12+ / 24+`
+
+Fix:
 ```bash
 node -v
+```
+Upgrade Node, then reinstall:
+- macOS/Linux:
+```bash
 rm -rf node_modules package-lock.json
 npm install
 ```
-Windows:
+- Windows:
 ```bat
 rmdir /s /q node_modules
 del /f /q package-lock.json
 npm install
 ```
 
-### B) `createdb node_db` asks password and fails for user like `wjddb`
-By default, `createdb` tries your OS username as DB role. Use postgres explicitly:
+### B) `createdb node_db` fails for user like your Windows username
+By default `createdb` tries your OS username as a DB role, which usually doesn’t exist.
+
+Fix:
 ```bash
 createdb -U postgres node_db
 ```
@@ -202,25 +253,32 @@ PostgreSQL `bin` not in PATH. Add:
 `C:\Program Files\PostgreSQL\<version>\bin`  
 Then reopen terminal.
 
-### D) Next.js warning about “multiple lockfiles / wrong workspace root”
-If you see something like:
-- selected root = `C:\Users\<you>\package-lock.json`
-- detected additional lockfile in your repo
+### D) Windows `EPERM` while removing node_modules
+Close VSCode/terminals that might lock files, then:
+```bat
+taskkill /F /IM node.exe 2>nul
+rmdir /s /q node_modules
+```
+If still stuck:
+```bat
+npx rimraf node_modules
+```
+Reboot as a last resort.
 
-✅ Fix: remove the unintended lockfile in your home directory if it’s not needed:
+### E) Next.js warning: “multiple lockfiles / wrong workspace root”
+If Next picks something like `C:\Users\<you>\package-lock.json` as the root, remove that unintended lockfile (if not needed):
 ```bat
 del C:\Users\<YOU>\package-lock.json
 ```
-Then run `npm run dev` again.
 
-### E) Weird broken Korean text in errors (PowerShell encoding)
-Use Windows Terminal/PowerShell 7, or set UTF-8:
+### F) PowerShell shows broken Korean characters in Postgres errors
+It’s usually console encoding. You can switch to UTF-8:
 ```powershell
 chcp 65001
 ```
 
 ---
 
-## Notes on “push” vs “migrate”
-- `db:push` is convenient for **local dev** (no migration history)
+## Notes: `db:push` vs `db:migrate`
+- `db:push` is convenient for **local dev** (fast, no migration history)
 - `db:migrate` is recommended for **production/team workflows** (keeps migration history)
