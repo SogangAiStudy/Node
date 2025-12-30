@@ -172,7 +172,18 @@ export function GraphCanvas({ projectId, data, onDataChange }: GraphCanvasProps)
   const [edges, setEdges, onEdgesChange] = useEdgesState(layoutedEdges);
 
   useMemo(() => {
-    setNodes(layoutedNodes);
+    setNodes((nds) =>
+      layoutedNodes.map((newNode) => {
+        const existingNode = nds.find((n) => n.id === newNode.id);
+        if (existingNode) {
+          return {
+            ...newNode,
+            selected: existingNode.selected,
+          };
+        }
+        return newNode;
+      })
+    );
     setEdges(layoutedEdges);
   }, [layoutedNodes, layoutedEdges, setNodes, setEdges]);
 

@@ -226,16 +226,23 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
               </p>
             )}
           </div>
-          <Badge
-            className={cn(
-              "text-[9px] px-2 py-0.5 cursor-pointer uppercase font-bold tracking-tighter transition-all hover:brightness-110 active:scale-95",
-              getStatusColor(node.computedStatus),
-              isUpdating && "opacity-50 cursor-not-allowed"
+          <div className="flex flex-col items-end gap-1">
+            <Badge
+              className={cn(
+                "text-[9px] px-2 py-0.5 cursor-pointer uppercase font-bold tracking-tighter transition-all hover:brightness-110 active:scale-95",
+                getStatusColor(node.computedStatus),
+                isUpdating && "opacity-50 cursor-not-allowed"
+              )}
+              onClick={handleBadgeClick}
+            >
+              {isUpdating ? <Loader2 className="h-3 w-3 animate-spin" /> : node.computedStatus}
+            </Badge>
+            {!isUpdating && (
+              <span className="text-[8px] text-slate-400 font-medium uppercase tracking-tighter">
+                Click to cycle
+              </span>
             )}
-            onClick={handleBadgeClick}
-          >
-            {isUpdating ? <Loader2 className="h-3 w-3 animate-spin" /> : node.computedStatus}
-          </Badge>
+          </div>
         </div>
 
         {/* Owner Avatar Badge - Bottom Left (Only for TODO/DOING) */}
@@ -302,31 +309,6 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
                   <Pencil className="absolute -right-4 top-0 h-3 w-3 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
               )}
-            </div>
-
-            {/* Status Toggle Tabs */}
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
-                Progress
-              </label>
-              <Tabs
-                value={node.manualStatus}
-                onValueChange={(val) => updateStatus(val as ManualStatus)}
-                className="w-full"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <TabsList className="grid w-full grid-cols-3 h-8 p-1">
-                  <TabsTrigger value="TODO" className="text-[10px]">
-                    TODO
-                  </TabsTrigger>
-                  <TabsTrigger value="DOING" className="text-[10px]">
-                    DOING
-                  </TabsTrigger>
-                  <TabsTrigger value="DONE" className="text-[10px]">
-                    DONE
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
             </div>
 
             {node.computedStatus === "BLOCKED" && blockedBy.length > 0 && (
