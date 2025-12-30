@@ -1,5 +1,3 @@
-"use client";
-
 import { useCallback, useMemo, useState } from "react";
 import ReactFlow, {
   Node,
@@ -15,9 +13,26 @@ import ReactFlow, {
 } from "reactflow";
 import dagre from "dagre";
 import "reactflow/dist/style.css";
-import { NodeDTO, GraphData } from "@/types";
+import { NodeDTO, GraphData, EdgeRelation } from "@/types";
 import { CustomNode } from "./CustomNode";
 import { Toolbar } from "./Toolbar";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 interface GraphCanvasProps {
   projectId: string;
@@ -32,8 +47,8 @@ const nodeTypes = {
 const dagreGraph = new dagre.graphlib.Graph();
 dagreGraph.setDefaultEdgeLabel(() => ({}));
 
-const nodeWidth = 220;
-const nodeHeight = 100;
+const nodeWidth = 240;
+const nodeHeight = 120;
 
 const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = "LR") => {
   const isHorizontal = direction === "LR";
@@ -54,7 +69,6 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = "LR") => 
     node.targetPosition = isHorizontal ? ("left" as any) : ("top" as any);
     node.sourcePosition = isHorizontal ? ("right" as any) : ("bottom" as any);
 
-    // We are shifting the dagre node position (which is center-based) to top-left
     node.position = {
       x: nodeWithPosition.x - nodeWidth / 2,
       y: nodeWithPosition.y - nodeHeight / 2,
@@ -69,6 +83,10 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = "LR") => 
 export function GraphCanvas({ projectId, data, onDataChange }: GraphCanvasProps) {
   const [filterStatus, setFilterStatus] = useState<string>("ALL");
   const [searchQuery, setSearchQuery] = useState("");
+  const [pendingConnection, setPendingConnection] = useState<Connection | null>(null);
+  const [editingEdge, setEditingEdge] = useState<Edge | null>(null);
+  const [relation, setRelation] = useState<string>("DEPENDS_ON");
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const { layoutedNodes, layoutedEdges } = useMemo(() => {
     const initialNodes: Node[] = data.nodes
@@ -89,9 +107,6 @@ export function GraphCanvas({ projectId, data, onDataChange }: GraphCanvasProps)
     const initialEdges: Edge[] = data.edges
       .filter((edge) => visibleNodeIds.has(edge.fromNodeId) && visibleNodeIds.has(edge.toNodeId))
       .map((edge) => {
-        // Precursor (dependency) should be source, Successor (dependent) should be target
-        // For HANDOFF_TO: fromNodeId (precursor) -> toNodeId (successor)
-        // For others (DEPENDS_ON, etc): toNodeId (precursor) -> fromNodeId (successor)
         const isForward = edge.relation === "HANDOFF_TO";
         return {
           id: edge.id,
@@ -100,18 +115,19 @@ export function GraphCanvas({ projectId, data, onDataChange }: GraphCanvasProps)
           label: edge.relation.replace(/_/g, " "),
           markerEnd: {
             type: MarkerType.ArrowClosed,
+            color: "#64748b",
           },
           style: {
             strokeWidth: 2,
+            stroke: "#94a3b8",
           },
+          data: { originalEdge: edge },
         };
       });
 
     const { nodes, edges } = getLayoutedElements(initialNodes, initialEdges);
 
-    // Add extra data for CustomNode
     const nodesWithExtraData = nodes.map((node) => {
-      // Find precursors that are blocking this node
       const blockedByTitles = data.edges
         .filter((e) => {
           if (e.relation === "HANDOFF_TO") return e.toNodeId === node.id;
@@ -124,7 +140,6 @@ export function GraphCanvas({ projectId, data, onDataChange }: GraphCanvasProps)
         .filter((n): n is NodeDTO => !!n && n.computedStatus !== "DONE")
         .map((n) => n.title);
 
-      // Find successors that this node is blocking
       const blockingTitles = data.edges
         .filter((e) => {
           if (e.relation === "HANDOFF_TO") return e.fromNodeId === node.id;
@@ -156,19 +171,80 @@ export function GraphCanvas({ projectId, data, onDataChange }: GraphCanvasProps)
   const [nodes, setNodes, onNodesChange] = useNodesState(layoutedNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(layoutedEdges);
 
-  // Update nodes and edges when layout changes
   useMemo(() => {
     setNodes(layoutedNodes);
     setEdges(layoutedEdges);
   }, [layoutedNodes, layoutedEdges, setNodes, setEdges]);
 
-  const onConnect = useCallback(
-    (params: Connection) => setEdges((eds) => addEdge(params, eds)),
-    [setEdges]
-  );
+  const onConnect = useCallback((params: Connection) => {
+    setPendingConnection(params);
+    setRelation("DEPENDS_ON");
+  }, []);
+
+  const handleCreateEdge = async () => {
+    if (!pendingConnection) return;
+    setIsSyncing(true);
+    try {
+      // Determine logical from/to based on relation
+      // HANDOFF_TO: source -> target
+      // Others: target -> source (because handle source is right, target is left, and dependencies are on the left)
+      const isForward = relation === "HANDOFF_TO";
+      const fromNodeId = isForward ? pendingConnection.source : pendingConnection.target;
+      const toNodeId = isForward ? pendingConnection.target : pendingConnection.source;
+
+      const res = await fetch(`/api/projects/${projectId}/edges`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fromNodeId, toNodeId, relation }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to create connection");
+      }
+
+      toast.success("Connection created");
+      onDataChange();
+      setPendingConnection(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Error creating connection");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleUpdateEdge = async () => {
+    if (!editingEdge) return;
+    setIsSyncing(true);
+    try {
+      const res = await fetch(`/api/edges/${editingEdge.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ relation }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to update connection");
+      }
+
+      toast.success("Connection updated");
+      onDataChange();
+      setEditingEdge(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Error updating connection");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const onEdgeClick = useCallback((event: React.MouseEvent, edge: Edge) => {
+    setEditingEdge(edge);
+    setRelation(edge.data?.originalEdge?.relation || "DEPENDS_ON");
+  }, []);
 
   return (
-    <div className="relative h-full w-full rounded-lg border bg-white">
+    <div className="relative h-full w-full rounded-lg border bg-white overflow-hidden shadow-inner">
       <Toolbar
         projectId={projectId}
         filterStatus={filterStatus}
@@ -185,14 +261,108 @@ export function GraphCanvas({ projectId, data, onDataChange }: GraphCanvasProps)
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
+          onEdgeClick={onEdgeClick}
           nodeTypes={nodeTypes}
           fitView
+          snapToGrid
+          snapGrid={[15, 15]}
         >
-          <Background />
+          <Background color="#f1f5f9" gap={15} />
           <Controls />
-          <MiniMap />
+          <MiniMap nodeStrokeColor="#e2e8f0" nodeColor="#f8fafc" />
         </ReactFlow>
       </div>
+
+      {/* Connection Picker Dialog */}
+      <Dialog open={!!pendingConnection} onOpenChange={() => setPendingConnection(null)}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Define Relationship</DialogTitle>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <div className="space-y-2">
+              <Label>How are these nodes related?</Label>
+              <Select value={relation} onValueChange={setRelation}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="DEPENDS_ON">Depends On (Left depends on Right)</SelectItem>
+                  <SelectItem value="HANDOFF_TO">Handoff To (Left leads to Right)</SelectItem>
+                  <SelectItem value="NEEDS_INFO_FROM">Needs Info From</SelectItem>
+                  <SelectItem value="APPROVAL_BY">Approval By</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="text-[11px] text-slate-500 italic bg-slate-50 p-3 rounded-md border border-slate-100">
+              {relation === "DEPENDS_ON" && "The right-side node must be completed before the left-side node can start."}
+              {relation === "HANDOFF_TO" && "Work flows directly from the left-side node to the right-side node."}
+              {relation === "NEEDS_INFO_FROM" && "The left-side node requires specific input from the right-side node."}
+              {relation === "APPROVAL_BY" && "The left-side node is waiting for a formal decision/approval from the right-side node."}
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPendingConnection(null)}>Cancel</Button>
+            <Button onClick={handleCreateEdge} disabled={isSyncing}>
+              {isSyncing ? "Creating..." : "Create Connection"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edge Edit Dialog */}
+      <Dialog open={!!editingEdge} onOpenChange={() => setEditingEdge(null)}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Edit Relationship</DialogTitle>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <div className="space-y-2">
+              <Label>Update the relation type</Label>
+              <Select value={relation} onValueChange={setRelation}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="DEPENDS_ON">Depends On</SelectItem>
+                  <SelectItem value="HANDOFF_TO">Handoff To</SelectItem>
+                  <SelectItem value="NEEDS_INFO_FROM">Needs Info From</SelectItem>
+                  <SelectItem value="APPROVAL_BY">Approval By</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter className="flex justify-between sm:justify-between items-center w-full">
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={async () => {
+                if (!editingEdge) return;
+                setIsSyncing(true);
+                try {
+                  const res = await fetch(`/api/edges/${editingEdge.id}`, { method: "DELETE" });
+                  if (!res.ok) throw new Error("Delete failed");
+                  toast.success("Connection removed");
+                  onDataChange();
+                  setEditingEdge(null);
+                } catch (e) {
+                  toast.error("Failed to delete connection");
+                } finally {
+                  setIsSyncing(false);
+                }
+              }}
+            >
+              Remove
+            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => setEditingEdge(null)}>Cancel</Button>
+              <Button size="sm" onClick={handleUpdateEdge} disabled={isSyncing}>
+                {isSyncing ? "Saving..." : "Update"}
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

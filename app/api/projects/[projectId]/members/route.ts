@@ -9,6 +9,52 @@ const AddMemberSchema = z.object({
   team: z.string().optional(),
 });
 
+// GET /api/projects/[projectId]/members - Get project members
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ projectId: string }> }
+) {
+  try {
+    const user = await requireAuth();
+    const { projectId } = await params;
+
+    await requireProjectMembership(projectId, user.id);
+
+    const members = await prisma.projectMember.findMany({
+      where: { projectId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            image: true,
+          },
+        },
+      },
+    });
+
+    return NextResponse.json(
+      members.map((m: any) => ({
+        id: m.id,
+        userId: m.userId,
+        userName: m.user.name,
+        userEmail: m.user.email,
+        userImage: m.user.image,
+        team: m.team,
+      }))
+    );
+  } catch (error) {
+    console.error("GET /api/projects/[projectId]/members error:", error);
+
+    if (error instanceof Error && error.message === "Not a member of this project") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    return NextResponse.json({ error: "Failed to fetch members" }, { status: 500 });
+  }
+}
+
 // POST /api/projects/[projectId]/members - Add member to project
 export async function POST(
   request: NextRequest,
@@ -83,7 +129,7 @@ export async function POST(
     console.error("POST /api/projects/[projectId]/members error:", error);
 
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: "Invalid input", details: error.errors }, { status: 400 });
+      return NextResponse.json({ error: "Invalid input", details: error.issues }, { status: 400 });
     }
 
     if (error instanceof Error && error.message === "Not a member of this project") {

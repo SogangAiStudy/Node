@@ -1,11 +1,15 @@
-import { memo, useState } from "react";
+import { memo, useState, useEffect } from "react";
 import { Handle, Position } from "reactflow";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { NodeDTO, ComputedStatus, ManualStatus } from "@/types";
 import { CreateRequestDialog } from "./CreateRequestDialog";
 import { cn } from "@/lib/utils";
-import { Loader2 } from "lucide-react";
+import { Loader2, User, Check, X, Pencil } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 
 interface CustomNodeProps {
   data: {
@@ -35,18 +39,50 @@ function getStatusColor(status: ComputedStatus): string {
   }
 }
 
+function getInitials(name: string | null) {
+  if (!name) return "??";
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+}
+
 export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
   const { node, projectId, onDataChange, blockedBy, blocking } = data;
   const [createRequestOpen, setCreateRequestOpen] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
 
-  const updateStatus = async (status: ManualStatus) => {
+  // Editing state
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [isEditingDesc, setIsEditingDesc] = useState(false);
+  const [editedTitle, setEditedTitle] = useState(node.title);
+  const [editedDesc, setEditedDesc] = useState(node.description || "");
+
+  useEffect(() => {
+    if (!isEditingTitle) setEditedTitle(node.title);
+  }, [node.title, isEditingTitle]);
+
+  useEffect(() => {
+    if (!isEditingDesc) setEditedDesc(node.description || "");
+  }, [node.description, isEditingDesc]);
+
+  const updateNode = async (updates: Partial<NodeDTO>, e?: React.MouseEvent | React.FocusEvent | React.KeyboardEvent) => {
+    if (e) {
+      e.stopPropagation();
+      // Only prevent default if it's not a focus event to allow tab navigation
+      if (!('target' in e && e.type === 'blur')) {
+        // e.preventDefault(); // Commented out to allow focus
+      }
+    }
+
     setIsUpdating(true);
     try {
       const res = await fetch(`/api/nodes/${node.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ manualStatus: status }),
+        body: JSON.stringify(updates),
       });
       if (res.ok) {
         onDataChange();
@@ -54,6 +90,10 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
     } finally {
       setIsUpdating(false);
     }
+  };
+
+  const updateStatus = (status: ManualStatus, e?: React.MouseEvent | React.FocusEvent) => {
+    updateNode({ manualStatus: status }, e);
   };
 
   const handleBadgeClick = async (e: React.MouseEvent) => {
@@ -74,20 +114,58 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
       default:
         nextStatus = "TODO";
     }
-    await updateStatus(nextStatus);
+    await updateStatus(nextStatus, e);
+  };
+
+  const handleTitleSave = async (e?: React.FocusEvent | React.KeyboardEvent) => {
+    if (editedTitle === node.title) {
+      setIsEditingTitle(false);
+      return;
+    }
+    await updateNode({ title: editedTitle } as any, e);
+    setIsEditingTitle(false);
+  };
+
+  const handleDescSave = async (e?: React.FocusEvent | React.KeyboardEvent) => {
+    if (editedDesc === (node.description || "")) {
+      setIsEditingDesc(false);
+      return;
+    }
+    await updateNode({ description: editedDesc } as any, e);
+    setIsEditingDesc(false);
   };
 
   const getPrimaryAction = () => {
-    if (isUpdating) return <Button disabled size="sm"><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Updating</Button>;
+    if (isUpdating)
+      return (
+        <Button disabled size="sm">
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Updating
+        </Button>
+      );
 
     switch (node.computedStatus) {
       case "TODO":
-        return <Button size="sm" onClick={() => updateStatus("DOING")}>Start Doing</Button>;
+        return (
+          <Button size="sm" onClick={(e) => updateStatus("DOING", e)}>
+            Start Doing
+          </Button>
+        );
       case "DOING":
-        return <Button size="sm" onClick={() => updateStatus("DONE")}>Mark Done</Button>;
+        return (
+          <Button size="sm" onClick={(e) => updateStatus("DONE", e)}>
+            Mark Done
+          </Button>
+        );
       case "BLOCKED":
         return (
-          <Button size="sm" variant="secondary" onClick={() => setCreateRequestOpen(true)}>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={(e) => {
+              e.stopPropagation();
+              setCreateRequestOpen(true);
+            }}
+          >
             Create Request
           </Button>
         );
@@ -96,21 +174,61 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
     }
   };
 
+  const showAvatar = node.manualStatus !== "DONE";
+
   return (
     <div
       className={cn(
-        "min-w-[220px] rounded-lg border-2 border-gray-300 bg-white p-3 shadow-md transition-all duration-200",
-        selected ? "scale-105 border-primary z-50" : "scale-100"
+        "min-w-[240px] rounded-lg border-2 border-slate-200 bg-white p-4 shadow-sm transition-all duration-200",
+        selected ? "scale-105 border-primary z-50 ring-2 ring-primary/20" : "hover:border-slate-300"
       )}
     >
-      <Handle type="target" position={Position.Left} />
+      <Handle
+        type="target"
+        position={Position.Left}
+        className="w-3 h-3 border-2 border-white bg-slate-400 hover:w-4 hover:h-4 hover:bg-primary transition-all cursor-crosshair"
+      />
 
-      <div className="space-y-2">
+      <div className="space-y-3">
         <div className="flex items-start justify-between gap-2">
-          <h3 className="font-bold text-sm leading-tight">{node.title}</h3>
+          <div className="space-y-1 flex-1">
+            {isEditingTitle ? (
+              <Input
+                value={editedTitle}
+                onChange={(e) => setEditedTitle(e.target.value)}
+                onBlur={() => handleTitleSave()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleTitleSave(e);
+                  if (e.key === "Escape") {
+                    setIsEditingTitle(false);
+                    setEditedTitle(node.title);
+                  }
+                }}
+                autoFocus
+                className="h-7 text-[13px] font-bold py-1 px-2"
+                onClick={(e) => e.stopPropagation()}
+              />
+            ) : (
+              <div
+                className="group flex items-center gap-1 cursor-text"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsEditingTitle(true);
+                }}
+              >
+                <h3 className="font-bold text-[13px] leading-tight text-slate-900">{node.title}</h3>
+                <Pencil className="h-3 w-3 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </div>
+            )}
+            {node.team && (
+              <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
+                {node.team}
+              </p>
+            )}
+          </div>
           <Badge
             className={cn(
-              "text-[10px] px-1.5 py-0 cursor-pointer hover:brightness-110 active:scale-95 transition-all",
+              "text-[9px] px-2 py-0.5 cursor-pointer uppercase font-bold tracking-tighter transition-all hover:brightness-110 active:scale-95",
               getStatusColor(node.computedStatus),
               isUpdating && "opacity-50 cursor-not-allowed"
             )}
@@ -120,32 +238,121 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
           </Badge>
         </div>
 
-        {node.ownerName && (
-          <p className="text-[10px] text-muted-foreground leading-none">
-            Owner: {node.ownerName}
-          </p>
+        {/* Owner Avatar Badge - Bottom Left (Only for TODO/DOING) */}
+        {showAvatar && (
+          <div className="flex items-center gap-2 mt-1">
+            {node.ownerId ? (
+              <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-100 rounded-full pr-2 pl-0.5 py-0.5">
+                <Avatar className="h-5 w-5 border border-white shadow-sm">
+                  <AvatarFallback className="text-[9px] font-bold bg-primary text-primary-foreground">
+                    {getInitials(node.ownerName)}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="text-[10px] font-medium text-slate-600 truncate max-w-[80px]">
+                  {node.ownerName}
+                </span>
+              </div>
+            ) : (
+              <Badge variant="outline" className="text-[9px] font-normal text-slate-400 border-dashed py-0">
+                Unassigned
+              </Badge>
+            )}
+          </div>
         )}
 
         {/* Inline Detail Card */}
         {selected && (
-          <div className="mt-3 space-y-3 pt-3 border-t text-[11px] animate-in fade-in slide-in-from-top-1 duration-200">
+          <div className="mt-4 space-y-4 pt-4 border-t animate-in fade-in slide-in-from-top-2 duration-300">
+            {/* Description editing */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
+                Description
+              </label>
+              {isEditingDesc ? (
+                <Textarea
+                  value={editedDesc}
+                  onChange={(e) => setEditedDesc(e.target.value)}
+                  onBlur={() => handleDescSave()}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleDescSave(e);
+                    if (e.key === "Escape") {
+                      setIsEditingDesc(false);
+                      setEditedDesc(node.description || "");
+                    }
+                  }}
+                  autoFocus
+                  placeholder="Add a description..."
+                  className="text-[11px] min-h-[60px] p-2 leading-normal"
+                  onClick={(e) => e.stopPropagation()}
+                />
+              ) : (
+                <div
+                  className="group relative cursor-text min-h-[20px]"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsEditingDesc(true);
+                  }}
+                >
+                  <p className={cn(
+                    "text-[11px] text-slate-600 leading-normal",
+                    !node.description && "text-slate-400 italic"
+                  )}>
+                    {node.description || "No description provided."}
+                  </p>
+                  <Pencil className="absolute -right-4 top-0 h-3 w-3 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </div>
+              )}
+            </div>
+
+            {/* Status Toggle Tabs */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
+                Progress
+              </label>
+              <Tabs
+                value={node.manualStatus}
+                onValueChange={(val) => updateStatus(val as ManualStatus)}
+                className="w-full"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <TabsList className="grid w-full grid-cols-3 h-8 p-1">
+                  <TabsTrigger value="TODO" className="text-[10px]">
+                    TODO
+                  </TabsTrigger>
+                  <TabsTrigger value="DOING" className="text-[10px]">
+                    DOING
+                  </TabsTrigger>
+                  <TabsTrigger value="DONE" className="text-[10px]">
+                    DONE
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+
             {node.computedStatus === "BLOCKED" && blockedBy.length > 0 && (
-              <div className="rounded bg-red-50 p-2 text-red-700">
-                <p className="font-semibold mb-1">Blocked by:</p>
-                <ul className="list-disc list-inside">
+              <div className="rounded-md bg-red-50 border border-red-100 p-2.5 text-red-700 text-[11px]">
+                <p className="font-bold flex items-center gap-1.5 mb-1.5 uppercase tracking-wide">
+                  <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
+                  Blocked by
+                </p>
+                <ul className="list-disc list-inside space-y-0.5">
                   {blockedBy.map((title, i) => (
-                    <li key={i}>{title}</li>
+                    <li key={i} className="truncate">
+                      {title}
+                    </li>
                   ))}
                 </ul>
               </div>
             )}
 
             {blocking.length > 0 && (
-              <div>
-                <p className="font-semibold text-muted-foreground mb-1">Blocking:</p>
+              <div className="space-y-1.5">
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
+                  Blocking
+                </p>
                 <div className="flex flex-wrap gap-1">
                   {blocking.map((title, i) => (
-                    <Badge key={i} variant="outline" className="text-[9px] px-1 py-0">
+                    <Badge key={i} variant="outline" className="text-[9px] px-1.5 py-0 border-slate-200 text-slate-500 bg-slate-50">
                       {title}
                     </Badge>
                   ))}
@@ -153,14 +360,25 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
               </div>
             )}
 
-            <div className="flex justify-end pt-1">
+            <div className="flex justify-between items-center pt-2">
+              <div className="text-[10px] text-slate-400">
+                {node.dueAt && (
+                  <span className="flex items-center gap-1">
+                    Due: {new Date(node.dueAt).toLocaleDateString()}
+                  </span>
+                )}
+              </div>
               {getPrimaryAction()}
             </div>
           </div>
         )}
       </div>
 
-      <Handle type="source" position={Position.Right} />
+      <Handle
+        type="source"
+        position={Position.Right}
+        className="w-3 h-3 border-2 border-white bg-slate-400 hover:w-4 hover:h-4 hover:bg-primary transition-all cursor-crosshair"
+      />
 
       <CreateRequestDialog
         projectId={projectId}

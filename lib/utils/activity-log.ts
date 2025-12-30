@@ -5,6 +5,7 @@ export type ActivityAction =
   | "UPDATE_NODE"
   | "DELETE_NODE"
   | "CREATE_EDGE"
+  | "UPDATE_EDGE"
   | "DELETE_EDGE"
   | "CREATE_REQUEST"
   | "RESPOND_REQUEST"
@@ -12,7 +13,8 @@ export type ActivityAction =
   | "APPROVE_REQUEST"
   | "CLOSE_REQUEST"
   | "CREATE_PROJECT"
-  | "ADD_PROJECT_MEMBER";
+  | "ADD_PROJECT_MEMBER"
+  | "UPDATE_PROJECT_MEMBER";
 
 export type EntityType = "NODE" | "EDGE" | "REQUEST" | "PROJECT" | "PROJECT_MEMBER";
 
@@ -78,7 +80,17 @@ export async function getActivityLogs(
     },
   });
 
-  return logs.map((log) => ({
+  return logs.map((log: {
+    id: string;
+    projectId: string;
+    userId: string;
+    action: string;
+    entityType: string;
+    entityId: string;
+    details: Record<string, unknown> | null;
+    createdAt: Date;
+    user: { name: string | null };
+  }) => ({
     id: log.id,
     projectId: log.projectId,
     userId: log.userId,
