@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useSession } from "next-auth/react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -19,8 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { toast } from "sonner";
-import { useSession } from "next-auth/react";
+import { MultiSelectSearch, SelectItem as MultiSelectItem } from "@/components/ui/multi-select-search";
 
 interface AddNodeDialogProps {
   projectId: string;
@@ -46,8 +47,8 @@ export function AddNodeDialog({ projectId, open, onOpenChange, onSuccess }: AddN
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [type, setType] = useState("TASK");
-  const [ownerId, setOwnerId] = useState<string>("unassigned");
-  const [teamId, setTeamId] = useState<string>("none");
+  const [ownerIds, setOwnerIds] = useState<string[]>([]);
+  const [teamIds, setTeamIds] = useState<string[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -60,15 +61,15 @@ export function AddNodeDialog({ projectId, open, onOpenChange, onSuccess }: AddN
         setMembers(data.members || []);
         setTeams(data.teams || []);
 
-        // Auto-set current user as owner if they are a member
-        if (session?.user?.id && ownerId === "unassigned") {
+        // Auto-set current user as owner if they are a member and none selected
+        if (session?.user?.id && ownerIds.length === 0) {
           const isMember = data.members.some((m: Member) => m.userId === session.user?.id);
           if (isMember) {
-            setOwnerId(session.user.id);
+            setOwnerIds([session.user.id]);
             // Also try to set their team
             const currentMember = data.members.find((m: Member) => m.userId === session.user?.id);
             if (currentMember?.teamId) {
-              setTeamId(currentMember.teamId);
+              setTeamIds([currentMember.teamId]);
             }
           }
         }
@@ -76,7 +77,7 @@ export function AddNodeDialog({ projectId, open, onOpenChange, onSuccess }: AddN
     } catch (error) {
       console.error("Failed to fetch members and teams:", error);
     }
-  }, [projectId, session?.user?.id, ownerId]);
+  }, [projectId, session?.user?.id, ownerIds.length]);
 
   useEffect(() => {
     if (open) {
@@ -96,8 +97,8 @@ export function AddNodeDialog({ projectId, open, onOpenChange, onSuccess }: AddN
           title,
           description,
           type,
-          ownerId: ownerId === "unassigned" ? undefined : ownerId,
-          team: teamId === "none" ? undefined : teamId,
+          ownerIds,
+          teamIds,
         }),
       });
 
@@ -120,30 +121,46 @@ export function AddNodeDialog({ projectId, open, onOpenChange, onSuccess }: AddN
     setTitle("");
     setDescription("");
     setType("TASK");
+    setOwnerIds([]);
+    setTeamIds([]);
   };
+
+  const ownerItems: MultiSelectItem[] = members.map((m: Member) => ({
+    id: m.userId,
+    name: m.userName || "Unknown",
+    subtitle: m.teamName || undefined,
+    type: "user",
+  }));
+
+  const teamItems: MultiSelectItem[] = teams.map((t: Team) => ({
+    id: t.id,
+    name: t.name,
+    type: "team",
+  }));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[500px]">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle>Add Node</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 my-4">
+          <div className="space-y-6 my-4">
             <div className="grid gap-2">
-              <Label htmlFor="title">Title</Label>
+              <Label htmlFor="title" className="text-sm font-medium">Title</Label>
               <Input
                 id="title"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="What needs to be done?"
                 required
+                className="text-base py-5"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
-                <Label htmlFor="type">Type</Label>
+                <Label htmlFor="type" className="text-sm font-medium">Type</Label>
                 <Select value={type} onValueChange={setType}>
                   <SelectTrigger id="type">
                     <SelectValue />
@@ -156,58 +173,50 @@ export function AddNodeDialog({ projectId, open, onOpenChange, onSuccess }: AddN
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+
+            <div className="grid gap-4">
+              <div className="grid gap-2">
+                <Label className="text-sm font-medium">Owners</Label>
+                <MultiSelectSearch
+                  items={ownerItems}
+                  selectedIds={ownerIds}
+                  onSelect={(id: string) => setOwnerIds((prev: string[]) => [...prev, id])}
+                  onRemove={(id: string) => setOwnerIds((prev: string[]) => prev.filter((i: string) => i !== id))}
+                  placeholder="Select owners"
+                  searchPlaceholder="Search people..."
+                />
+              </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="owner">Owner</Label>
-                <Select value={ownerId} onValueChange={setOwnerId}>
-                  <SelectTrigger id="owner">
-                    <SelectValue placeholder="Select owner" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="unassigned">Unassigned</SelectItem>
-                    {members.map((member) => (
-                      <SelectItem key={member.userId} value={member.userId}>
-                        {member.userName || "Unknown"}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label className="text-sm font-medium">Assigned Teams</Label>
+                <MultiSelectSearch
+                  items={teamItems}
+                  selectedIds={teamIds}
+                  onSelect={(id: string) => setTeamIds((prev: string[]) => [...prev, id])}
+                  onRemove={(id: string) => setTeamIds((prev: string[]) => prev.filter((i: string) => i !== id))}
+                  placeholder="Select teams"
+                  searchPlaceholder="Search teams..."
+                />
               </div>
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="team">Assigned Team</Label>
-              <Select value={teamId} onValueChange={setTeamId}>
-                <SelectTrigger id="team">
-                  <SelectValue placeholder="Select team" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
-                  {teams.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>
-                      {t.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="description">Description (optional)</Label>
+              <Label htmlFor="description" className="text-sm font-medium">Description (optional)</Label>
               <Textarea
                 id="description"
                 value={description}
-                onChange={(e) => setDescription(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setDescription(e.target.value)}
                 placeholder="Add more context..."
-                className="h-20"
+                className="h-24 resize-none"
               />
             </div>
           </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="flex-1 sm:flex-none">
               Cancel
             </Button>
-            <Button type="submit" disabled={isLoading}>
+            <Button type="submit" disabled={isLoading} className="flex-1 sm:flex-none">
               {isLoading ? "Creating..." : "Create Node"}
             </Button>
           </DialogFooter>
