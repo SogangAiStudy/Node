@@ -33,33 +33,59 @@ cd Node
 npm install
 ```
 
-### 3. Environment Setup
-We support a **Dual-Environment Workflow** to safely switch between Local and Remote (Supabase) databases.
+### 3. Database & Environment Setup
 
+#### Step A: Create Local Database & User
+Run these in your terminal to prepare PostgreSQL:
+
+**🍎 macOS / 🐧 Linux:**
+```bash
+# 1. Create a 'postgres' role
+psql -d postgres -c "CREATE ROLE postgres WITH LOGIN SUPERUSER PASSWORD 'postgres';"
+
+# 2. Create the project database
+createdb node_db
+```
+
+**🪟 Windows (cmd/PowerShell):**
+```powershell
+# 1. Create a 'postgres' role
+psql -U postgres -d postgres -c "CREATE ROLE postgres WITH LOGIN SUPERUSER PASSWORD 'postgres';"
+
+# 2. Create the project database
+createdb -U postgres node_db
+```
+
+#### Step B: Configure environment files
 ```bash
 # Copy the template
 cp .env.example .env.local
 cp .env.example .env.remote
 ```
 
-#### Local Development (`.env.local`)
-Update the file with your local credentials:
+Edit `.env.local` with the credentials created above:
 ```env
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/node_db?schema=public"
 DIRECT_URL="postgresql://postgres:postgres@localhost:5432/node_db?schema=public"
-AUTH_SECRET="your-secret" # Generate with: openssl rand -base64 32
+
+# Generate AUTH_SECRET with: openssl rand -base64 32
+AUTH_SECRET="your-secret" 
+
 GOOGLE_CLIENT_ID="..."
 GOOGLE_CLIENT_SECRET="..."
 ```
 
 ### 4. Database Initialization
-Initialize your **Local Database** with these targeted scripts:
+Initialize your **Local Database** (Run these after Step A/B):
 
 ```bash
-# 1. Sync the schema
+# 1. Generate Prisma client
+npm run db:generate
+
+# 2. Sync the schema (Create tables)
 npm run db:push:local
 
-# 2. Seed with sample data
+# 3. Seed with sample data
 npm run db:seed:local
 ```
 
