@@ -22,6 +22,7 @@ export type EntityType = "NODE" | "EDGE" | "REQUEST" | "PROJECT" | "PROJECT_MEMB
  * Create an activity log entry for audit trail
  */
 export async function createActivityLog({
+  orgId,
   projectId,
   userId,
   action,
@@ -29,15 +30,32 @@ export async function createActivityLog({
   entityId,
   details,
 }: {
+  orgId?: string;
   projectId: string;
   userId: string;
   action: ActivityAction;
   entityType: EntityType;
   entityId: string;
   details?: Record<string, unknown>;
-}): Promise<void> {
-  await prisma.activityLog.create({
+}, tx?: any): Promise<void> {
+  const db = tx || prisma;
+
+  // Get orgId from project if not provided
+  let finalOrgId = orgId;
+  if (!finalOrgId) {
+    const project = await db.project.findUnique({
+      where: { id: projectId },
+      select: { orgId: true },
+    });
+    if (!project) {
+      throw new Error(`Project not found: ${projectId}`);
+    }
+    finalOrgId = project.orgId;
+  }
+
+  await db.activityLog.create({
     data: {
+      orgId: finalOrgId,
       projectId,
       userId,
       action,
