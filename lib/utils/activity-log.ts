@@ -98,17 +98,7 @@ export async function getActivityLogs(
     },
   });
 
-  return logs.map((log: {
-    id: string;
-    projectId: string;
-    userId: string;
-    action: string;
-    entityType: string;
-    entityId: string;
-    details: Record<string, unknown> | null;
-    createdAt: Date;
-    user: { name: string | null };
-  }) => ({
+  return logs.map((log: any) => ({
     id: log.id,
     projectId: log.projectId,
     userId: log.userId,
