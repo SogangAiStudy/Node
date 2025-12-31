@@ -2,14 +2,33 @@
 
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { CreateProjectDialog } from "@/components/projects/CreateProjectDialog";
 import { ProjectDTO } from "@/types";
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+
+  // Check if user has an organization
+  const { data: orgStatus, isLoading: isCheckingOrg } = useQuery({
+    queryKey: ["organization-status"],
+    queryFn: async () => {
+      const res = await fetch("/api/user/organization-status");
+      if (!res.ok) throw new Error("Failed to check organization status");
+      return res.json() as Promise<{ hasOrganization: boolean; organization: any }>;
+    },
+  });
+
+  // Redirect to onboarding if user has no organization
+  useEffect(() => {
+    if (!isCheckingOrg && orgStatus && !orgStatus.hasOrganization) {
+      router.push("/onboarding");
+    }
+  }, [orgStatus, isCheckingOrg, router]);
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["projects"],
@@ -18,7 +37,22 @@ export default function DashboardPage() {
       if (!res.ok) throw new Error("Failed to fetch projects");
       return res.json() as Promise<{ projects: ProjectDTO[] }>;
     },
+    enabled: orgStatus?.hasOrganization === true, // Only fetch projects if user has org
   });
+
+  // Show loading while checking organization
+  if (isCheckingOrg) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="text-center text-muted-foreground">Loading...</div>
+      </div>
+    );
+  }
+
+  // Don't render if user has no org (will redirect)
+  if (!orgStatus?.hasOrganization) {
+    return null;
+  }
 
   return (
     <div className="container mx-auto px-4 py-8">
