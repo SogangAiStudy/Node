@@ -152,8 +152,8 @@ npm run dev
 ---
 
 ## 8) Deploy tip: switch to Neon later
-1) Create a Neon Postgres database and copy its connection string.
-2) Replace `DATABASE_URL` in `.env` with the Neon string.
+1) In the Neon console, create a project/database and copy the **pooled** connection string.
+2) Replace `DATABASE_URL` in `.env` (and Vercel env vars) with `<NEON_POOLED_URL>?sslmode=require`.
 3) Apply schema:
    ```bash
    npx prisma migrate deploy   # if you have migration history

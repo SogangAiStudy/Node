@@ -132,7 +132,7 @@ Edit `.env` and set at least:
 
 ```env
 # Database
-DATABASE_URL="postgresql://postgres:<YOUR_POSTGRES_PASSWORD>@localhost:5432/node_db?schema=public"
+DATABASE_URL="<NEON_POOLED_CONNECTION_STRING>?sslmode=require"
 
 # NextAuth (local dev)
 NEXTAUTH_SECRET="generate-with-openssl-or-powershell"
@@ -142,6 +142,11 @@ NEXTAUTH_URL="http://localhost:3000"
 GOOGLE_CLIENT_ID="your-google-client-id"
 GOOGLE_CLIENT_SECRET="your-google-client-secret"
 ```
+
+**Neon + Vercel setup (recommended for deployment):**
+1) In the Neon console, create a new project/database and copy the **pooled** connection string.
+2) Set `DATABASE_URL` in both `.env` and your Vercel Project Settings → Environment Variables to that pooled URL with `?sslmode=require` appended.
+3) Confirm `datasource db` in `prisma/schema.prisma` uses `url = env("DATABASE_URL")` (already set in this repo).
 
 ### Generate NEXTAUTH_SECRET
 macOS/Linux:
