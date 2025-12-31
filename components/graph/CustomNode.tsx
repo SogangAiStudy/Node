@@ -5,13 +5,12 @@ import { Button } from "@/components/ui/button";
 import { NodeDTO, ComputedStatus, ManualStatus } from "@/types";
 import { CreateRequestDialog } from "./CreateRequestDialog";
 import { cn } from "@/lib/utils";
-import { Loader2, User, Check, X, Pencil } from "lucide-react";
+import { Loader2, User, Pencil, Crown, AlertCircle, Clock, Calendar, ChevronDown } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Users } from "lucide-react";
+import { Plus } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,6 +19,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface Member {
   userId: string;
@@ -85,6 +90,7 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
   const [members, setMembers] = useState<Member[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [hasLoadedMetadata, setHasLoadedMetadata] = useState(false);
+  const [showSecondaryTeams, setShowSecondaryTeams] = useState(false);
 
   const fetchMetadata = async () => {
     try {
@@ -220,13 +226,24 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
     }
   };
 
-  const showAvatar = node.manualStatus !== "DONE";
+  // Determine primary team and secondary teams
+  const primaryTeam = node.teams && node.teams.length > 0 ? node.teams[0] : null;
+  const secondaryTeams = node.teams && node.teams.length > 1 ? node.teams.slice(1) : [];
+
+  // Determine primary owner and additional owners
+  const primaryOwner = node.owners && node.owners.length > 0 ? node.owners[0] : null;
+  const additionalOwners = node.owners && node.owners.length > 1 ? node.owners.slice(1) : [];
+
+  // Check if node has no owner (degraded state)
+  const hasNoOwner = !primaryOwner;
 
   return (
     <div
       className={cn(
-        "min-w-[240px] rounded-lg border-2 border-slate-200 bg-white p-4 shadow-sm transition-all duration-200",
-        selected ? "scale-105 border-primary z-50 ring-2 ring-primary/20" : "hover:border-slate-300"
+        "min-w-[280px] max-w-[320px] rounded-lg border-2 bg-white shadow-sm transition-all duration-200",
+        selected ? "scale-105 border-primary z-50 ring-2 ring-primary/20" : "hover:border-slate-300",
+        hasNoOwner ? "opacity-70 border-amber-300 bg-amber-50/30" : "border-slate-200",
+        node.computedStatus === "BLOCKED" && "border-red-300"
       )}
     >
       <Handle
@@ -236,10 +253,10 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
         className="hover:!bg-primary transition-colors cursor-crosshair z-50 shadow-sm"
       />
 
-      <div className="space-y-4">
-        {/* Title and Status */}
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex-1">
+      <div className="p-4 space-y-3">
+        {/* (1) HEADER AREA - Title and Status Badge */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
             {isEditingTitle ? (
               <Input
                 value={editedTitle}
@@ -253,25 +270,29 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
                   }
                 }}
                 autoFocus
-                className="h-7 text-[13px] font-bold py-1 px-2"
+                className="h-8 text-base font-bold"
                 onClick={(e) => e.stopPropagation()}
               />
             ) : (
               <div
-                className="group flex items-center gap-1 cursor-text"
+                className="group flex items-start gap-1.5 cursor-text"
                 onClick={(e) => {
                   e.stopPropagation();
                   setIsEditingTitle(true);
                 }}
               >
-                <h3 className="font-bold text-[14px] leading-tight text-slate-900">{node.title}</h3>
-                <Pencil className="h-3 w-3 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+                <h3 className="font-bold text-base leading-tight text-slate-900 break-words">
+                  {node.title}
+                </h3>
+                <Pencil className="h-3 w-3 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-0.5" />
               </div>
             )}
           </div>
+
+          {/* Status Badge - Fixed Position */}
           <Badge
             className={cn(
-              "text-[9px] px-2 py-0.5 cursor-pointer uppercase font-bold tracking-tighter transition-all hover:brightness-110 active:scale-95",
+              "text-[10px] px-2.5 py-1 cursor-pointer uppercase font-bold tracking-tight transition-all hover:brightness-110 active:scale-95 flex-shrink-0",
               getStatusColor(node.computedStatus),
               isUpdating && "opacity-50 cursor-not-allowed"
             )}
@@ -281,52 +302,82 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
           </Badge>
         </div>
 
-        {/* Teams in Box */}
-        <div className="space-y-1.5">
-          <div className="flex flex-wrap gap-1.5">
-            {node.teams && node.teams.length > 0 ? (
-              node.teams.map((t) => (
-                <div
-                  key={t.id}
-                  className="bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 uppercase tracking-tighter"
-                >
-                  {t.name}
-                </div>
-              ))
-            ) : (
-              <div className="text-[10px] text-slate-400 italic">No team assigned</div>
-            )}
-          </div>
-        </div>
-
-        {/* Members Label and Icons */}
-        <div className="space-y-1">
-          <p className="text-[11px] text-slate-500 font-medium">members</p>
+        {/* (2) RESPONSIBILITY SECTION - Most Important */}
+        <div className="space-y-2">
+          <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Owner</p>
           <div className="flex items-center gap-2">
-            <div className="flex -space-x-2">
-              {(node.owners || []).length > 0 ? (
-                (node.owners || []).map((owner) => (
-                  <Avatar key={owner.id} className="h-7 w-7 border-2 border-white shadow-sm hover:z-10 transition-transform hover:scale-110">
-                    <AvatarFallback className="text-[9px] font-bold bg-indigo-100 text-indigo-700">
-                      {getInitials(owner.name)}
-                    </AvatarFallback>
-                  </Avatar>
-                ))
-              ) : (
-                <div className="h-7 w-7 rounded-full border-2 border-dashed border-slate-200 flex items-center justify-center bg-slate-50">
-                  <User className="h-3 w-3 text-slate-300" />
-                </div>
-              )}
-            </div>
+            {hasNoOwner ? (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex items-center gap-2 px-3 py-2 border-2 border-dashed border-amber-400 rounded-lg bg-amber-50/50">
+                      <AlertCircle className="h-4 w-4 text-amber-600" />
+                      <span className="text-xs font-medium text-amber-700">No Owner Assigned</span>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>This node needs an owner for accountability</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            ) : (
+              <>
+                {/* Primary Owner - Emphasized */}
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="relative">
+                        <Avatar className="h-9 w-9 border-2 border-indigo-500 ring-2 ring-indigo-100 shadow-md">
+                          <AvatarFallback className="text-xs font-bold bg-indigo-100 text-indigo-700">
+                            {getInitials(primaryOwner.name)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <Crown className="h-3 w-3 text-amber-500 absolute -top-1 -right-1 drop-shadow-sm" />
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="font-medium">{primaryOwner.name}</p>
+                      <p className="text-xs text-muted-foreground">Primary Owner</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
 
+                {/* Additional Owners - Smaller */}
+                {additionalOwners.length > 0 && (
+                  <div className="flex -space-x-2">
+                    {additionalOwners.map((owner) => (
+                      <TooltipProvider key={owner.id}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Avatar className="h-7 w-7 border-2 border-white shadow-sm hover:z-10 transition-transform hover:scale-110">
+                              <AvatarFallback className="text-[9px] font-bold bg-slate-100 text-slate-700">
+                                {getInitials(owner.name)}
+                              </AvatarFallback>
+                            </Avatar>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p className="font-medium">{owner.name}</p>
+                            <p className="text-xs text-muted-foreground">Additional Owner</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Add Owner Button */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="h-6 w-6 rounded-full border border-dashed border-slate-300 flex items-center justify-center hover:bg-slate-50 transition-colors bg-white">
+                <button className="h-7 w-7 rounded-full border border-dashed border-slate-300 flex items-center justify-center hover:bg-slate-50 transition-colors bg-white">
                   <Plus className="h-3 w-3 text-slate-400" />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-64" onClick={(e) => e.stopPropagation()}>
-                <DropdownMenuLabel className="text-[10px] uppercase font-bold text-slate-400">Manage Owners</DropdownMenuLabel>
+                <DropdownMenuLabel className="text-[10px] uppercase font-bold text-slate-400">
+                  Manage Owners
+                </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <div className="max-h-[300px] overflow-y-auto">
                   {members.map((m) => {
@@ -339,14 +390,16 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
                           e.stopPropagation();
                           const currentOwners = node.owners || [];
                           const newOwnerIds = isSelected
-                            ? currentOwners.filter(o => o.id !== m.userId).map(o => o.id)
-                            : [...currentOwners.map(o => o.id), m.userId];
+                            ? currentOwners.filter((o) => o.id !== m.userId).map((o) => o.id)
+                            : [...currentOwners.map((o) => o.id), m.userId];
                           updateNode({ ownerIds: newOwnerIds } as any);
                         }}
                       >
-                        <Checkbox checked={isSelected} onCheckedChange={() => { }} className="pointer-events-none" />
+                        <Checkbox checked={isSelected} onCheckedChange={() => {}} className="pointer-events-none" />
                         <Avatar className="h-6 w-6 border border-slate-100">
-                          <AvatarFallback className="text-[9px] font-bold">{getInitials(m.userName)}</AvatarFallback>
+                          <AvatarFallback className="text-[9px] font-bold">
+                            {getInitials(m.userName)}
+                          </AvatarFallback>
                         </Avatar>
                         <div className="flex flex-col">
                           <span className="text-[11px] leading-none">{m.userName}</span>
@@ -361,23 +414,119 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
           </div>
         </div>
 
-        {/* Creation Date and Secondary Actions */}
-        <div className="pt-2 flex items-center justify-between border-t border-slate-50">
-          <span className="text-[10px] text-slate-400 font-medium">
-            Created {new Date(node.createdAt).toLocaleDateString()}
-          </span>
-          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            {/* Context for "Click to cycle" if needed, but keeping it clean */}
+        {/* (3) TEAM SECTION - Accountability */}
+        <div className="space-y-1.5">
+          <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Team</p>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {primaryTeam ? (
+              <>
+                {/* Primary Team - Always Visible */}
+                <div className="bg-indigo-100 border border-indigo-300 rounded-md px-2.5 py-1 text-[11px] font-bold text-indigo-800 uppercase tracking-tight">
+                  {primaryTeam.name}
+                </div>
+
+                {/* Secondary Teams - Collapsed */}
+                {secondaryTeams.length > 0 && (
+                  <TooltipProvider>
+                    <Tooltip open={showSecondaryTeams} onOpenChange={setShowSecondaryTeams}>
+                      <TooltipTrigger asChild>
+                        <button
+                          className="bg-slate-100 border border-slate-300 rounded-md px-2 py-1 text-[10px] font-semibold text-slate-600 hover:bg-slate-200 transition-colors"
+                          onMouseEnter={() => setShowSecondaryTeams(true)}
+                          onMouseLeave={() => setShowSecondaryTeams(false)}
+                        >
+                          +{secondaryTeams.length}
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <div className="space-y-1">
+                          <p className="text-xs font-semibold">Additional Teams:</p>
+                          {secondaryTeams.map((t) => (
+                            <div key={t.id} className="text-xs">
+                              • {t.name}
+                            </div>
+                          ))}
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+              </>
+            ) : (
+              <div className="text-[11px] text-slate-400 italic">No team assigned</div>
+            )}
+          </div>
+        </div>
+
+        {/* (4) BLOCKED-SPECIFIC SECTION - Conditional */}
+        {node.computedStatus === "BLOCKED" && blockedBy.length > 0 && (
+          <div className="rounded-lg bg-red-50 border-2 border-red-200 p-3 space-y-2">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 text-red-600" />
+              <p className="font-bold text-[11px] text-red-900 uppercase tracking-wide">Why Blocked</p>
+            </div>
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2">
+                <div className="text-[10px] font-semibold text-red-700">DEPENDS_ON:</div>
+                <div className="text-[10px] text-red-600">{blockedBy.length} incomplete dependencies</div>
+              </div>
+              <ul className="space-y-1 pl-3">
+                {blockedBy.map((title, i) => (
+                  <li key={i} className="text-[10px] text-red-700 flex items-center gap-1.5">
+                    <span className="h-1 w-1 rounded-full bg-red-500" />
+                    <span className="truncate">{title}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
+
+        {/* (5) METADATA FOOTER - Lowest Priority */}
+        <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400">
+          <div className="flex items-center gap-3">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="flex items-center gap-1">
+                    <Calendar className="h-3 w-3" />
+                    {new Date(node.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Created: {new Date(node.createdAt).toLocaleString()}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            {node.dueAt && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="flex items-center gap-1 text-amber-600">
+                      <Clock className="h-3 w-3" />
+                      {new Date(node.dueAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Due: {new Date(node.dueAt).toLocaleString()}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </div>
+          <div className="text-[9px] font-medium">
+            P{node.priority || 3}
           </div>
         </div>
       </div>
 
-      {/* Inline Detail Card */}
+      {/* EXPANDED DETAIL PANEL - When Selected */}
       {selected && (
-        <div className="mt-4 space-y-4 pt-4 border-t animate-in fade-in slide-in-from-top-2 duration-300">
+        <div className="px-4 pb-4 space-y-3 border-t border-slate-200 pt-3 animate-in fade-in slide-in-from-top-2 duration-300">
           {/* Description editing */}
           <div className="space-y-1.5">
-            <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
+            <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
               Description
             </label>
             {isEditingDesc ? (
@@ -399,47 +548,38 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
               />
             ) : (
               <div
-                className="group relative cursor-text min-h-[20px]"
+                className="group relative cursor-text min-h-[20px] p-2 rounded border border-slate-200 hover:border-slate-300"
                 onClick={(e) => {
                   e.stopPropagation();
                   setIsEditingDesc(true);
                 }}
               >
-                <p className={cn(
-                  "text-[11px] text-slate-600 leading-normal",
-                  !node.description && "text-slate-400 italic"
-                )}>
+                <p
+                  className={cn(
+                    "text-[11px] text-slate-600 leading-normal",
+                    !node.description && "text-slate-400 italic"
+                  )}
+                >
                   {node.description || "No description provided."}
                 </p>
-                <Pencil className="absolute -right-4 top-0 h-3 w-3 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+                <Pencil className="absolute -right-3 top-2 h-3 w-3 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
             )}
           </div>
 
-          {node.computedStatus === "BLOCKED" && blockedBy.length > 0 && (
-            <div className="rounded-md bg-red-50 border border-red-100 p-2.5 text-red-700 text-[11px]">
-              <p className="font-bold flex items-center gap-1.5 mb-1.5 uppercase tracking-wide">
-                <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
-                Blocked by
-              </p>
-              <ul className="list-disc list-inside space-y-0.5">
-                {blockedBy.map((title, i) => (
-                  <li key={i} className="truncate">
-                    {title}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
+          {/* Blocking Other Nodes */}
           {blocking.length > 0 && (
             <div className="space-y-1.5">
-              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">
-                Blocking
+              <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+                Blocking {blocking.length} Node{blocking.length > 1 ? "s" : ""}
               </p>
-              <div className="flex flex-wrap gap-1">
+              <div className="flex flex-wrap gap-1.5">
                 {blocking.map((title, i) => (
-                  <Badge key={i} variant="outline" className="text-[9px] px-1.5 py-0 border-slate-200 text-slate-500 bg-slate-50">
+                  <Badge
+                    key={i}
+                    variant="outline"
+                    className="text-[10px] px-2 py-0.5 border-orange-200 text-orange-700 bg-orange-50"
+                  >
                     {title}
                   </Badge>
                 ))}
@@ -447,15 +587,21 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
             </div>
           )}
 
-          <div className="flex justify-between items-center pt-2">
-            <div className="text-[10px] text-slate-400">
-              {node.dueAt && (
-                <span className="flex items-center gap-1">
-                  Due: {new Date(node.dueAt).toLocaleDateString()}
-                </span>
-              )}
-            </div>
+          {/* Action Buttons */}
+          <div className="flex items-center gap-2 pt-2">
             {getPrimaryAction()}
+            {node.computedStatus === "BLOCKED" && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCreateRequestOpen(true);
+                }}
+              >
+                Create Request
+              </Button>
+            )}
           </div>
         </div>
       )}
