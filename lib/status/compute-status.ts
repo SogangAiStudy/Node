@@ -86,8 +86,11 @@ export function getMyTodos(
   nodes: Node[],
   statusMap: Map<string, ComputedStatus>
 ): Node[] {
-  return nodes.filter((node) => {
-    if (node.ownerId !== userId) return false;
+  return nodes.filter((node: any) => {
+    const isOwner = node.ownerId === userId ||
+      node.nodeOwners?.some((no: any) => no.userId === userId);
+
+    if (!isOwner) return false;
 
     const computedStatus = statusMap.get(node.id);
     if (!computedStatus) return false;
@@ -108,8 +111,11 @@ export function getMyWaiting(
   nodes: Node[],
   statusMap: Map<string, ComputedStatus>
 ): Node[] {
-  return nodes.filter((node) => {
-    if (node.ownerId !== userId) return false;
+  return nodes.filter((node: any) => {
+    const isOwner = node.ownerId === userId ||
+      node.nodeOwners?.some((no: any) => no.userId === userId);
+
+    if (!isOwner) return false;
 
     const computedStatus = statusMap.get(node.id);
     return computedStatus === "BLOCKED" || computedStatus === "WAITING";
@@ -131,9 +137,11 @@ export function getImBlocking(
   const result: Array<{ blockedNode: Node; waitingOnMyNode: Node }> = [];
 
   // Find all my nodes that are not DONE
-  const myIncompleteNodes = nodes.filter(
-    (node) => node.ownerId === userId && node.manualStatus !== ManualStatus.DONE
-  );
+  const myIncompleteNodes = nodes.filter((node: any) => {
+    const isOwner = node.ownerId === userId ||
+      node.nodeOwners?.some((no: any) => no.userId === userId);
+    return isOwner && node.manualStatus !== ManualStatus.DONE;
+  });
 
   for (const myNode of myIncompleteNodes) {
     // Find all edges where someone else's node DEPENDS_ON this node
@@ -142,14 +150,22 @@ export function getImBlocking(
     );
 
     for (const edge of dependentEdges) {
-      const blockedNode = nodes.find((n) => n.id === edge.fromNodeId);
+      const blockedNode: any = nodes.find((n) => n.id === edge.fromNodeId);
 
-      // Only include if the blocked node is owned by someone else
-      if (blockedNode && blockedNode.ownerId !== userId && blockedNode.ownerId !== null) {
-        result.push({
-          blockedNode,
-          waitingOnMyNode: myNode,
-        });
+      if (blockedNode) {
+        // Only include if the blocked node is NOT owned by me (neither primary nor multi)
+        const isBlockedNodeOwnedByMe = blockedNode.ownerId === userId ||
+          blockedNode.nodeOwners?.some((no: any) => no.userId === userId);
+
+        // Also ensure it HAS an owner or owners (not unassigned)
+        const hasOwner = blockedNode.ownerId !== null || (blockedNode.nodeOwners && blockedNode.nodeOwners.length > 0);
+
+        if (!isBlockedNodeOwnedByMe && hasOwner) {
+          result.push({
+            blockedNode,
+            waitingOnMyNode: myNode,
+          });
+        }
       }
     }
   }

@@ -100,17 +100,26 @@ export interface NodeDTO {
   projectId: string;
   teamId: string | null;
   teamName: string | null;
+  ownerId: string | null;
+  ownerName: string | null;
+
+  // Multi-assignment
+  teams: { id: string; name: string }[];
+  owners: { id: string; name: string }[];
+
   title: string;
   description: string | null;
   type: NodeType;
   manualStatus: ManualStatus;
   computedStatus: ComputedStatus; // Computed on server
-  ownerId: string | null;
-  ownerName: string | null;
   priority: number;
   dueAt: string | null;
   createdAt: string;
   updatedAt: string;
+
+  // Position for React Flow
+  positionX: number | null;
+  positionY: number | null;
 }
 
 // Edge DTO

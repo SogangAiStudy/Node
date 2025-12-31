@@ -15,12 +15,17 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
       ? "graph"
       : pathname.includes("/inbox")
         ? "inbox"
-        : "now";
+        : pathname === "/"
+          ? "projects"
+          : "now";
 
   return (
     <div className="container mx-auto px-4 py-8">
       <Tabs value={currentTab} className="mb-6">
         <TabsList>
+          <Link href="/">
+            <TabsTrigger value="projects">Projects</TabsTrigger>
+          </Link>
           <Link href={`/projects/${projectId}/now`}>
             <TabsTrigger value="now">Now</TabsTrigger>
           </Link>
