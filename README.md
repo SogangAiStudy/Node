@@ -154,6 +154,8 @@ Windows (PowerShell):
 [Convert]::ToBase64String((1..32 | ForEach-Object {Get-Random -Max 256}))
 ```
 
+👉 **Google OAuth how-to:** See [docs/google-auth.md](docs/google-auth.md) for a copy-paste guide to creating the credentials, wiring env vars, and triggering the Google sign-in/out buttons in your UI.
+
 ---
 
 ## 5) Initialize the database
