@@ -23,8 +23,8 @@ Traditional task lists fail when dependencies get complex. **Node** turns your w
 ## 🚀 Quick Start
 
 ### 1. Requirements
-- **Node.js**: `v20.19+` or `v22.12+` (Required for Prisma 7)
-- **PostgreSQL**: `v15+`
+- **Node.js**: `v20.19+` or `v22.12+`
+- **PostgreSQL**: `v15+` OR **Docker** (Recommended)
 
 ### 2. Installation
 ```bash
@@ -35,7 +35,17 @@ npm install
 
 ### 3. Database & Environment Setup
 
-#### Step A: Create Local Database & User
+#### Option 1: Docker (Recommended - Fast & Easy)
+If you have [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed, you don't need to install Postgres manually.
+
+```bash
+# 1. Start the database container
+docker-compose up -d
+
+# 2. Proceed directly to Step B
+```
+
+#### Option 2: Manual Setup (No Docker)
 Run these in your terminal to prepare PostgreSQL:
 
 **🍎 macOS / 🐧 Linux:**
@@ -63,7 +73,7 @@ cp .env.example .env.local
 cp .env.example .env.remote
 ```
 
-Edit `.env.local` with the credentials created above:
+Edit `.env.local` to match the Docker/Manual credentials:
 ```env
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/node_db?schema=public"
 DIRECT_URL="postgresql://postgres:postgres@localhost:5432/node_db?schema=public"
