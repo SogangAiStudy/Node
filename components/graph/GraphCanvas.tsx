@@ -10,6 +10,7 @@ import ReactFlow, {
   addEdge,
   Connection,
   MarkerType,
+  NodeDragHandler,
 } from "reactflow";
 import dagre from "dagre";
 import "reactflow/dist/style.css";
@@ -44,13 +45,13 @@ const nodeTypes = {
   custom: CustomNode,
 };
 
-const dagreGraph = new dagre.graphlib.Graph();
-dagreGraph.setDefaultEdgeLabel(() => ({}));
-
 const nodeWidth = 240;
 const nodeHeight = 120;
 
 const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = "LR") => {
+  const dagreGraph = new dagre.graphlib.Graph();
+  dagreGraph.setDefaultEdgeLabel(() => ({}));
+
   const isHorizontal = direction === "LR";
   dagreGraph.setGraph({ rankdir: direction });
 
@@ -96,12 +97,17 @@ export function GraphCanvas({ projectId, data, onDataChange }: GraphCanvasProps)
           return false;
         return true;
       })
-      .map((node) => ({
-        id: node.id,
-        type: "custom",
-        position: { x: 0, y: 0 },
-        data: { node },
-      }));
+      .map((node) => {
+        const x = typeof node.positionX === 'number' && !Number.isNaN(node.positionX) ? node.positionX : 0;
+        const y = typeof node.positionY === 'number' && !Number.isNaN(node.positionY) ? node.positionY : 0;
+
+        return {
+          id: node.id,
+          type: "custom",
+          position: { x, y },
+          data: { node },
+        };
+      });
 
     const visibleNodeIds = new Set(initialNodes.map((n) => n.id));
     const initialEdges: Edge[] = data.edges
@@ -125,7 +131,39 @@ export function GraphCanvas({ projectId, data, onDataChange }: GraphCanvasProps)
         };
       });
 
-    const { nodes, edges } = getLayoutedElements(initialNodes, initialEdges);
+    // Apply positions: use saved positions or auto-layout
+    const { nodes, edges } = (() => {
+      const nodesWithSavedPos: Node[] = [];
+      const nodesNeedingLayout: Node[] = [];
+
+      initialNodes.forEach((node) => {
+        const nodeData = data.nodes.find((n) => n.id === node.id);
+        const hasValidPos =
+          nodeData &&
+          typeof nodeData.positionX === 'number' && !Number.isNaN(nodeData.positionX) &&
+          typeof nodeData.positionY === 'number' && !Number.isNaN(nodeData.positionY);
+
+        if (hasValidPos) {
+          // Use saved position and set handle positions
+          nodesWithSavedPos.push({
+            ...node,
+            position: { x: nodeData!.positionX!, y: nodeData!.positionY! },
+            sourcePosition: "right" as any,
+            targetPosition: "left" as any,
+          });
+        } else {
+          nodesNeedingLayout.push(node);
+        }
+      });
+
+      // Auto-layout nodes without saved positions
+      if (nodesNeedingLayout.length > 0) {
+        const { nodes: layoutedNodes } = getLayoutedElements(nodesNeedingLayout, initialEdges);
+        return { nodes: [...nodesWithSavedPos, ...layoutedNodes], edges: initialEdges };
+      }
+
+      return { nodes: nodesWithSavedPos, edges: initialEdges };
+    })();
 
     const nodesWithExtraData = nodes.map((node) => {
       const blockedByTitles = data.edges
@@ -254,6 +292,33 @@ export function GraphCanvas({ projectId, data, onDataChange }: GraphCanvasProps)
     setRelation(edge.data?.originalEdge?.relation || "DEPENDS_ON");
   }, []);
 
+  const onNodeDragStop: NodeDragHandler = useCallback(
+    async (_event, node) => {
+      // Persist node position to database
+      try {
+        const res = await fetch(`/api/nodes/${node.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            positionX: Math.round(node.position.x),
+            positionY: Math.round(node.position.y),
+          }),
+        });
+
+        if (res.ok) {
+          toast.success("Position saved", { duration: 1000 });
+          onDataChange();
+        } else {
+          throw new Error("Failed to save position");
+        }
+      } catch (error) {
+        console.error("Failed to save node position:", error);
+        toast.error("Failed to save position");
+      }
+    },
+    [onDataChange]
+  );
+
   return (
     <div className="relative h-full w-full rounded-lg border bg-white overflow-hidden shadow-inner">
       <Toolbar
@@ -273,6 +338,7 @@ export function GraphCanvas({ projectId, data, onDataChange }: GraphCanvasProps)
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           onEdgeClick={onEdgeClick}
+          onNodeDragStop={onNodeDragStop}
           nodeTypes={nodeTypes}
           fitView
           snapToGrid

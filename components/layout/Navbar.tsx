@@ -54,6 +54,14 @@ export function Navbar({ user }: NavbarProps) {
             <Link href="/" className="text-xl font-bold">
               Node
             </Link>
+            <div className="flex items-center gap-4">
+              <Link
+                href="/"
+                className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Projects
+              </Link>
+            </div>
           </div>
 
           <div className="flex items-center gap-4">
@@ -61,7 +69,7 @@ export function Navbar({ user }: NavbarProps) {
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-10 w-10 rounded-full">
                   <Avatar>
-                    <AvatarImage src={user.image || ""} alt={user.name || ""} />
+                    <AvatarImage src={user.image || undefined} alt={user.name || ""} />
                     <AvatarFallback>{initials}</AvatarFallback>
                   </Avatar>
                 </Button>

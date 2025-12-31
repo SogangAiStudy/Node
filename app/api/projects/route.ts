@@ -137,14 +137,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get user's teams to verify selection
-    const myTeams = await getUserTeams(orgMember.orgId, user.id);
+    // Get all teams in the organization to verify selection
+    const orgTeams = await prisma.team.findMany({
+      where: { orgId: orgMember.orgId },
+      select: { id: true },
+    });
+    const orgTeamIds = orgTeams.map((t: any) => t.id);
 
-    // Verify all selected teamIds are valid for this user
-    const invalidTeams = validated.teamIds.filter(id => !myTeams.includes(id));
+    // Verify all selected teamIds belong to this organization
+    const invalidTeams = validated.teamIds.filter(id => !orgTeamIds.includes(id));
     if (invalidTeams.length > 0) {
       return NextResponse.json(
-        { error: "Some selected teams are invalid or you are not a member of them" },
+        { error: "Some selected teams are invalid or do not belong to your organization" },
         { status: 400 }
       );
     }

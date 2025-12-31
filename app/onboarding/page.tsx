@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,6 +13,7 @@ import { toast } from "sonner";
 
 export default function OnboardingPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<string>("join");
 
   // Join Org State
@@ -23,6 +25,22 @@ export default function OnboardingPage() {
   // Create Org State
   const [organizationName, setOrganizationName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+
+  // Check if user already has an organization and redirect
+  const { data: orgStatus } = useQuery({
+    queryKey: ["organization-status"],
+    queryFn: async () => {
+      const res = await fetch("/api/user/organization-status");
+      if (!res.ok) return null;
+      return res.json() as Promise<{ hasOrganization: boolean }>;
+    },
+  });
+
+  useEffect(() => {
+    if (orgStatus?.hasOrganization) {
+      router.push("/");
+    }
+  }, [orgStatus, router]);
 
   // Search logic
   useEffect(() => {
@@ -91,6 +109,7 @@ export default function OnboardingPage() {
       }
 
       toast.success("Organization created successfully!");
+      await queryClient.invalidateQueries({ queryKey: ["organization-status"] });
       router.push("/");
       router.refresh();
     } catch (err: any) {

@@ -234,6 +234,21 @@ export default function MembersPage() {
                     <p className="text-muted-foreground">Manage organization users and team assignments</p>
                 </div>
                 <div className="flex items-center gap-2">
+                    <Button
+                        variant="ghost"
+                        className="text-muted-foreground hover:bg-slate-100 border-dashed border"
+                        onClick={async () => {
+                            const res = await fetch("/api/test/make-user", { method: "POST" });
+                            if (res.ok) {
+                                queryClient.invalidateQueries({ queryKey: ["org-members"] });
+                                toast.success("Mock user created and added to organization");
+                            } else {
+                                toast.error("Failed to create mock user");
+                            }
+                        }}
+                    >
+                        <Plus className="mr-2 h-4 w-4" /> Make User
+                    </Button>
                     <Button variant="outline" onClick={copyInviteLink} disabled={!currentOrg?.inviteCode}>
                         {copied ? <CheckCircle2 className="mr-2 h-4 w-4 text-green-500" /> : <Copy className="mr-2 h-4 w-4" />}
                         {copied ? "Copied!" : "Copy Invite Link"}
@@ -264,7 +279,7 @@ export default function MembersPage() {
                                             <TableCell>
                                                 <div className="flex items-center gap-3">
                                                     <Avatar className="h-8 w-8">
-                                                        <AvatarImage src={member.image || ""} />
+                                                        <AvatarImage src={member.image || undefined} />
                                                         <AvatarFallback>{member.name?.[0] || member.email[0].toUpperCase()}</AvatarFallback>
                                                     </Avatar>
                                                     <div>
@@ -328,7 +343,7 @@ export default function MembersPage() {
                                         <TableCell>
                                             <div className="flex items-center gap-3">
                                                 <Avatar className="h-8 w-8">
-                                                    <AvatarImage src={member.image || ""} />
+                                                    <AvatarImage src={member.image || undefined} />
                                                     <AvatarFallback>{member.name?.[0] || member.email[0].toUpperCase()}</AvatarFallback>
                                                 </Avatar>
                                                 <div>
@@ -406,7 +421,7 @@ export default function MembersPage() {
                     <div className="grid gap-6 py-4">
                         <div className="flex items-center gap-4 border-b pb-4">
                             <Avatar className="h-10 w-10">
-                                <AvatarImage src={editingMember?.image || ""} />
+                                <AvatarImage src={editingMember?.image || undefined} />
                                 <AvatarFallback>{editingMember?.name?.[0] || "?"}</AvatarFallback>
                             </Avatar>
                             <div>
