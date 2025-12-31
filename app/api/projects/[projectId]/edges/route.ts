@@ -4,7 +4,7 @@ import { requireAuth, requireProjectMembership } from "@/lib/utils/auth";
 import { createActivityLog } from "@/lib/utils/activity-log";
 import { wouldCreateCycle, findCyclePath } from "@/lib/status/cycle-detection";
 import { z } from "zod";
-import { EdgeRelation } from "@prisma/client";
+import { EdgeRelation } from "@/types";
 
 const CreateEdgeSchema = z.object({
   fromNodeId: z.string(),
@@ -85,9 +85,20 @@ export async function POST(
       return NextResponse.json({ error: "Edge already exists" }, { status: 400 });
     }
 
+    // Get project to get orgId
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { orgId: true },
+    });
+
+    if (!project) {
+      return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    }
+
     // Create edge
     const edge = await prisma.edge.create({
       data: {
+        orgId: project.orgId,
         projectId,
         fromNodeId: validated.fromNodeId,
         toNodeId: validated.toNodeId,
@@ -126,7 +137,7 @@ export async function POST(
     console.error("POST /api/projects/[projectId]/edges error:", error);
 
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: "Invalid input", details: error.errors }, { status: 400 });
+      return NextResponse.json({ error: "Invalid input", details: error.flatten() }, { status: 400 });
     }
 
     if (error instanceof Error && error.message === "Not a member of this project") {

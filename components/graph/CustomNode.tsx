@@ -10,6 +10,27 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from "@/components/ui/dropdown-menu";
+import { Users } from "lucide-react";
+
+interface Member {
+  userId: string;
+  userName: string | null;
+  teamId: string | null;
+  teamName: string | null;
+}
+
+interface Team {
+  id: string;
+  name: string;
+}
 
 interface CustomNodeProps {
   data: {
@@ -59,6 +80,30 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
   const [isEditingDesc, setIsEditingDesc] = useState(false);
   const [editedTitle, setEditedTitle] = useState(node.title);
   const [editedDesc, setEditedDesc] = useState(node.description || "");
+
+  const [members, setMembers] = useState<Member[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [hasLoadedMetadata, setHasLoadedMetadata] = useState(false);
+
+  const fetchMetadata = async () => {
+    try {
+      const res = await fetch(`/api/projects/${projectId}/members`);
+      if (res.ok) {
+        const data = await res.json();
+        setMembers(data.members || []);
+        setTeams(data.teams || []);
+        setHasLoadedMetadata(true);
+      }
+    } catch (error) {
+      console.error("Failed to fetch node metadata:", error);
+    }
+  };
+
+  useEffect(() => {
+    if (selected && !hasLoadedMetadata) {
+      fetchMetadata();
+    }
+  }, [selected, hasLoadedMetadata]);
 
   useEffect(() => {
     if (!isEditingTitle) setEditedTitle(node.title);
@@ -220,11 +265,35 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
                 <Pencil className="h-3 w-3 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
             )}
-            {node.team && (
-              <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
-                {node.team}
-              </p>
-            )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <div className="flex items-center gap-1 cursor-pointer hover:bg-slate-50 rounded px-1 -ml-1 w-fit transition-colors">
+                  <Users className="h-3 w-3 text-slate-400" />
+                  <p className={cn(
+                    "text-[10px] font-medium uppercase tracking-wider",
+                    node.teamName ? "text-primary" : "text-muted-foreground"
+                  )}>
+                    {node.teamName || "No Team"}
+                  </p>
+                </div>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-48">
+                <DropdownMenuLabel className="text-[10px] uppercase font-bold text-slate-400">Assign Team</DropdownMenuLabel>
+                <DropdownMenuItem onClick={(e) => updateNode({ teamId: null } as any, e)}>
+                  None
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                {teams.map((t) => (
+                  <DropdownMenuItem
+                    key={t.id}
+                    onClick={(e) => updateNode({ teamId: t.id } as any, e)}
+                    className={cn(node.teamId === t.id && "bg-slate-100 font-bold")}
+                  >
+                    {t.name}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
           <div className="flex flex-col items-end gap-1">
             <Badge
@@ -248,22 +317,55 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
         {/* Owner Avatar Badge - Bottom Left (Only for TODO/DOING) */}
         {showAvatar && (
           <div className="flex items-center gap-2 mt-1">
-            {node.ownerId ? (
-              <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-100 rounded-full pr-2 pl-0.5 py-0.5">
-                <Avatar className="h-5 w-5 border border-white shadow-sm">
-                  <AvatarFallback className="text-[9px] font-bold bg-primary text-primary-foreground">
-                    {getInitials(node.ownerName)}
-                  </AvatarFallback>
-                </Avatar>
-                <span className="text-[10px] font-medium text-slate-600 truncate max-w-[80px]">
-                  {node.ownerName}
-                </span>
-              </div>
-            ) : (
-              <Badge variant="outline" className="text-[9px] font-normal text-slate-400 border-dashed py-0">
-                Unassigned
-              </Badge>
-            )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <div className="cursor-pointer hover:brightness-95 transition-all">
+                  {node.ownerId ? (
+                    <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-100 rounded-full pr-2 pl-0.5 py-0.5">
+                      <Avatar className="h-5 w-5 border border-white shadow-sm">
+                        <AvatarFallback className="text-[9px] font-bold bg-primary text-primary-foreground">
+                          {getInitials(node.ownerName)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="text-[10px] font-medium text-slate-600 truncate max-w-[120px]">
+                        {node.ownerName}
+                      </span>
+                    </div>
+                  ) : (
+                    <Badge variant="outline" className="text-[9px] font-normal text-slate-400 border-dashed py-0">
+                      Unassigned
+                    </Badge>
+                  )}
+                </div>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-56 overflow-y-auto max-h-[300px]">
+                <DropdownMenuLabel className="text-[10px] uppercase font-bold text-slate-400">Assign Owner</DropdownMenuLabel>
+                <DropdownMenuItem onClick={(e) => updateNode({ ownerId: null } as any, e)}>
+                  Unassigned
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                {members.map((m) => (
+                  <DropdownMenuItem
+                    key={m.userId}
+                    onClick={(e) => updateNode({ ownerId: m.userId } as any, e)}
+                    className={cn(
+                      "flex items-center gap-2 px-2 py-1.5",
+                      node.ownerId === m.userId && "bg-slate-100 font-bold"
+                    )}
+                  >
+                    <Avatar className="h-5 w-5 border border-white">
+                      <AvatarFallback className="text-[8px] font-bold">
+                        {getInitials(m.userName)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex flex-col">
+                      <span className="text-[11px] leading-none">{m.userName}</span>
+                      <span className="text-[9px] text-muted-foreground">{m.teamName || "No Team"}</span>
+                    </div>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         )}
 

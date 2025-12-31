@@ -44,17 +44,52 @@ export async function POST(
       );
     }
 
+    // Get project to get orgId
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { orgId: true },
+    });
+
+    if (!project) {
+      return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    }
+
     // If toUserId provided, verify they are a project member
     if (validated.toUserId) {
       await requireProjectMembership(projectId, validated.toUserId);
     }
 
-    // If toTeam provided, verify at least one team member exists
+    // If toTeam provided, verify at least one team member exists and team has access
     if (validated.toTeam) {
-      const teamMembers = await prisma.projectMember.findMany({
+      // Find teamId by name (hacky since toTeam is currently a string)
+      const team = await prisma.team.findFirst({
         where: {
-          projectId,
-          team: validated.toTeam,
+          orgId: project.orgId,
+          name: validated.toTeam,
+        },
+      });
+
+      if (!team) {
+        return NextResponse.json({ error: "Team not found" }, { status: 400 });
+      }
+
+      // Check if team has access to project
+      const projectTeam = await prisma.projectTeam.findUnique({
+        where: {
+          projectId_teamId: {
+            projectId,
+            teamId: team.id,
+          },
+        },
+      });
+
+      if (!projectTeam) {
+        return NextResponse.json({ error: "Team does not have access to this project" }, { status: 400 });
+      }
+
+      const teamMembers = await prisma.teamMember.findMany({
+        where: {
+          teamId: team.id,
         },
       });
 
@@ -69,6 +104,7 @@ export async function POST(
     // Create request
     const req = await prisma.request.create({
       data: {
+        orgId: project.orgId,
         projectId,
         linkedNodeId: validated.linkedNodeId,
         question: validated.question,
@@ -132,7 +168,7 @@ export async function POST(
     console.error("POST /api/projects/[projectId]/requests error:", error);
 
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: "Invalid input", details: error.errors }, { status: 400 });
+      return NextResponse.json({ error: "Invalid input", details: error.flatten() }, { status: 400 });
     }
 
     if (error instanceof Error && error.message === "Not a member of this project") {

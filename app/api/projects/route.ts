@@ -11,7 +11,105 @@ const CreateProjectSchema = z.object({
   teamIds: z.array(z.string()).min(1, "Select at least one team"),
 });
 
-// ... GET remains SAME (viewed previously) ...
+// GET /api/projects - List user's projects (ProjectTeam-based)
+export async function GET() {
+  try {
+    const user = await requireAuth();
+
+    // Get user's organization
+    const orgMember = await prisma.orgMember.findFirst({
+      where: {
+        userId: user.id,
+        status: "ACTIVE",
+      },
+      select: {
+        orgId: true,
+        role: true,
+      },
+    });
+
+    if (!orgMember) {
+      return NextResponse.json({ projects: [] });
+    }
+
+    // Check if user is org admin
+    const isAdmin = await isOrgAdmin(orgMember.orgId, user.id);
+
+    let projects;
+
+    if (isAdmin) {
+      // ADMIN sees all projects in the org
+      projects = await prisma.project.findMany({
+        where: {
+          orgId: orgMember.orgId,
+        },
+        include: {
+          _count: {
+            select: {
+              projectTeams: true,
+            },
+          },
+          primaryTeam: {
+            select: {
+              name: true,
+            },
+          },
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      });
+    } else {
+      // MEMBER sees only projects their teams have access to
+      const myTeams = await getUserTeams(orgMember.orgId, user.id);
+
+      projects = await prisma.project.findMany({
+        where: {
+          orgId: orgMember.orgId,
+          projectTeams: {
+            some: {
+              teamId: {
+                in: myTeams,
+              },
+            },
+          },
+        },
+        include: {
+          _count: {
+            select: {
+              projectTeams: true,
+            },
+          },
+          primaryTeam: {
+            select: {
+              name: true,
+            },
+          },
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      });
+    }
+
+    const projectDTOs = projects.map((project: any) => ({
+      id: project.id,
+      orgId: project.orgId,
+      name: project.name,
+      description: project.description,
+      primaryTeamId: project.primaryTeamId,
+      primaryTeamName: project.primaryTeam?.name || null,
+      createdAt: project.createdAt.toISOString(),
+      updatedAt: project.updatedAt.toISOString(),
+      teamCount: project._count.projectTeams,
+    }));
+
+    return NextResponse.json({ projects: projectDTOs });
+  } catch (error) {
+    console.error("GET /api/projects error:", error);
+    return NextResponse.json({ error: "Failed to fetch projects" }, { status: 500 });
+  }
+}
 
 // POST /api/projects - Create new project
 export async function POST(request: NextRequest) {

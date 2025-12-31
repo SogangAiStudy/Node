@@ -29,10 +29,16 @@ interface AddNodeDialogProps {
   onSuccess: () => void;
 }
 
-interface ProjectMember {
+interface Member {
   userId: string;
   userName: string | null;
-  team: string | null;
+  teamId: string | null;
+  teamName: string | null;
+}
+
+interface Team {
+  id: string;
+  name: string;
 }
 
 export function AddNodeDialog({ projectId, open, onOpenChange, onSuccess }: AddNodeDialogProps) {
@@ -41,40 +47,42 @@ export function AddNodeDialog({ projectId, open, onOpenChange, onSuccess }: AddN
   const [description, setDescription] = useState("");
   const [type, setType] = useState("TASK");
   const [ownerId, setOwnerId] = useState<string>("unassigned");
-  const [team, setTeam] = useState("");
-  const [members, setMembers] = useState<ProjectMember[]>([]);
+  const [teamId, setTeamId] = useState<string>("none");
+  const [members, setMembers] = useState<Member[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  const fetchMembers = useCallback(async () => {
+  const fetchMembersAndTeams = useCallback(async () => {
     try {
       const res = await fetch(`/api/projects/${projectId}/members`);
       if (res.ok) {
         const data = await res.json();
-        setMembers(data);
+        setMembers(data.members || []);
+        setTeams(data.teams || []);
 
         // Auto-set current user as owner if they are a member
         if (session?.user?.id && ownerId === "unassigned") {
-          const isMember = data.some((m: ProjectMember) => m.userId === session.user?.id);
+          const isMember = data.members.some((m: Member) => m.userId === session.user?.id);
           if (isMember) {
             setOwnerId(session.user.id);
             // Also try to set their team
-            const currentMember = data.find((m: ProjectMember) => m.userId === session.user?.id);
-            if (currentMember?.team) {
-              setTeam(currentMember.team);
+            const currentMember = data.members.find((m: Member) => m.userId === session.user?.id);
+            if (currentMember?.teamId) {
+              setTeamId(currentMember.teamId);
             }
           }
         }
       }
     } catch (error) {
-      console.error("Failed to fetch members:", error);
+      console.error("Failed to fetch members and teams:", error);
     }
   }, [projectId, session?.user?.id, ownerId]);
 
   useEffect(() => {
     if (open) {
-      fetchMembers();
+      fetchMembersAndTeams();
     }
-  }, [open, fetchMembers]);
+  }, [open, fetchMembersAndTeams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,7 +97,7 @@ export function AddNodeDialog({ projectId, open, onOpenChange, onSuccess }: AddN
           description,
           type,
           ownerId: ownerId === "unassigned" ? undefined : ownerId,
-          team: team || undefined,
+          team: teamId === "none" ? undefined : teamId,
         }),
       });
 
@@ -112,7 +120,6 @@ export function AddNodeDialog({ projectId, open, onOpenChange, onSuccess }: AddN
     setTitle("");
     setDescription("");
     setType("TASK");
-    // Don't reset ownerId/team here to keep defaults for next creation within same project session
   };
 
   return (
@@ -169,13 +176,20 @@ export function AddNodeDialog({ projectId, open, onOpenChange, onSuccess }: AddN
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="team">Team (optional)</Label>
-              <Input
-                id="team"
-                value={team}
-                onChange={(e) => setTeam(e.target.value)}
-                placeholder="e.g. Design, Backend"
-              />
+              <Label htmlFor="team">Assigned Team</Label>
+              <Select value={teamId} onValueChange={setTeamId}>
+                <SelectTrigger id="team">
+                  <SelectValue placeholder="Select team" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  {teams.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="grid gap-2">

@@ -1,6 +1,6 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db/prisma";
-import { OrgRole, ProjectRole } from "@prisma/client";
+import { OrgRole, ProjectRole } from "@/types";
 
 /**
  * Get the current authenticated user
@@ -98,7 +98,7 @@ export async function getUserTeams(orgId: string, userId: string): Promise<strin
       teamId: true,
     },
   });
-  return teamMemberships.map((tm) => tm.teamId);
+  return teamMemberships.map((tm: any) => tm.teamId);
 }
 
 /**
