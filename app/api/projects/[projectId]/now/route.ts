@@ -95,6 +95,8 @@ export async function GET(
       dueAt: node.dueAt?.toISOString() || null,
       createdAt: node.createdAt.toISOString(),
       updatedAt: node.updatedAt.toISOString(),
+      positionX: node.positionX ?? null,
+      positionY: node.positionY ?? null,
     });
 
     const myTodos = myTodosNodes.map(toNodeDTO);
