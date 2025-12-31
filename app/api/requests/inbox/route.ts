@@ -84,6 +84,7 @@ export async function GET(request: NextRequest) {
 
     const requestDTOs: RequestDTO[] = requests.map((req) => ({
       id: req.id,
+      orgId: req.orgId,
       projectId: req.projectId,
       linkedNodeId: req.linkedNodeId,
       linkedNodeTitle: req.linkedNode.title,
