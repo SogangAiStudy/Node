@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "OrgMemberStatus" ADD VALUE 'PENDING_APPROVAL';
