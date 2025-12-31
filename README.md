@@ -158,6 +158,8 @@ Windows (PowerShell):
 
 👉 **Local dev playbook:** See [docs/local-dev-playbook.md](docs/local-dev-playbook.md) for a copy-paste checklist to run any Next.js project with npm + PostgreSQL + Prisma, plus common Windows/macOS fixes.
 
+👉 **NextAuth + Prisma quickstart:** See [docs/nextauth-prisma.md](docs/nextauth-prisma.md) to lift our exact App Router + NextAuth.js + Prisma/PostgreSQL wiring (env vars, middleware guard, adapter, schema, and client usage) into another project without re-reading docs.
+
 ---
 
 ## 5) Initialize the database
