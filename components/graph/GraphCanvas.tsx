@@ -10,6 +10,7 @@ import ReactFlow, {
   addEdge,
   Connection,
   MarkerType,
+  NodeDragHandler,
 } from "reactflow";
 import dagre from "dagre";
 import "reactflow/dist/style.css";
@@ -99,7 +100,11 @@ export function GraphCanvas({ projectId, data, onDataChange }: GraphCanvasProps)
       .map((node) => ({
         id: node.id,
         type: "custom",
-        position: { x: 0, y: 0 },
+        // Use saved position if available, otherwise use placeholder for auto-layout
+        position:
+          node.positionX !== null && node.positionY !== null
+            ? { x: node.positionX, y: node.positionY }
+            : { x: 0, y: 0 },
         data: { node },
       }));
 
@@ -125,7 +130,34 @@ export function GraphCanvas({ projectId, data, onDataChange }: GraphCanvasProps)
         };
       });
 
-    const { nodes, edges } = getLayoutedElements(initialNodes, initialEdges);
+    // Apply positions: use saved positions or auto-layout
+    const { nodes, edges } = (() => {
+      const nodesWithSavedPos: Node[] = [];
+      const nodesNeedingLayout: Node[] = [];
+
+      initialNodes.forEach((node) => {
+        const nodeData = data.nodes.find((n) => n.id === node.id);
+        if (nodeData && nodeData.positionX !== null && nodeData.positionY !== null) {
+          // Use saved position and set handle positions
+          nodesWithSavedPos.push({
+            ...node,
+            position: { x: nodeData.positionX, y: nodeData.positionY },
+            sourcePosition: "right" as any,
+            targetPosition: "left" as any,
+          });
+        } else {
+          nodesNeedingLayout.push(node);
+        }
+      });
+
+      // Auto-layout nodes without saved positions
+      if (nodesNeedingLayout.length > 0) {
+        const { nodes: layoutedNodes } = getLayoutedElements(nodesNeedingLayout, initialEdges);
+        return { nodes: [...nodesWithSavedPos, ...layoutedNodes], edges: initialEdges };
+      }
+
+      return { nodes: nodesWithSavedPos, edges: initialEdges };
+    })();
 
     const nodesWithExtraData = nodes.map((node) => {
       const blockedByTitles = data.edges
@@ -254,6 +286,26 @@ export function GraphCanvas({ projectId, data, onDataChange }: GraphCanvasProps)
     setRelation(edge.data?.originalEdge?.relation || "DEPENDS_ON");
   }, []);
 
+  const onNodeDragStop: NodeDragHandler = useCallback(
+    async (_event, node) => {
+      // Persist node position to database
+      try {
+        await fetch(`/api/nodes/${node.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            positionX: node.position.x,
+            positionY: node.position.y,
+          }),
+        });
+      } catch (error) {
+        console.error("Failed to save node position:", error);
+        toast.error("Failed to save position");
+      }
+    },
+    []
+  );
+
   return (
     <div className="relative h-full w-full rounded-lg border bg-white overflow-hidden shadow-inner">
       <Toolbar
@@ -273,6 +325,7 @@ export function GraphCanvas({ projectId, data, onDataChange }: GraphCanvasProps)
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           onEdgeClick={onEdgeClick}
+          onNodeDragStop={onNodeDragStop}
           nodeTypes={nodeTypes}
           fitView
           snapToGrid

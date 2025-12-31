@@ -119,6 +119,8 @@ export async function GET(
       dueAt: node.dueAt?.toISOString() || null,
       createdAt: node.createdAt.toISOString(),
       updatedAt: node.updatedAt.toISOString(),
+      positionX: node.positionX,
+      positionY: node.positionY,
     }));
 
     const edgeDTOs: EdgeDTO[] = edges.map((edge: any) => ({

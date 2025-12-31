@@ -54,6 +54,11 @@ export async function POST(
     const ownerId = (validated.ownerId && validated.ownerId !== "unassigned") ? validated.ownerId : null;
     const teamId = (validated.team && validated.team !== "none") ? validated.team : null;
 
+    // Generate random initial position to prevent stacking
+    // Spread nodes in a 800x600 area
+    const initialX = Math.random() * 800;
+    const initialY = Math.random() * 600;
+
     const node = await prisma.node.create({
       data: {
         orgId: project.orgId,
@@ -66,6 +71,8 @@ export async function POST(
         teamId,
         priority: validated.priority,
         dueAt: validated.dueAt ? new Date(validated.dueAt) : null,
+        positionX: initialX,
+        positionY: initialY,
         nodeTeams: {
           create: (validated.teamIds || (teamId ? [teamId] : [])).map(tid => ({ teamId: tid }))
         },

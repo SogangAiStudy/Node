@@ -16,6 +16,8 @@ const UpdateNodeSchema = z.object({
   ownerIds: z.array(z.string()).optional(),
   priority: z.number().int().min(1).max(5).optional(),
   dueAt: z.string().datetime().nullable().optional(),
+  positionX: z.number().optional(),
+  positionY: z.number().optional(),
 });
 
 // PATCH /api/nodes/[nodeId] - Update node
@@ -64,6 +66,8 @@ export async function PATCH(
         ...(validated.dueAt !== undefined && {
           dueAt: validated.dueAt ? new Date(validated.dueAt) : null,
         }),
+        ...(validated.positionX !== undefined && { positionX: validated.positionX }),
+        ...(validated.positionY !== undefined && { positionY: validated.positionY }),
         ...(validated.teamIds !== undefined && {
           nodeTeams: {
             deleteMany: {},
