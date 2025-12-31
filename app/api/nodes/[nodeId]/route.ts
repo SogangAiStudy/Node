@@ -11,7 +11,7 @@ const UpdateNodeSchema = z.object({
   type: z.nativeEnum(NodeType).optional(),
   manualStatus: z.nativeEnum(ManualStatus).optional(),
   ownerId: z.string().nullable().optional(),
-  team: z.string().nullable().optional(),
+  teamId: z.string().nullable().optional(),
   priority: z.number().int().min(1).max(5).optional(),
   dueAt: z.string().datetime().nullable().optional(),
 });
@@ -53,7 +53,7 @@ export async function PATCH(
         ...(validated.type !== undefined && { type: validated.type }),
         ...(validated.manualStatus !== undefined && { manualStatus: validated.manualStatus }),
         ...(validated.ownerId !== undefined && { ownerId: validated.ownerId }),
-        ...(validated.team !== undefined && { teamId: validated.team }),
+        ...(validated.teamId !== undefined && { teamId: validated.teamId }),
         ...(validated.priority !== undefined && { priority: validated.priority }),
         ...(validated.dueAt !== undefined && {
           dueAt: validated.dueAt ? new Date(validated.dueAt) : null,

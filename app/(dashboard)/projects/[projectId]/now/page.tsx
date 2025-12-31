@@ -21,7 +21,7 @@ function NodeCard({ node, projectId }: { node: NodeDTO; projectId: string }) {
           {node.ownerName && (
             <p className="text-xs text-muted-foreground mb-1">Owner: {node.ownerName}</p>
           )}
-          {node.team && <p className="text-xs text-muted-foreground mb-1">Team: {node.team}</p>}
+          {node.teamName && <p className="text-xs text-muted-foreground mb-1">Team: {node.teamName}</p>}
           {node.dueAt && (
             <p className="text-xs text-muted-foreground">
               Due: {new Date(node.dueAt).toLocaleDateString()}
