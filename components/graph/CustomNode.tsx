@@ -232,7 +232,8 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
       <Handle
         type="target"
         position={Position.Left}
-        className="w-3 h-3 border-2 border-white bg-slate-400 hover:w-4 hover:h-4 hover:bg-primary transition-all cursor-crosshair"
+        style={{ width: '16px', height: '16px', backgroundColor: '#94a3b8', border: '2px solid white', marginLeft: '-8px' }}
+        className="hover:!bg-primary transition-colors cursor-crosshair z-50 shadow-sm"
       />
 
       <div className="space-y-4">
@@ -461,7 +462,8 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
       <Handle
         type="source"
         position={Position.Right}
-        className="w-3 h-3 border-2 border-white bg-slate-400 hover:w-4 hover:h-4 hover:bg-primary transition-all cursor-crosshair"
+        style={{ width: '16px', height: '16px', backgroundColor: '#94a3b8', border: '2px solid white', marginRight: '-8px' }}
+        className="hover:!bg-primary transition-colors cursor-crosshair z-50 shadow-sm"
       />
 
       <CreateRequestDialog
