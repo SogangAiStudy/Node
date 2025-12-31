@@ -60,12 +60,11 @@ export async function PATCH(
             );
         }
 
-        // Determine final status
-        let finalStatus = status;
+        let finalStatus = status; // Initialize finalStatus with the provided status
 
-        // If teams are being updated, we might need to auto-update status if it was PENDING
-        // Manual says: OrgMember.status updates to ACTIVE when assigned to team(s)
-        if (teamIds && teamIds.length > 0 && targetOrgMember.status === "PENDING_TEAM_ASSIGNMENT" && !status) {
+        // If teams are being updated, auto-update status to ACTIVE if it was PENDING
+        if (teamIds && teamIds.length > 0 &&
+            (targetOrgMember.status === "PENDING_TEAM_ASSIGNMENT" || targetOrgMember.status === "PENDING_APPROVAL")) {
             finalStatus = "ACTIVE";
         }
 

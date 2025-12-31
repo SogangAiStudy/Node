@@ -20,7 +20,7 @@ export async function GET() {
     const orgMember = await prisma.orgMember.findFirst({
       where: {
         userId: user.id,
-        status: "ACTIVE",
+        status: { in: ["ACTIVE", "PENDING_TEAM_ASSIGNMENT"] },
       },
       select: {
         orgId: true,
@@ -102,6 +102,7 @@ export async function GET() {
       createdAt: project.createdAt.toISOString(),
       updatedAt: project.updatedAt.toISOString(),
       teamCount: project._count.projectTeams,
+      memberCount: project._count.projectTeams, // For UI compatibility
     }));
 
     return NextResponse.json({ projects: projectDTOs });
@@ -123,7 +124,7 @@ export async function POST(request: NextRequest) {
     const orgMember = await prisma.orgMember.findFirst({
       where: {
         userId: user.id,
-        status: "ACTIVE",
+        status: { in: ["ACTIVE", "PENDING_TEAM_ASSIGNMENT"] },
       },
       select: {
         orgId: true,
