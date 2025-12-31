@@ -1,292 +1,122 @@
-# Node (Bottleneck Radar) — Node Graph Collaboration Tool
+# 🛰️ Node (Bottleneck Radar)
 
-A **Node Graph-based collaboration tool** that automatically surfaces bottlenecks and provides a **“what to do now”** view, with an official **Request → Respond → Approve** workflow.
+A powerful **Node Graph-based collaboration tool** designed to eliminate project stalls. It visualizes dependencies, surfaces bottlenecks, and provides a clear **"What to do now"** queue for every team member.
 
----
-
-## Project Overview
-
-### Purpose
-In collaboration, work often stalls because:
-- It’s unclear **where the bottleneck is** (what is blocked by what),
-- And unclear whether an answer is **official/final** or just a draft.
-
-**Node** models work as **Nodes + Edges (relations)** and derives status automatically so you can instantly see:
-- What you should do **now**
-- What you are **waiting on**
-- Who you are **blocking**
-
-### Key Features
-- **Graph View**: Visual workflow with nodes and edges, auto-computed status (**BLOCKED / WAITING / TODO / DOING / DONE**)
-- **Now View**: Personal queue showing **My Todos**, **My Waiting**, and **I'm Blocking Others**
-- **Requests Inbox**: Structured info request workflow with an approval mechanism
-- **Status Auto-Derivation**: Detects blocked/waiting states based on dependencies
-- **Cycle Detection**: Prevents circular dependencies in `DEPENDS_ON` relationships
-
-### Tech Stack
-- **Frontend**: Next.js (App Router), React, TypeScript, TailwindCSS
-- **UI**: shadcn/ui, React Flow
-- **State**: TanStack Query
-- **Backend**: Next.js API Routes
-- **DB**: PostgreSQL + Prisma ORM
-- **Auth**: NextAuth.js (Google OAuth optional for local)
-- **Deployment**: Vercel-compatible
+[![Next.js](https://img.shields.io/badge/Next.js-15.0-black?style=flat-square&logo=next.js)](https://nextjs.org/)
+[![Prisma](https://img.shields.io/badge/Prisma-7.2-2D3748?style=flat-square&logo=prisma)](https://www.prisma.io/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?style=flat-square&logo=postgresql)](https://www.postgresql.org/)
+[![React Flow](https://img.shields.io/badge/React_Flow-11.11-FF6060?style=flat-square)](https://reactflow.dev/)
 
 ---
 
-## Quick Start (Run Locally)
+## 🎨 Overview
 
-This guide is written so you can run the project **only by following this README**.
+Traditional task lists fail when dependencies get complex. **Node** turns your workflow into a **Directed Acyclic Graph (DAG)**, automatically calculating statuses like `BLOCKED` or `WAITING` based on official handoffs.
 
-### Requirements (versions matter)
-
-#### 1) Node.js (IMPORTANT)
-Prisma `v7.2.0` requires **Node.js 20.19+ or 22.12+ or 24+**.
-
-✅ Recommended: **Node.js 22.12+ (LTS)**
-
-Check:
-```bash
-node -v
-npm -v
-```
-
-> If you’re on `v22.11.x` (or older), `npm install` will fail for Prisma with an engine/version error.
-
-#### 2) PostgreSQL
-Any recent PostgreSQL works (you used `18.1`, which is OK).
-
-Check:
-```bash
-psql --version
-createdb --version
-```
+- **Graph View**: Interactive visualization of the entire project workflow.
+- **Now View**: A prioritized personal inbox of what you can actually work on *today*.
+- **Request Workflow**: An official **Ask → Respond → Approve** mechanism for technical decisions.
+- **Auto-Derivation**: Real-time dependency tracking—know exactly who you are blocking.
 
 ---
 
-## 1) Install PostgreSQL (Windows)
+## 🚀 Quick Start
 
-1) Install PostgreSQL using the official Windows installer (EDB).
-2) During install, ensure **Command Line Tools** are included (so `psql`, `createdb` are available).
-3) Open a **new** terminal and verify:
+### 1. Requirements
+- **Node.js**: `v20.19+` or `v22.12+` (Required for Prisma 7)
+- **PostgreSQL**: `v15+`
+
+### 2. Installation
 ```bash
-psql --version
-createdb --version
-```
-
-### If `createdb` / `psql` is “not recognized”
-Add PostgreSQL `bin` to PATH (common path):
-- `C:\Program Files\PostgreSQL\<version>\bin`
-
-Then reopen terminal and re-check:
-```bash
-where psql
-where createdb
-```
-
----
-
-## 2) Clone & install dependencies
-
-```bash
-git clone <YOUR_REPO_URL>
+git clone <repository-url>
 cd Node
 npm install
 ```
 
-> If you get Windows `EPERM` while deleting/installing, see **Troubleshooting → EPERM**.
-
----
-
-## 3) Create local database (PostgreSQL)
-
-### 3-1) Create DB
-Create a database named `node_db`:
+### 3. Environment Setup
+We support a **Dual-Environment Workflow** to safely switch between Local and Remote (Supabase) databases.
 
 ```bash
-createdb -U postgres node_db
-```
-
-If it says the database already exists, that’s fine.
-
-### 3-2) Test DB connection
-```bash
-psql -U postgres -d node_db -c "SELECT 1;"
-```
-
----
-
-## 4) Configure environment variables
-
-We support a **dual-environment workflow** to safely switch between a local database and a remote production/staging database (like Supabase).
-
-### 4-1) Create environment files
-Copy the example template into two files:
-```bash
+# Copy the template
 cp .env.example .env.local
 cp .env.example .env.remote
 ```
 
-### 4-2) Local Setup (`.env.local`)
-Edit `.env.local` for local development:
+#### Local Development (`.env.local`)
+Update the file with your local credentials:
 ```env
-# Database
 DATABASE_URL="postgresql://postgres:postgres@localhost:5432/node_db?schema=public"
 DIRECT_URL="postgresql://postgres:postgres@localhost:5432/node_db?schema=public"
-
-# NextAuth
-AUTH_SECRET="your-generated-secret"
-AUTH_URL="http://localhost:3000"
-
-# Google OAuth (Required for login)
-GOOGLE_CLIENT_ID="your-id"
-GOOGLE_CLIENT_SECRET="your-secret"
+AUTH_SECRET="your-secret" # Generate with: openssl rand -base64 32
+GOOGLE_CLIENT_ID="..."
+GOOGLE_CLIENT_SECRET="..."
 ```
 
-### 4-3) Remote Setup (`.env.remote`)
-Edit `.env.remote` with your Supabase credentials:
-```env
-# Database (Use the Transaction/Session Pooler URL)
-DATABASE_URL="postgresql://postgres:[PASSWORD]@aws-0-us-west-2.pooler.supabase.com:5432/postgres?schema=public"
-DIRECT_URL="postgresql://postgres:[PASSWORD]@aws-0-us-west-2.pooler.supabase.com:5432/postgres?schema=public"
-```
+### 4. Database Initialization
+Initialize your **Local Database** with these targeted scripts:
 
-> [!TIP]
-> **Safe Fallback**: The standard `.env` file is used as a fallback. We recommend keeping it empty or pointing to local to prevent accidental writes to production.
-
----
-
-## 5) Initialize the database
-
-Choose your target environment by using the appropriate script suffix (`:local` or `:remote`).
-
-### Targeting Local
 ```bash
-# Push schema
+# 1. Sync the schema
 npm run db:push:local
 
-# Seed data
+# 2. Seed with sample data
 npm run db:seed:local
 ```
 
-### Targeting Remote (Supabase)
+### 5. Launch
 ```bash
-# Push schema
-npm run db:push:remote
-
-# Seed data (Proceed with caution!)
-npm run db:seed:remote
-```
-
----
-
-## 6) Run the development server
-
-```bash
-# To run against local database (recommended)
+# Run the app against local DB
 npm run dev:local
-
-# To run against remote database
-npm run dev:remote
 ```
-
-Open: [http://localhost:3000](http://localhost:3000)
+Access the app at [http://localhost:3000](http://localhost:3000).
 
 ---
 
-## Database Management (targeted scripts)
+## 🛠️ Database Management
 
-We use `dotenv-cli` to explicitly load environment files.
+We use `dotenv-cli` for explicit environment targeting. **Never accidentally write to production again.**
 
-```bash
-# Generate Prisma Client (same for all envs)
-npm run db:generate
-
-# Local DB Management
-npm run db:push:local
-npm run db:seed:local
-npm run db:studio:local
-
-# Remote (Supabase) Management
-npm run db:push:remote
-npm run db:seed:remote
-npm run db:studio:remote
-```
+| Command | Local Target (`.env.local`) | Remote Target (`.env.remote`) |
+| :--- | :--- | :--- |
+| **Development** | `npm run dev:local` | `npm run dev:remote` |
+| **Push Schema** | `npm run db:push:local` | `npm run db:push:remote` |
+| **Seed Data** | `npm run db:seed:local` | `npm run db:seed:remote` |
+| **Prisma Studio** | `npm run db:studio:local` | `npm run db:studio:remote` |
 
 ---
 
-## Optional: Google OAuth setup (only if you use Google login)
+## 🏗️ Architecture
 
-1) Google Cloud Console → APIs & Services → Credentials  
-2) Create OAuth 2.0 Client ID  
-3) Add Authorized redirect URI (local):
-- `http://localhost:3000/api/auth/callback/google`
-4) Put the Client ID/Secret into `.env`
+For a deep dive into the service design, data models (DAG), and status derivation logic, see [architecture.md](./architecture.md).
 
 ---
 
-## Troubleshooting
+## ❓ Troubleshooting
 
-### A) Prisma engine/version error (EBADENGINE)
-Symptom:
-- Prisma says Node must be `20.19+ / 22.12+ / 24+`
+<details>
+<summary><b>Prisma Engine / Version Error (EBADENGINE)</b></summary>
+Ensure `node -v` returns 20.19+ or 22.12+. If you just upgraded, delete `node_modules` and run `npm install` again.
+</details>
 
-Fix:
-```bash
-node -v
-```
-Upgrade Node, then reinstall:
-- macOS/Linux:
-```bash
-rm -rf node_modules package-lock.json
-npm install
-```
-- Windows:
-```bat
-rmdir /s /q node_modules
-del /f /q package-lock.json
-npm install
-```
+<details>
+<summary><b>Database Access Denied (P1010)</b></summary>
+The default password for Postgres might be your login password or 'postgres'.
+Check <code>psql -U postgres</code>. If that fails, connect as your OS user and create the role:
+<code>psql -d postgres -c "CREATE ROLE postgres WITH LOGIN SUPERUSER PASSWORD 'postgres';"</code>
+</details>
 
-### B) `createdb node_db` fails for user like your Windows username
-By default `createdb` tries your OS username as a DB role, which usually doesn’t exist.
+<details>
+<summary><b>Google Auth Callback Error</b></summary>
+Ensure your redirect URI in Google Cloud Console matches exactly:
+<code>http://localhost:3000/api/auth/callback/google</code>
+</details>
 
-Fix:
-```bash
-createdb -U postgres node_db
-```
-
-### C) `createdb` / `psql` not recognized
-PostgreSQL `bin` not in PATH. Add:
-`C:\Program Files\PostgreSQL\<version>\bin`  
-Then reopen terminal.
-
-### D) Windows `EPERM` while removing node_modules
-Close VSCode/terminals that might lock files, then:
-```bat
-taskkill /F /IM node.exe 2>nul
-rmdir /s /q node_modules
-```
-If still stuck:
-```bat
-npx rimraf node_modules
-```
-Reboot as a last resort.
-
-### E) Next.js warning: “multiple lockfiles / wrong workspace root”
-If Next picks something like `C:\Users\<you>\package-lock.json` as the root, remove that unintended lockfile (if not needed):
-```bat
-del C:\Users\<YOU>\package-lock.json
-```
-
-### F) PowerShell shows broken Korean characters in Postgres errors
-It’s usually console encoding. You can switch to UTF-8:
-```powershell
-chcp 65001
-```
+<details>
+<summary><b>Windows File Errors (EPERM)</b></summary>
+Close any process locking the files (VSCode, another terminal) and run:
+<code>taskkill /F /IM node.exe</code> then retry.
+</details>
 
 ---
 
-## Notes: `db:push` vs `db:migrate`
-- `db:push` is convenient for **local dev** (fast, no migration history)
-- `db:migrate` is recommended for **production/team workflows** (keeps migration history)
+Made with ❤️ by the Node Team
