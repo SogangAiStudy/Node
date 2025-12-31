@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db/prisma";
 import { requireAuth, requireProjectMembership } from "@/lib/utils/auth";
 import { createActivityLog } from "@/lib/utils/activity-log";
 import { z } from "zod";
-import { EdgeRelation } from "@prisma/client";
+import { EdgeRelation } from "@/types";
 import { wouldCreateCycle } from "@/lib/status/cycle-detection";
 
 export async function DELETE(

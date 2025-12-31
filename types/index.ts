@@ -11,14 +11,14 @@ import {
 
 // Export Prisma types for convenience
 export {
-  type NodeType,
-  type ManualStatus,
-  type EdgeRelation,
-  type RequestStatus,
-  type OrgRole,
-  type OrgMemberStatus,
-  type TeamRole,
-  type ProjectRole,
+  NodeType,
+  ManualStatus,
+  EdgeRelation,
+  RequestStatus,
+  OrgRole,
+  OrgMemberStatus,
+  TeamRole,
+  ProjectRole,
 };
 
 // Computed status (derived from graph state)

@@ -26,6 +26,11 @@ export async function GET(
               name: true,
             },
           },
+          team: {
+            select: {
+              name: true,
+            },
+          },
         },
         orderBy: { createdAt: "desc" },
       }),
@@ -42,9 +47,12 @@ export async function GET(
     const statusMap = computeAllNodeStatuses(nodes, edges, requests);
 
     // Transform to DTOs
-    const nodeDTOs: NodeDTO[] = nodes.map((node) => ({
+    const nodeDTOs: NodeDTO[] = nodes.map((node: any) => ({
       id: node.id,
+      orgId: node.orgId,
       projectId: node.projectId,
+      teamId: node.teamId,
+      teamName: node.team?.name || null,
       title: node.title,
       description: node.description,
       type: node.type,
@@ -52,14 +60,13 @@ export async function GET(
       computedStatus: statusMap.get(node.id)!,
       ownerId: node.ownerId,
       ownerName: node.owner?.name || null,
-      team: node.team,
       priority: node.priority,
       dueAt: node.dueAt?.toISOString() || null,
       createdAt: node.createdAt.toISOString(),
       updatedAt: node.updatedAt.toISOString(),
     }));
 
-    const edgeDTOs: EdgeDTO[] = edges.map((edge) => ({
+    const edgeDTOs: EdgeDTO[] = edges.map((edge: any) => ({
       id: edge.id,
       projectId: edge.projectId,
       fromNodeId: edge.fromNodeId,

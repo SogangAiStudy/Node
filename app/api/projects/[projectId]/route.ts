@@ -16,13 +16,21 @@ export async function GET(
     const project = await prisma.project.findUnique({
       where: { id: projectId },
       include: {
-        members: {
+        projectTeams: {
           include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
+            team: {
+              include: {
+                members: {
+                  include: {
+                    user: {
+                      select: {
+                        id: true,
+                        name: true,
+                        email: true,
+                      },
+                    },
+                  },
+                },
               },
             },
           },
@@ -34,17 +42,27 @@ export async function GET(
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
 
+    // Flatten and unique-ify members
+    const memberMap = new Map();
+    project.projectTeams.forEach((pt: any) => {
+      pt.team.members.forEach((tm: any) => {
+        if (!memberMap.has(tm.userId)) {
+          memberMap.set(tm.userId, {
+            id: tm.id,
+            userId: tm.userId,
+            userName: tm.user.name,
+            userEmail: tm.user.email,
+            team: pt.team.name,
+          });
+        }
+      });
+    });
+
     return NextResponse.json({
       id: project.id,
       name: project.name,
       createdAt: project.createdAt.toISOString(),
-      members: project.members.map((m) => ({
-        id: m.id,
-        userId: m.userId,
-        userName: m.user.name,
-        userEmail: m.user.email,
-        team: m.team,
-      })),
+      members: Array.from(memberMap.values()),
     });
   } catch (error) {
     console.error("GET /api/projects/[projectId] error:", error);

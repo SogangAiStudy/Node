@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db/prisma";
 import { requireAuth, requireProjectMembership } from "@/lib/utils/auth";
 import { createActivityLog } from "@/lib/utils/activity-log";
 import { z } from "zod";
-import { NodeType, ManualStatus } from "@prisma/client";
+import { NodeType, ManualStatus } from "@/types";
 
 const UpdateNodeSchema = z.object({
   title: z.string().min(1).max(200).optional(),
@@ -53,7 +53,7 @@ export async function PATCH(
         ...(validated.type !== undefined && { type: validated.type }),
         ...(validated.manualStatus !== undefined && { manualStatus: validated.manualStatus }),
         ...(validated.ownerId !== undefined && { ownerId: validated.ownerId }),
-        ...(validated.team !== undefined && { team: validated.team }),
+        ...(validated.team !== undefined && { teamId: validated.team }),
         ...(validated.priority !== undefined && { priority: validated.priority }),
         ...(validated.dueAt !== undefined && {
           dueAt: validated.dueAt ? new Date(validated.dueAt) : null,
@@ -61,6 +61,11 @@ export async function PATCH(
       },
       include: {
         owner: {
+          select: {
+            name: true,
+          },
+        },
+        team: {
           select: {
             name: true,
           },
@@ -80,6 +85,7 @@ export async function PATCH(
 
     return NextResponse.json({
       id: node.id,
+      orgId: node.orgId,
       projectId: node.projectId,
       title: node.title,
       description: node.description,
@@ -87,7 +93,8 @@ export async function PATCH(
       manualStatus: node.manualStatus,
       ownerId: node.ownerId,
       ownerName: node.owner?.name || null,
-      team: node.team,
+      teamId: node.teamId,
+      teamName: node.team?.name || null,
       priority: node.priority,
       dueAt: node.dueAt?.toISOString() || null,
       createdAt: node.createdAt.toISOString(),
@@ -97,7 +104,7 @@ export async function PATCH(
     console.error("PATCH /api/nodes/[nodeId] error:", error);
 
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: "Invalid input", details: error.errors }, { status: 400 });
+      return NextResponse.json({ error: "Invalid input", details: error.flatten() }, { status: 400 });
     }
 
     if (error instanceof Error && error.message === "Not a member of this project") {

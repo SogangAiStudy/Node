@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db/prisma";
 import { requireAuth, requireProjectMembership } from "@/lib/utils/auth";
 import { createActivityLog } from "@/lib/utils/activity-log";
 import { z } from "zod";
-import { NodeType, ManualStatus } from "@prisma/client";
+import { NodeType, ManualStatus } from "@/types";
 
 const CreateNodeSchema = z.object({
   title: z.string().min(1).max(200),
@@ -35,23 +35,38 @@ export async function POST(
       await requireProjectMembership(projectId, validated.ownerId);
     }
 
+    // Get project to get orgId
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { orgId: true },
+    });
+
+    if (!project) {
+      return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    }
+
+    const ownerId = (validated.ownerId && validated.ownerId !== "unassigned") ? validated.ownerId : null;
+    const teamId = (validated.team && validated.team !== "none") ? validated.team : null;
+
     const node = await prisma.node.create({
       data: {
+        orgId: project.orgId,
         projectId,
         title: validated.title,
         description: validated.description,
         type: validated.type,
         manualStatus: validated.manualStatus,
-        ownerId: validated.ownerId,
-        team: validated.team,
+        ownerId,
+        teamId,
         priority: validated.priority,
         dueAt: validated.dueAt ? new Date(validated.dueAt) : null,
       },
       include: {
         owner: {
-          select: {
-            name: true,
-          },
+          select: { name: true },
+        },
+        team: {
+          select: { name: true },
         },
       },
     });
@@ -72,6 +87,7 @@ export async function POST(
     return NextResponse.json(
       {
         id: node.id,
+        orgId: node.orgId,
         projectId: node.projectId,
         title: node.title,
         description: node.description,
@@ -79,7 +95,8 @@ export async function POST(
         manualStatus: node.manualStatus,
         ownerId: node.ownerId,
         ownerName: node.owner?.name || null,
-        team: node.team,
+        teamId: node.teamId,
+        teamName: node.team?.name || null,
         priority: node.priority,
         dueAt: node.dueAt?.toISOString() || null,
         createdAt: node.createdAt.toISOString(),
@@ -91,7 +108,7 @@ export async function POST(
     console.error("POST /api/projects/[projectId]/nodes error:", error);
 
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: "Invalid input", details: error.errors }, { status: 400 });
+      return NextResponse.json({ error: "Invalid input", details: error.flatten() }, { status: 400 });
     }
 
     if (error instanceof Error && error.message === "Not a member of this project") {
