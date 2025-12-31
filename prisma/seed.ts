@@ -1,4 +1,3 @@
-import "dotenv/config";
 import { PrismaClient, NodeType, ManualStatus, EdgeRelation } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
@@ -10,11 +9,18 @@ const pool = new Pool({
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
-
 async function main() {
-  console.log("Starting seed...");
+  const dbUrl = process.env.DATABASE_URL || "";
+  const dbHost = dbUrl.split("@")[1]?.split("/")[0] || "unknown";
 
-  // Create test users
+  console.log("-----------------------------------------");
+  console.log(`Starting seed against: ${dbHost}`);
+  if (dbHost.includes("supabase") || dbHost.includes("pooler")) {
+    console.log("⚠️ WARNING: Running seed against REMOTE database!");
+  }
+  console.log("-----------------------------------------");
+
+  // 1. Create test users
   const user1 = await prisma.user.upsert({
     where: { email: "alice@example.com" },
     update: {},
@@ -44,10 +50,39 @@ async function main() {
 
   console.log("Created users:", { user1, user2, user3 });
 
-  // Create a project
-  const project = await prisma.project.create({
-    data: {
+  // 2. Create an organization
+  const org = await prisma.organization.upsert({
+    where: { id: "demo-org-id" }, // Using a fixed ID for seed stability
+    update: {
+      name: "Demo Organization",
+    },
+    create: {
+      id: "demo-org-id",
+      name: "Demo Organization",
+      ownerId: user1.id,
+      members: {
+        create: [
+          { userId: user1.id, role: "ADMIN", status: "ACTIVE" },
+          { userId: user2.id, role: "MEMBER", status: "ACTIVE" },
+          { userId: user3.id, role: "MEMBER", status: "ACTIVE" },
+        ]
+      }
+    },
+  });
+
+  console.log("Using organization:", org.name);
+
+  // 3. Create a project
+  const project = await prisma.project.upsert({
+    where: { id: "demo-project-id" },
+    update: {
       name: "Product Launch Q1",
+    },
+    create: {
+      id: "demo-project-id",
+      name: "Product Launch Q1",
+      orgId: org.id,
+      ownerId: user1.id,
       members: {
         create: [
           { userId: user1.id, team: "Engineering" },
@@ -58,89 +93,111 @@ async function main() {
     },
   });
 
-  console.log("Created project:", project);
+  console.log("Using project:", project.name);
 
-  // Create nodes
-  const designMockups = await prisma.node.create({
-    data: {
+  // 4. Create nodes
+  const designMockups = await prisma.node.upsert({
+    where: { id: "node-design-mockups" },
+    update: { manualStatus: ManualStatus.DONE },
+    create: {
+      id: "node-design-mockups",
       projectId: project.id,
+      orgId: org.id,
       title: "Create Design Mockups",
       description: "Design the UI/UX mockups for the new feature",
       type: NodeType.TASK,
       manualStatus: ManualStatus.DONE,
       ownerId: user2.id,
-      team: "Design",
       priority: 1,
     },
   });
 
-  const buildUI = await prisma.node.create({
-    data: {
+  const buildUI = await prisma.node.upsert({
+    where: { id: "node-build-ui" },
+    update: { manualStatus: ManualStatus.DOING },
+    create: {
+      id: "node-build-ui",
       projectId: project.id,
+      orgId: org.id,
       title: "Build UI Components",
       description: "Implement the UI based on approved mockups",
       type: NodeType.TASK,
       manualStatus: ManualStatus.DOING,
       ownerId: user1.id,
-      team: "Engineering",
       priority: 1,
     },
   });
 
-  const buildBackend = await prisma.node.create({
-    data: {
+  const buildBackend = await prisma.node.upsert({
+    where: { id: "node-build-backend" },
+    update: {},
+    create: {
+      id: "node-build-backend",
       projectId: project.id,
+      orgId: org.id,
       title: "Build Backend API",
       description: "Create REST API endpoints",
       type: NodeType.TASK,
       manualStatus: ManualStatus.TODO,
       ownerId: user1.id,
-      team: "Engineering",
       priority: 1,
     },
   });
 
-  const testing = await prisma.node.create({
-    data: {
+  const testing = await prisma.node.upsert({
+    where: { id: "node-testing" },
+    update: {},
+    create: {
+      id: "node-testing",
       projectId: project.id,
+      orgId: org.id,
       title: "QA Testing",
       description: "Test all features before launch",
       type: NodeType.TASK,
       manualStatus: ManualStatus.TODO,
       ownerId: user1.id,
-      team: "Engineering",
       priority: 2,
     },
   });
 
-  const marketingCopy = await prisma.node.create({
-    data: {
+  const marketingCopy = await prisma.node.upsert({
+    where: { id: "node-marketing-copy" },
+    update: {},
+    create: {
+      id: "node-marketing-copy",
       projectId: project.id,
+      orgId: org.id,
       title: "Write Marketing Copy",
       description: "Prepare marketing materials",
       type: NodeType.TASK,
       manualStatus: ManualStatus.TODO,
       ownerId: user3.id,
-      team: "Marketing",
       priority: 2,
     },
   });
 
-  const legalApproval = await prisma.node.create({
-    data: {
+  const legalApproval = await prisma.node.upsert({
+    where: { id: "node-legal-approval" },
+    update: {},
+    create: {
+      id: "node-legal-approval",
       projectId: project.id,
+      orgId: org.id,
       title: "Legal Approval",
       description: "Get legal sign-off on terms and conditions",
       type: NodeType.DECISION,
       manualStatus: ManualStatus.TODO,
-      team: "Legal",
       priority: 1,
     },
   });
 
-  const launch = await prisma.node.create({
-    data: {
+  const launch = await prisma.node.upsert({
+    where: { id: "node-launch" },
+    update: { dueAt: new Date("2025-03-01") },
+    create: {
+      id: "node-launch",
       projectId: project.id,
+      orgId: org.id,
       title: "Product Launch",
       description: "Go live with the new feature",
       type: NodeType.TASK,
@@ -153,41 +210,50 @@ async function main() {
 
   console.log("Created nodes");
 
-  // Create edges (dependencies)
+  // 5. Create edges (dependencies)
+  // delete existing edges to avoid unique constraint violations
+  await prisma.edge.deleteMany({ where: { projectId: project.id } });
+
   await prisma.edge.createMany({
     data: [
       {
         projectId: project.id,
+        orgId: org.id,
         fromNodeId: buildUI.id,
         toNodeId: designMockups.id,
         relation: EdgeRelation.DEPENDS_ON,
       },
       {
         projectId: project.id,
+        orgId: org.id,
         fromNodeId: testing.id,
         toNodeId: buildUI.id,
         relation: EdgeRelation.DEPENDS_ON,
       },
       {
         projectId: project.id,
+        orgId: org.id,
         fromNodeId: testing.id,
         toNodeId: buildBackend.id,
         relation: EdgeRelation.DEPENDS_ON,
       },
       {
         projectId: project.id,
+        orgId: org.id,
         fromNodeId: launch.id,
         toNodeId: testing.id,
         relation: EdgeRelation.DEPENDS_ON,
       },
       {
         projectId: project.id,
+        orgId: org.id,
         fromNodeId: launch.id,
         toNodeId: marketingCopy.id,
         relation: EdgeRelation.DEPENDS_ON,
       },
       {
         projectId: project.id,
+        orgId: org.id,
         fromNodeId: launch.id,
         toNodeId: legalApproval.id,
         relation: EdgeRelation.APPROVAL_BY,
@@ -197,10 +263,14 @@ async function main() {
 
   console.log("Created edges");
 
-  // Create requests
-  const request1 = await prisma.request.create({
-    data: {
+  // 6. Create requests
+  await prisma.request.upsert({
+    where: { id: "req-legal-review" },
+    update: {},
+    create: {
+      id: "req-legal-review",
       projectId: project.id,
+      orgId: org.id,
       linkedNodeId: legalApproval.id,
       question: "Can you review the terms and conditions for legal compliance?",
       fromUserId: user1.id,
@@ -208,9 +278,13 @@ async function main() {
     },
   });
 
-  const request2 = await prisma.request.create({
-    data: {
+  await prisma.request.upsert({
+    where: { id: "req-ui-color" },
+    update: {},
+    create: {
+      id: "req-ui-color",
       projectId: project.id,
+      orgId: org.id,
       linkedNodeId: buildUI.id,
       question: "What color scheme should we use for the primary buttons?",
       fromUserId: user1.id,
@@ -220,26 +294,19 @@ async function main() {
     },
   });
 
-  console.log("Created requests:", { request1, request2 });
+  console.log("Created requests");
 
-  // Create activity logs
+  // 7. Create activity logs
   await prisma.activityLog.createMany({
     data: [
       {
         projectId: project.id,
+        orgId: org.id,
         userId: user1.id,
         action: "CREATE_PROJECT",
         entityType: "PROJECT",
         entityId: project.id,
         details: { name: project.name },
-      },
-      {
-        projectId: project.id,
-        userId: user1.id,
-        action: "CREATE_NODE",
-        entityType: "NODE",
-        entityId: designMockups.id,
-        details: { title: designMockups.title },
       },
     ],
   });
