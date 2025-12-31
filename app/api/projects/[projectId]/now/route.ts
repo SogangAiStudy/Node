@@ -33,7 +33,28 @@ export async function GET(
           },
           team: {
             select: {
+              id: true,
               name: true,
+            },
+          },
+          nodeTeams: {
+            include: {
+              team: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          },
+          nodeOwners: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
             },
           },
         },
@@ -68,6 +89,8 @@ export async function GET(
       computedStatus: statusMap.get(node.id)!,
       ownerId: node.ownerId,
       ownerName: node.owner?.name || null,
+      teams: node.nodeTeams?.map((nt: any) => ({ id: nt.team.id, name: nt.team.name })) || [],
+      owners: node.nodeOwners?.map((no: any) => ({ id: no.user.id, name: no.user.name })) || [],
       priority: node.priority,
       dueAt: node.dueAt?.toISOString() || null,
       createdAt: node.createdAt.toISOString(),

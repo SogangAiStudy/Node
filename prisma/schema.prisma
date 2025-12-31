@@ -25,6 +25,7 @@ model User {
   assignedRequests   Request[]       @relation("RequestAssignee")
   sessions           Session[]
   teamMemberships    TeamMember[]
+  nodeOwners         NodeOwner[]
 
   @@map("users")
 }
@@ -113,6 +114,7 @@ model Team {
   projectTeams    ProjectTeam[]
   primaryProjects Project[]     @relation("PrimaryTeam")
   members         TeamMember[]
+  nodeTeams       NodeTeam[]
   organization    Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
   @@unique([orgId, name])
@@ -210,6 +212,8 @@ model Node {
   owner          User?        @relation("NodeOwner", fields: [ownerId], references: [id])
   project        Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   team           Team?        @relation(fields: [teamId], references: [id])
+  nodeTeams      NodeTeam[]
+  nodeOwners     NodeOwner[]
   linkedRequests Request[]
 
   @@index([orgId])
@@ -217,6 +221,26 @@ model Node {
   @@index([teamId])
   @@index([ownerId])
   @@map("nodes")
+}
+
+model NodeTeam {
+  nodeId String
+  teamId String
+  node   Node   @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@id([nodeId, teamId])
+  @@map("node_teams")
+}
+
+model NodeOwner {
+  nodeId String
+  userId String
+  node   Node   @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([nodeId, userId])
+  @@map("node_owners")
 }
 
 model Edge {

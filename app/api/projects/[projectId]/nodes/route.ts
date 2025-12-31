@@ -11,7 +11,9 @@ const CreateNodeSchema = z.object({
   type: z.nativeEnum(NodeType).default(NodeType.TASK),
   manualStatus: z.nativeEnum(ManualStatus).default(ManualStatus.TODO),
   ownerId: z.string().optional(),
+  ownerIds: z.array(z.string()).optional(),
   team: z.string().optional(),
+  teamIds: z.array(z.string()).optional(),
   priority: z.number().int().min(1).max(5).default(3),
   dueAt: z.string().datetime().optional(),
 });
@@ -30,8 +32,12 @@ export async function POST(
     const body = await request.json();
     const validated = CreateNodeSchema.parse(body);
 
-    // If ownerId provided, verify they are a project member
-    if (validated.ownerId) {
+    // If ownerIds/ownerId provided, verify they are project members
+    if (validated.ownerIds) {
+      for (const oid of validated.ownerIds) {
+        await requireProjectMembership(projectId, oid);
+      }
+    } else if (validated.ownerId && validated.ownerId !== "unassigned") {
       await requireProjectMembership(projectId, validated.ownerId);
     }
 
@@ -60,14 +66,18 @@ export async function POST(
         teamId,
         priority: validated.priority,
         dueAt: validated.dueAt ? new Date(validated.dueAt) : null,
+        nodeTeams: {
+          create: (validated.teamIds || (teamId ? [teamId] : [])).map(tid => ({ teamId: tid }))
+        },
+        nodeOwners: {
+          create: (validated.ownerIds || (ownerId ? [ownerId] : [])).map(oid => ({ userId: oid }))
+        }
       },
       include: {
-        owner: {
-          select: { name: true },
-        },
-        team: {
-          select: { name: true },
-        },
+        owner: { select: { name: true } },
+        team: { select: { name: true } },
+        nodeTeams: { include: { team: { select: { id: true, name: true } } } },
+        nodeOwners: { include: { user: { select: { id: true, name: true } } } },
       },
     });
 
@@ -93,10 +103,11 @@ export async function POST(
         description: node.description,
         type: node.type,
         manualStatus: node.manualStatus,
-        ownerId: node.ownerId,
         ownerName: node.owner?.name || null,
         teamId: node.teamId,
         teamName: node.team?.name || null,
+        teams: node.nodeTeams.map((nt: any) => ({ id: nt.team.id, name: nt.team.name })),
+        owners: node.nodeOwners.map((no: any) => ({ id: no.user.id, name: no.user.name })),
         priority: node.priority,
         dueAt: node.dueAt?.toISOString() || null,
         createdAt: node.createdAt.toISOString(),

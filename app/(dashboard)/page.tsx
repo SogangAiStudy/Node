@@ -8,27 +8,29 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { CreateProjectDialog } from "@/components/projects/CreateProjectDialog";
 import { ProjectDTO } from "@/types";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function DashboardPage() {
   const router = useRouter();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
   // Check if user has an organization
-  const { data: orgStatus, isLoading: isCheckingOrg } = useQuery({
+  const { data: orgStatus, isLoading: isCheckingOrg, isFetching } = useQuery({
     queryKey: ["organization-status"],
     queryFn: async () => {
       const res = await fetch("/api/user/organization-status");
       if (!res.ok) throw new Error("Failed to check organization status");
       return res.json() as Promise<{ hasOrganization: boolean; organization: any }>;
     },
+    staleTime: 0, // Ensure we always check on mount
   });
 
   // Redirect to onboarding if user has no organization
   useEffect(() => {
-    if (!isCheckingOrg && orgStatus && !orgStatus.hasOrganization) {
+    if (!isCheckingOrg && !isFetching && orgStatus && !orgStatus.hasOrganization) {
       router.push("/onboarding");
     }
-  }, [orgStatus, isCheckingOrg, router]);
+  }, [orgStatus, isCheckingOrg, isFetching, router]);
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["projects"],
@@ -56,6 +58,17 @@ export default function DashboardPage() {
 
   return (
     <div className="container mx-auto px-4 py-8">
+      <Tabs value="projects" className="mb-6">
+        <TabsList>
+          <Link href="/">
+            <TabsTrigger value="projects">Projects</TabsTrigger>
+          </Link>
+          <TabsTrigger value="now" disabled className="opacity-50">Now</TabsTrigger>
+          <TabsTrigger value="graph" disabled className="opacity-50">Graph</TabsTrigger>
+          <TabsTrigger value="inbox" disabled className="opacity-50">Inbox</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
       <div className="mb-8 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Projects</h1>

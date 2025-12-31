@@ -12,6 +12,8 @@ const UpdateNodeSchema = z.object({
   manualStatus: z.nativeEnum(ManualStatus).optional(),
   ownerId: z.string().nullable().optional(),
   teamId: z.string().nullable().optional(),
+  teamIds: z.array(z.string()).optional(),
+  ownerIds: z.array(z.string()).optional(),
   priority: z.number().int().min(1).max(5).optional(),
   dueAt: z.string().datetime().nullable().optional(),
 });
@@ -39,8 +41,12 @@ export async function PATCH(
 
     await requireProjectMembership(existingNode.projectId, user.id);
 
-    // If ownerId provided, verify they are a project member
-    if (validated.ownerId !== undefined && validated.ownerId !== null) {
+    // Verify all new owners are project members
+    if (validated.ownerIds) {
+      for (const oid of validated.ownerIds) {
+        await requireProjectMembership(existingNode.projectId, oid);
+      }
+    } else if (validated.ownerId !== undefined && validated.ownerId !== null) {
       await requireProjectMembership(existingNode.projectId, validated.ownerId);
     }
 
@@ -58,18 +64,24 @@ export async function PATCH(
         ...(validated.dueAt !== undefined && {
           dueAt: validated.dueAt ? new Date(validated.dueAt) : null,
         }),
+        ...(validated.teamIds !== undefined && {
+          nodeTeams: {
+            deleteMany: {},
+            create: validated.teamIds.map(tid => ({ teamId: tid }))
+          }
+        }),
+        ...(validated.ownerIds !== undefined && {
+          nodeOwners: {
+            deleteMany: {},
+            create: validated.ownerIds.map(oid => ({ userId: oid }))
+          }
+        })
       },
       include: {
-        owner: {
-          select: {
-            name: true,
-          },
-        },
-        team: {
-          select: {
-            name: true,
-          },
-        },
+        owner: { select: { name: true } },
+        team: { select: { name: true } },
+        nodeTeams: { include: { team: { select: { id: true, name: true } } } },
+        nodeOwners: { include: { user: { select: { id: true, name: true } } } },
       },
     });
 
@@ -95,6 +107,8 @@ export async function PATCH(
       ownerName: node.owner?.name || null,
       teamId: node.teamId,
       teamName: node.team?.name || null,
+      teams: node.nodeTeams.map((nt: any) => ({ id: nt.team.id, name: nt.team.name })),
+      owners: node.nodeOwners.map((no: any) => ({ id: no.user.id, name: no.user.name })),
       priority: node.priority,
       dueAt: node.dueAt?.toISOString() || null,
       createdAt: node.createdAt.toISOString(),
