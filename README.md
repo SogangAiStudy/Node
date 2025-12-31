@@ -118,97 +118,99 @@ psql -U postgres -d node_db -c "SELECT 1;"
 
 ## 4) Configure environment variables
 
-Copy env:
+We support a **dual-environment workflow** to safely switch between a local database and a remote production/staging database (like Supabase).
+
+### 4-1) Create environment files
+Copy the example template into two files:
 ```bash
-cp .env.example .env
+cp .env.example .env.local
+cp .env.example .env.remote
 ```
 
-Windows alternative:
-```bat
-copy .env.example .env
-```
-
-Edit `.env` and set at least:
-
+### 4-2) Local Setup (`.env.local`)
+Edit `.env.local` for local development:
 ```env
 # Database
-DATABASE_URL="postgresql://postgres:<YOUR_POSTGRES_PASSWORD>@localhost:5432/node_db?schema=public"
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/node_db?schema=public"
+DIRECT_URL="postgresql://postgres:postgres@localhost:5432/node_db?schema=public"
 
-# NextAuth (local dev)
-NEXTAUTH_SECRET="generate-with-openssl-or-powershell"
-NEXTAUTH_URL="http://localhost:3000"
+# NextAuth
+AUTH_SECRET="your-generated-secret"
+AUTH_URL="http://localhost:3000"
 
-# Google OAuth (optional for local; required if you use Google login)
-GOOGLE_CLIENT_ID="your-google-client-id"
-GOOGLE_CLIENT_SECRET="your-google-client-secret"
+# Google OAuth (Required for login)
+GOOGLE_CLIENT_ID="your-id"
+GOOGLE_CLIENT_SECRET="your-secret"
 ```
 
-### Generate NEXTAUTH_SECRET
-macOS/Linux:
-```bash
-openssl rand -base64 32
+### 4-3) Remote Setup (`.env.remote`)
+Edit `.env.remote` with your Supabase credentials:
+```env
+# Database (Use the Transaction/Session Pooler URL)
+DATABASE_URL="postgresql://postgres:[PASSWORD]@aws-0-us-west-2.pooler.supabase.com:5432/postgres?schema=public"
+DIRECT_URL="postgresql://postgres:[PASSWORD]@aws-0-us-west-2.pooler.supabase.com:5432/postgres?schema=public"
 ```
 
-Windows (PowerShell):
-```powershell
-[Convert]::ToBase64String((1..32 | ForEach-Object {Get-Random -Max 256}))
-```
-
-👉 **Google OAuth how-to:** See [docs/google-auth.md](docs/google-auth.md) for a copy-paste guide to creating the credentials, wiring env vars, and triggering the Google sign-in/out buttons in your UI.
-
-👉 **Local dev playbook:** See [docs/local-dev-playbook.md](docs/local-dev-playbook.md) for a copy-paste checklist to run any Next.js project with npm + PostgreSQL + Prisma, plus common Windows/macOS fixes.
-
-👉 **NextAuth + Prisma quickstart:** See [docs/nextauth-prisma.md](docs/nextauth-prisma.md) to lift our exact App Router + NextAuth.js + Prisma/PostgreSQL wiring (env vars, middleware guard, adapter, schema, and client usage) into another project without re-reading docs.
+> [!TIP]
+> **Safe Fallback**: The standard `.env` file is used as a fallback. We recommend keeping it empty or pointing to local to prevent accidental writes to production.
 
 ---
 
 ## 5) Initialize the database
 
-Run these in order:
+Choose your target environment by using the appropriate script suffix (`:local` or `:remote`).
 
+### Targeting Local
 ```bash
-# Generate Prisma Client
-npm run db:generate
+# Push schema
+npm run db:push:local
 
-# Push schema to database (dev sync)
-npm run db:push
-
-# Seed with sample data
-npm run db:seed
+# Seed data
+npm run db:seed:local
 ```
 
-You should see: `Seed completed successfully!`
+### Targeting Remote (Supabase)
+```bash
+# Push schema
+npm run db:push:remote
+
+# Seed data (Proceed with caution!)
+npm run db:seed:remote
+```
 
 ---
 
 ## 6) Run the development server
 
 ```bash
-npm run dev
+# To run against local database (recommended)
+npm run dev:local
+
+# To run against remote database
+npm run dev:remote
 ```
 
-Open:
-- http://localhost:3000
+Open: [http://localhost:3000](http://localhost:3000)
 
 ---
 
-## Database Management (scripts)
+## Database Management (targeted scripts)
+
+We use `dotenv-cli` to explicitly load environment files.
 
 ```bash
-# Generate Prisma Client after schema changes
+# Generate Prisma Client (same for all envs)
 npm run db:generate
 
-# Push schema changes to database (dev)
-npm run db:push
+# Local DB Management
+npm run db:push:local
+npm run db:seed:local
+npm run db:studio:local
 
-# Create and run migrations (production-style)
-npm run db:migrate
-
-# Seed database with sample data
-npm run db:seed
-
-# Open Prisma Studio (database GUI)
-npm run db:studio
+# Remote (Supabase) Management
+npm run db:push:remote
+npm run db:seed:remote
+npm run db:studio:remote
 ```
 
 ---
