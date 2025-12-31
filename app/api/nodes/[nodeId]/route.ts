@@ -30,6 +30,7 @@ export async function PATCH(
     const { nodeId } = await params;
 
     const body = await request.json();
+    console.log(`PATCH /api/nodes/${nodeId} - body:`, body);
     const validated = UpdateNodeSchema.parse(body);
 
     // Get existing node
