@@ -1,62 +1,53 @@
-// Bottleneck Radar - Database Schema
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
 }
 
-// User model - authenticated users
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String    @unique
-  emailVerified DateTime?
-  image         String?
-  createdAt     DateTime  @default(now())
-
-  // Relations
-  ownedOrganizations Organization[]  @relation("OrganizationOwner")
-  ownedProjects      Project[]       @relation("ProjectOwner")
-  orgMemberships     OrgMember[]
-  teamMemberships    TeamMember[]
-  projectMemberships ProjectMember[] // Deprecated - kept for migration
+  id                 String          @id @default(cuid())
+  name               String?
+  email              String          @unique
+  image              String?
+  createdAt          DateTime        @default(now())
+  emailVerified      DateTime?
+  accounts           Account[]
+  activityLogs       ActivityLog[]
   ownedNodes         Node[]          @relation("NodeOwner")
+  orgMemberships     OrgMember[]
+  ownedOrganizations Organization[]  @relation("OrganizationOwner")
+  projectMemberships ProjectMember[]
+  ownedProjects      Project[]       @relation("ProjectOwner")
+  approvedRequests   Request[]       @relation("RequestApprover")
   createdRequests    Request[]       @relation("RequestCreator")
   assignedRequests   Request[]       @relation("RequestAssignee")
-  approvedRequests   Request[]       @relation("RequestApprover")
-  activityLogs       ActivityLog[]
-  accounts           Account[]
   sessions           Session[]
+  teamMemberships    TeamMember[]
 
   @@map("users")
 }
 
-// NextAuth Account model
 model Account {
   id                String  @id @default(cuid())
   userId            String
   type              String
   provider          String
   providerAccountId String
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
+  refresh_token     String?
+  access_token      String?
   expires_at        Int?
   token_type        String?
   scope             String?
-  id_token          String? @db.Text
+  id_token          String?
   session_state     String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
   @@map("accounts")
 }
 
-// NextAuth Session model
 model Session {
   id           String   @id @default(cuid())
   sessionToken String   @unique
@@ -67,7 +58,6 @@ model Session {
   @@map("sessions")
 }
 
-// NextAuth Verification Token model
 model VerificationToken {
   identifier String
   token      String   @unique
@@ -77,59 +67,35 @@ model VerificationToken {
   @@map("verification_tokens")
 }
 
-// ============================================================================
-// ORGANIZATION & TEAM MODELS
-// ============================================================================
-
-// Organization model - top-level organizational entity
 model Organization {
-  id         String   @id @default(cuid())
-  name       String
-  ownerId    String   // Owner is always ADMIN
-  inviteCode String?  @unique // Optional simple invite flow
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  // Relations
-  owner        User          @relation("OrganizationOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  members      OrgMember[]
-  teams        Team[]
-  projects     Project[]
-  nodes        Node[]
-  edges        Edge[]
-  requests     Request[]
+  id           String        @id @default(cuid())
+  name         String
+  inviteCode   String?       @unique
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  ownerId      String
   activityLogs ActivityLog[]
+  edges        Edge[]
+  nodes        Node[]
+  members      OrgMember[]
+  owner        User          @relation("OrganizationOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  projects     Project[]
+  requests     Request[]
+  teams        Team[]
 
   @@index([ownerId])
   @@map("organizations")
 }
 
-// Organization member role enum
-enum OrgRole {
-  ADMIN  // Bypasses all restrictions
-  MEMBER // Requires team assignment for access
-}
-
-// Organization member status enum
-enum OrgMemberStatus {
-  PENDING_APPROVAL        // User requested to join, waiting for admin
-  ACTIVE                  // User has team assignments and can access projects
-  PENDING_TEAM_ASSIGNMENT // User joined org but has no team yet
-  DEACTIVATED            // User access revoked
-}
-
-// Organization membership model
 model OrgMember {
-  id        String          @id @default(cuid())
-  orgId     String
-  userId    String
-  role      OrgRole         @default(MEMBER)
-  status    OrgMemberStatus @default(PENDING_TEAM_ASSIGNMENT)
-  createdAt DateTime        @default(now())
-
-  // Relations
-  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id           String          @id @default(cuid())
+  orgId        String
+  userId       String
+  role         OrgRole         @default(MEMBER)
+  status       OrgMemberStatus @default(PENDING_TEAM_ASSIGNMENT)
+  createdAt    DateTime        @default(now())
+  organization Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([orgId, userId])
   @@index([orgId])
@@ -137,33 +103,23 @@ model OrgMember {
   @@map("org_members")
 }
 
-// Team model - logical grouping of users within an organization
 model Team {
-  id          String   @id @default(cuid())
-  orgId       String
-  name        String
-  description String?  @db.Text
-  createdAt   DateTime @default(now())
-
-  // Relations
-  organization     Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  members          TeamMember[]
-  projectTeams     ProjectTeam[]
-  primaryProjects  Project[]     @relation("PrimaryTeam") // Projects where this is primaryTeam
-  nodes            Node[] // Nodes created by this team (for traceability)
+  id              String        @id @default(cuid())
+  orgId           String
+  name            String
+  description     String?
+  createdAt       DateTime      @default(now())
+  nodes           Node[]
+  projectTeams    ProjectTeam[]
+  primaryProjects Project[]     @relation("PrimaryTeam")
+  members         TeamMember[]
+  organization    Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
   @@unique([orgId, name])
   @@index([orgId])
   @@map("teams")
 }
 
-// Team member role enum
-enum TeamRole {
-  LEAD   // Team leadership role
-  MEMBER // Regular team member
-}
-
-// Team membership model (N:M relationship between users and teams)
 model TeamMember {
   id        String   @id @default(cuid())
   orgId     String
@@ -171,10 +127,8 @@ model TeamMember {
   userId    String
   role      TeamRole @default(MEMBER)
   createdAt DateTime @default(now())
-
-  // Relations
-  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([orgId, teamId, userId])
   @@index([teamId])
@@ -182,14 +136,6 @@ model TeamMember {
   @@map("team_members")
 }
 
-// Project team role enum (permissions)
-enum ProjectRole {
-  PROJECT_ADMIN // Full control over project and team assignments
-  EDITOR        // Can modify project data (nodes, edges)
-  VIEWER        // Read-only access
-}
-
-// ProjectTeam model - defines team access and permissions for projects
 model ProjectTeam {
   id        String      @id @default(cuid())
   orgId     String
@@ -197,10 +143,8 @@ model ProjectTeam {
   teamId    String
   role      ProjectRole @default(VIEWER)
   createdAt DateTime    @default(now())
-
-  // Relations
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  team    Team    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  team      Team        @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, teamId])
   @@index([projectId])
@@ -208,31 +152,24 @@ model ProjectTeam {
   @@map("project_teams")
 }
 
-// ============================================================================
-// PROJECT & GRAPH MODELS
-// ============================================================================
-
-// Project model - collaborative project within an organization
 model Project {
-  id            String   @id @default(cuid())
-  orgId         String
-  ownerId       String   // Project owner/creator
+  id            String          @id @default(cuid())
   name          String
-  description   String?  @db.Text
-  primaryTeamId String?  // Display-only, NOT used for access control
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  // Relations
-  organization Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  owner        User            @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  primaryTeam  Team?           @relation("PrimaryTeam", fields: [primaryTeamId], references: [id], onDelete: SetNull)
-  projectTeams ProjectTeam[]   // Teams with access to this project
-  members      ProjectMember[] // Deprecated - kept for migration
-  nodes        Node[]
-  edges        Edge[]
-  requests     Request[]
-  activityLogs ActivityLog[]
+  createdAt     DateTime        @default(now())
+  description   String?
+  orgId         String
+  primaryTeamId String?
+  updatedAt     DateTime        @updatedAt
+  ownerId       String
+  activityLogs  ActivityLog[]
+  edges         Edge[]
+  nodes         Node[]
+  members       ProjectMember[]
+  projectTeams  ProjectTeam[]
+  organization  Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  owner         User            @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  primaryTeam   Team?           @relation("PrimaryTeam", fields: [primaryTeamId], references: [id])
+  requests      Request[]
 
   @@index([orgId])
   @@index([ownerId])
@@ -240,60 +177,39 @@ model Project {
   @@map("projects")
 }
 
-// Project membership with team assignment
 model ProjectMember {
   id        String   @id @default(cuid())
   projectId String
   userId    String
-  team      String?  // Team tag (nullable)
+  team      String?
   createdAt DateTime @default(now())
-
-  // Relations
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, userId])
   @@map("project_members")
 }
 
-// Node types enum
-enum NodeType {
-  TASK
-  DECISION
-  BLOCKER
-  INFOREQ
-}
-
-// Manual status enum (user-set status)
-enum ManualStatus {
-  TODO
-  DOING
-  DONE
-}
-
-// Node model - represents work items in the graph
 model Node {
-  id           String       @id @default(cuid())
-  orgId        String
-  projectId    String
-  teamId       String? // For traceability - which team created this node
-  title        String
-  description  String?      @db.Text
-  type         NodeType     @default(TASK)
-  manualStatus ManualStatus @default(TODO)
-  ownerId      String?
-  priority     Int          @default(3) // 1=highest, 5=lowest
-  dueAt        DateTime?
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
-
-  // Relations
-  organization   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  project        Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  team           Team?        @relation(fields: [teamId], references: [id], onDelete: SetNull)
-  owner          User?        @relation("NodeOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  id             String       @id @default(cuid())
+  projectId      String
+  title          String
+  description    String?
+  type           NodeType     @default(TASK)
+  manualStatus   ManualStatus @default(TODO)
+  ownerId        String?
+  priority       Int          @default(3)
+  dueAt          DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  orgId          String
+  teamId         String?
   edgesFrom      Edge[]       @relation("EdgeFrom")
   edgesTo        Edge[]       @relation("EdgeTo")
+  organization   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  owner          User?        @relation("NodeOwner", fields: [ownerId], references: [id])
+  project        Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  team           Team?        @relation(fields: [teamId], references: [id])
   linkedRequests Request[]
 
   @@index([orgId])
@@ -303,31 +219,19 @@ model Node {
   @@map("nodes")
 }
 
-// Edge relation types
-enum EdgeRelation {
-  DEPENDS_ON // A depends on B (A cannot start until B is done)
-  HANDOFF_TO // A hands off to B
-  NEEDS_INFO_FROM // A needs information from B
-  APPROVAL_BY // A needs approval by B
-}
-
-// Edge model - represents relationships between nodes
 model Edge {
-  id         String       @id @default(cuid())
-  orgId      String
-  projectId  String
-  fromNodeId String
-  toNodeId   String
-  relation   EdgeRelation
-  createdAt  DateTime     @default(now())
-
-  // Relations
+  id           String       @id @default(cuid())
+  projectId    String
+  fromNodeId   String
+  toNodeId     String
+  relation     EdgeRelation
+  createdAt    DateTime     @default(now())
+  orgId        String
+  fromNode     Node         @relation("EdgeFrom", fields: [fromNodeId], references: [id], onDelete: Cascade)
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  fromNode     Node         @relation("EdgeFrom", fields: [fromNodeId], references: [id], onDelete: Cascade)
   toNode       Node         @relation("EdgeTo", fields: [toNodeId], references: [id], onDelete: Cascade)
 
-  // Prevent duplicate edges
   @@unique([projectId, fromNodeId, toNodeId, relation])
   @@index([orgId])
   @@index([projectId])
@@ -336,40 +240,29 @@ model Edge {
   @@map("edges")
 }
 
-// Request status enum
-enum RequestStatus {
-  OPEN // Created, waiting for response
-  RESPONDED // Draft response provided
-  APPROVED // Response approved and finalized
-  CLOSED // Request closed
-}
-
-// Request model - represents information requests
 model Request {
   id            String        @id @default(cuid())
-  orgId         String
   projectId     String
   linkedNodeId  String
-  question      String        @db.Text
+  question      String
   fromUserId    String
-  toUserId      String? // Null for team requests until claimed
-  toTeam        String? // Team string tag - TODO: migrate to teamId FK in future
+  toUserId      String?
+  toTeam        String?
   status        RequestStatus @default(OPEN)
-  responseDraft String?       @db.Text
-  responseFinal String?       @db.Text
+  responseDraft String?
+  responseFinal String?
   approvedById  String?
   approvedAt    DateTime?
-  claimedAt     DateTime? // When team request was claimed
+  claimedAt     DateTime?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
-
-  // Relations
-  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  linkedNode   Node         @relation(fields: [linkedNodeId], references: [id], onDelete: Cascade)
-  fromUser     User         @relation("RequestCreator", fields: [fromUserId], references: [id], onDelete: Cascade)
-  toUser       User?        @relation("RequestAssignee", fields: [toUserId], references: [id], onDelete: SetNull)
-  approvedBy   User?        @relation("RequestApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  orgId         String
+  approvedBy    User?         @relation("RequestApprover", fields: [approvedById], references: [id])
+  fromUser      User          @relation("RequestCreator", fields: [fromUserId], references: [id], onDelete: Cascade)
+  linkedNode    Node          @relation(fields: [linkedNodeId], references: [id], onDelete: Cascade)
+  organization  Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  project       Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  toUser        User?         @relation("RequestAssignee", fields: [toUserId], references: [id])
 
   @@index([orgId])
   @@index([projectId])
@@ -380,19 +273,16 @@ model Request {
   @@map("requests")
 }
 
-// Activity log for audit trail
 model ActivityLog {
-  id         String   @id @default(cuid())
-  orgId      String
-  projectId  String
-  userId     String
-  action     String // e.g., "CREATE_NODE", "UPDATE_NODE", "DELETE_EDGE", "APPROVE_REQUEST"
-  entityType String // e.g., "NODE", "EDGE", "REQUEST", "TEAM", "ORG_MEMBER"
-  entityId   String
-  details    Json? // Additional details in JSON format
-  createdAt  DateTime @default(now())
-
-  // Relations
+  id           String       @id @default(cuid())
+  projectId    String
+  userId       String
+  action       String
+  entityType   String
+  entityId     String
+  details      Json?
+  createdAt    DateTime     @default(now())
+  orgId        String
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -402,4 +292,54 @@ model ActivityLog {
   @@index([userId])
   @@index([createdAt])
   @@map("activity_logs")
+}
+
+enum OrgRole {
+  ADMIN
+  MEMBER
+}
+
+enum OrgMemberStatus {
+  ACTIVE
+  PENDING_TEAM_ASSIGNMENT
+  DEACTIVATED
+  PENDING_APPROVAL
+}
+
+enum TeamRole {
+  LEAD
+  MEMBER
+}
+
+enum ProjectRole {
+  PROJECT_ADMIN
+  EDITOR
+  VIEWER
+}
+
+enum NodeType {
+  TASK
+  DECISION
+  BLOCKER
+  INFOREQ
+}
+
+enum ManualStatus {
+  TODO
+  DOING
+  DONE
+}
+
+enum EdgeRelation {
+  DEPENDS_ON
+  HANDOFF_TO
+  NEEDS_INFO_FROM
+  APPROVAL_BY
+}
+
+enum RequestStatus {
+  OPEN
+  RESPONDED
+  APPROVED
+  CLOSED
 }
