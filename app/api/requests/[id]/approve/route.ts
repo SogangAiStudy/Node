@@ -110,7 +110,7 @@ export async function PATCH(
     console.error("PATCH /api/requests/[id]/approve error:", error);
 
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: "Invalid input", details: error.errors }, { status: 400 });
+      return NextResponse.json({ error: "Invalid input", details: error.issues }, { status: 400 });
     }
 
     return NextResponse.json({ error: "Failed to approve request" }, { status: 500 });
