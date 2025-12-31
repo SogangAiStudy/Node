@@ -206,6 +206,8 @@ model Node {
   updatedAt      DateTime     @updatedAt
   orgId          String
   teamId         String?
+  positionX      Float?
+  positionY      Float?
   edgesFrom      Edge[]       @relation("EdgeFrom")
   edgesTo        Edge[]       @relation("EdgeTo")
   organization   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)

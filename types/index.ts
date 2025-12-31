@@ -116,6 +116,10 @@ export interface NodeDTO {
   dueAt: string | null;
   createdAt: string;
   updatedAt: string;
+
+  // Position for React Flow
+  positionX: number | null;
+  positionY: number | null;
 }
 
 // Edge DTO
