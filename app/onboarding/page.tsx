@@ -10,8 +10,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, Search, Building2, UserPlus } from "lucide-react";
 import { toast } from "sonner";
+import { useSession } from "next-auth/react";
+import { Navbar } from "@/components/layout/Navbar";
 
 export default function OnboardingPage() {
+  const { data: session } = useSession();
   const router = useRouter();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<string>("join");
@@ -120,119 +123,122 @@ export default function OnboardingPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold">Welcome to Node</CardTitle>
-          <CardDescription>
-            Join an existing organization or create a new one to get started.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-2 mb-6">
-              <TabsTrigger value="join" className="flex items-center gap-2">
-                <UserPlus className="h-4 w-4" /> Join
-              </TabsTrigger>
-              <TabsTrigger value="create" className="flex items-center gap-2">
-                <Building2 className="h-4 w-4" /> Create
-              </TabsTrigger>
-            </TabsList>
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      {session?.user && <Navbar user={session.user} />}
+      <div className="flex-1 flex items-center justify-center px-4 py-12">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl font-bold">Welcome to Node</CardTitle>
+            <CardDescription>
+              Join an existing organization or create a new one to get started.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+              <TabsList className="grid w-full grid-cols-2 mb-6">
+                <TabsTrigger value="join" className="flex items-center gap-2">
+                  <UserPlus className="h-4 w-4" /> Join
+                </TabsTrigger>
+                <TabsTrigger value="create" className="flex items-center gap-2">
+                  <Building2 className="h-4 w-4" /> Create
+                </TabsTrigger>
+              </TabsList>
 
-            <TabsContent value="join" className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="searchOrg">Search Organization</Label>
-                <div className="relative">
-                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="searchOrg"
-                    type="text"
-                    placeholder="Type organization name..."
-                    className="pl-9"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2 max-h-64 overflow-y-auto border rounded-md p-1">
-                {isSearching ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                  </div>
-                ) : searchResults.length > 0 ? (
-                  searchResults.map((org) => (
-                    <div
-                      key={org.id}
-                      className="flex items-center justify-between p-3 hover:bg-accent rounded-sm transition-colors"
-                    >
-                      <span className="font-medium">{org.name}</span>
-                      <Button
-                        size="sm"
-                        disabled={isSubmittingJoin}
-                        onClick={() => handleJoinRequest(org.id)}
-                      >
-                        Request Access
-                      </Button>
-                    </div>
-                  ))
-                ) : searchQuery.length >= 2 ? (
-                  <div className="text-center py-8 text-sm text-muted-foreground">
-                    No organizations found matching "{searchQuery}"
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-sm text-muted-foreground">
-                    Start typing to search...
-                  </div>
-                )}
-              </div>
-            </TabsContent>
-
-            <TabsContent value="create">
-              <form onSubmit={handleCreateOrganization} className="space-y-4">
+              <TabsContent value="join" className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="orgName">Organization Name</Label>
-                  <Input
-                    id="orgName"
-                    type="text"
-                    placeholder="e.g. Acme Corp"
-                    value={organizationName}
-                    onChange={(e) => setOrganizationName(e.target.value)}
-                    required
-                    disabled={isCreating}
-                  />
-                  <p className="text-sm text-muted-foreground">
-                    This will be your private workspace name.
-                  </p>
+                  <Label htmlFor="searchOrg">Search Organization</Label>
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="searchOrg"
+                      type="text"
+                      placeholder="Type organization name..."
+                      className="pl-9"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                  </div>
                 </div>
 
-                <Button
-                  type="submit"
-                  className="w-full"
-                  disabled={isCreating || !organizationName.trim()}
-                >
-                  {isCreating ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Creating...
-                    </>
+                <div className="space-y-2 max-h-64 overflow-y-auto border rounded-md p-1">
+                  {isSearching ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : searchResults.length > 0 ? (
+                    searchResults.map((org) => (
+                      <div
+                        key={org.id}
+                        className="flex items-center justify-between p-3 hover:bg-accent rounded-sm transition-colors"
+                      >
+                        <span className="font-medium">{org.name}</span>
+                        <Button
+                          size="sm"
+                          disabled={isSubmittingJoin}
+                          onClick={() => handleJoinRequest(org.id)}
+                        >
+                          Request Access
+                        </Button>
+                      </div>
+                    ))
+                  ) : searchQuery.length >= 2 ? (
+                    <div className="text-center py-8 text-sm text-muted-foreground">
+                      No organizations found matching "{searchQuery}"
+                    </div>
                   ) : (
-                    "Create Organization"
+                    <div className="text-center py-8 text-sm text-muted-foreground">
+                      Start typing to search...
+                    </div>
                   )}
-                </Button>
-              </form>
-            </TabsContent>
-          </Tabs>
+                </div>
+              </TabsContent>
 
-          <div className="mt-8 rounded-lg bg-blue-50/50 p-4 border border-blue-100/50">
-            <h4 className="text-sm font-semibold text-blue-900 mb-1">How it works</h4>
-            <ul className="text-xs text-blue-800 space-y-1.5 list-disc list-inside">
-              <li>Joining requires approval from an organization administrator.</li>
-              <li>You'll be notified once access is granted and teams are assigned.</li>
-              <li>Creating a new organization makes you the primary administrator.</li>
-            </ul>
-          </div>
-        </CardContent>
-      </Card>
+              <TabsContent value="create">
+                <form onSubmit={handleCreateOrganization} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="orgName">Organization Name</Label>
+                    <Input
+                      id="orgName"
+                      type="text"
+                      placeholder="e.g. Acme Corp"
+                      value={organizationName}
+                      onChange={(e) => setOrganizationName(e.target.value)}
+                      required
+                      disabled={isCreating}
+                    />
+                    <p className="text-sm text-muted-foreground">
+                      This will be your private workspace name.
+                    </p>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    className="w-full"
+                    disabled={isCreating || !organizationName.trim()}
+                  >
+                    {isCreating ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Creating...
+                      </>
+                    ) : (
+                      "Create Organization"
+                    )}
+                  </Button>
+                </form>
+              </TabsContent>
+            </Tabs>
+
+            <div className="mt-8 rounded-lg bg-blue-50/50 p-4 border border-blue-100/50">
+              <h4 className="text-sm font-semibold text-blue-900 mb-1">How it works</h4>
+              <ul className="text-xs text-blue-800 space-y-1.5 list-disc list-inside">
+                <li>Joining requires approval from an organization administrator.</li>
+                <li>You'll be notified once access is granted and teams are assigned.</li>
+                <li>Creating a new organization makes you the primary administrator.</li>
+              </ul>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

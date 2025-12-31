@@ -6,7 +6,7 @@
     "dev": "next dev",
     "dev:local": "dotenv -e .env.local -- next dev",
     "dev:remote": "dotenv -e .env.remote -- next dev",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
     "db:generate": "prisma generate",
