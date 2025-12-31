@@ -45,13 +45,13 @@ const nodeTypes = {
   custom: CustomNode,
 };
 
-const dagreGraph = new dagre.graphlib.Graph();
-dagreGraph.setDefaultEdgeLabel(() => ({}));
-
 const nodeWidth = 240;
 const nodeHeight = 120;
 
 const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = "LR") => {
+  const dagreGraph = new dagre.graphlib.Graph();
+  dagreGraph.setDefaultEdgeLabel(() => ({}));
+
   const isHorizontal = direction === "LR";
   dagreGraph.setGraph({ rankdir: direction });
 
@@ -97,16 +97,17 @@ export function GraphCanvas({ projectId, data, onDataChange }: GraphCanvasProps)
           return false;
         return true;
       })
-      .map((node) => ({
-        id: node.id,
-        type: "custom",
-        // Use saved position if available, otherwise use placeholder for auto-layout
-        position:
-          node.positionX !== null && node.positionY !== null
-            ? { x: node.positionX, y: node.positionY }
-            : { x: 0, y: 0 },
-        data: { node },
-      }));
+      .map((node) => {
+        const x = typeof node.positionX === 'number' && !Number.isNaN(node.positionX) ? node.positionX : 0;
+        const y = typeof node.positionY === 'number' && !Number.isNaN(node.positionY) ? node.positionY : 0;
+
+        return {
+          id: node.id,
+          type: "custom",
+          position: { x, y },
+          data: { node },
+        };
+      });
 
     const visibleNodeIds = new Set(initialNodes.map((n) => n.id));
     const initialEdges: Edge[] = data.edges
@@ -137,11 +138,16 @@ export function GraphCanvas({ projectId, data, onDataChange }: GraphCanvasProps)
 
       initialNodes.forEach((node) => {
         const nodeData = data.nodes.find((n) => n.id === node.id);
-        if (nodeData && nodeData.positionX !== null && nodeData.positionY !== null) {
+        const hasValidPos =
+          nodeData &&
+          typeof nodeData.positionX === 'number' && !Number.isNaN(nodeData.positionX) &&
+          typeof nodeData.positionY === 'number' && !Number.isNaN(nodeData.positionY);
+
+        if (hasValidPos) {
           // Use saved position and set handle positions
           nodesWithSavedPos.push({
             ...node,
-            position: { x: nodeData.positionX, y: nodeData.positionY },
+            position: { x: nodeData!.positionX!, y: nodeData!.positionY! },
             sourcePosition: "right" as any,
             targetPosition: "left" as any,
           });
@@ -290,20 +296,27 @@ export function GraphCanvas({ projectId, data, onDataChange }: GraphCanvasProps)
     async (_event, node) => {
       // Persist node position to database
       try {
-        await fetch(`/api/nodes/${node.id}`, {
+        const res = await fetch(`/api/nodes/${node.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            positionX: node.position.x,
-            positionY: node.position.y,
+            positionX: Math.round(node.position.x),
+            positionY: Math.round(node.position.y),
           }),
         });
+
+        if (res.ok) {
+          toast.success("Position saved", { duration: 1000 });
+          onDataChange();
+        } else {
+          throw new Error("Failed to save position");
+        }
       } catch (error) {
         console.error("Failed to save node position:", error);
         toast.error("Failed to save position");
       }
     },
-    []
+    [onDataChange]
   );
 
   return (
