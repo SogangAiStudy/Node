@@ -158,7 +158,7 @@ export async function canViewProject(projectId: string, userId: string): Promise
     },
   });
 
-  const projectTeamIds = projectTeams.map((pt) => pt.teamId);
+  const projectTeamIds = projectTeams.map((pt: any) => pt.teamId);
 
   // Check intersection: myTeams ∩ projectTeams ≠ ∅
   return myTeams.some((teamId) => projectTeamIds.includes(teamId));
@@ -277,10 +277,10 @@ export async function getUserProjectRole(
   }
 
   // Return highest role (PROJECT_ADMIN > EDITOR > VIEWER)
-  if (projectTeams.some((pt) => pt.role === ProjectRole.PROJECT_ADMIN)) {
+  if (projectTeams.some((pt: any) => pt.role === ProjectRole.PROJECT_ADMIN)) {
     return ProjectRole.PROJECT_ADMIN;
   }
-  if (projectTeams.some((pt) => pt.role === ProjectRole.EDITOR)) {
+  if (projectTeams.some((pt: any) => pt.role === ProjectRole.EDITOR)) {
     return ProjectRole.EDITOR;
   }
   return ProjectRole.VIEWER;
