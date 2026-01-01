@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,16 +10,24 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { RequestDTO } from "@/types";
 import { toast } from "sonner";
+import { ExternalLink, Clock } from "lucide-react";
 
 function RequestCard({
   request,
   onAction,
+  projectId,
 }: {
   request: RequestDTO;
   onAction: () => void;
+  projectId: string;
 }) {
+  const router = useRouter();
   const [responseDraft, setResponseDraft] = useState(request.responseDraft || "");
   const [isLoading, setIsLoading] = useState(false);
+
+  const handleNavigateToNode = () => {
+    router.push(`/projects/${projectId}/graph?nodeId=${request.linkedNodeId}`);
+  };
 
   const handleRespond = async () => {
     setIsLoading(true);
@@ -98,18 +106,36 @@ function RequestCard({
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="space-y-1 text-sm">
+        <div className="space-y-2 text-sm">
           <p className="text-muted-foreground">
             From: <span className="font-medium">{request.fromUserName}</span>
           </p>
-          <p className="text-muted-foreground">
-            Node: <span className="font-medium">{request.linkedNodeTitle}</span>
-          </p>
+          <button
+            onClick={handleNavigateToNode}
+            className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors group"
+          >
+            <span>Node:</span>
+            <span className="font-medium text-primary group-hover:underline">
+              {request.linkedNodeTitle}
+            </span>
+            <ExternalLink className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+          </button>
           {request.toTeam && !request.toUserId && (
             <p className="text-muted-foreground">
               To Team: <span className="font-medium">{request.toTeam}</span>
             </p>
           )}
+          <div className="flex items-center gap-4 text-xs text-muted-foreground pt-1">
+            <span className="flex items-center gap-1">
+              <Clock className="h-3 w-3" />
+              Created {new Date(request.createdAt).toLocaleDateString()}
+            </span>
+            {request.updatedAt !== request.createdAt && (
+              <span className="flex items-center gap-1">
+                Updated {new Date(request.updatedAt).toLocaleDateString()}
+              </span>
+            )}
+          </div>
         </div>
 
         {request.status !== "CLOSED" && request.status !== "APPROVED" && (
@@ -191,7 +217,7 @@ export default function InboxPage() {
       ) : (
         <div className="space-y-4">
           {data?.requests.map((request) => (
-            <RequestCard key={request.id} request={request} onAction={refetch} />
+            <RequestCard key={request.id} request={request} onAction={refetch} projectId={projectId} />
           ))}
         </div>
       )}

@@ -1,13 +1,15 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { GraphCanvas } from "@/components/graph/GraphCanvas";
 import { GraphData } from "@/types";
 
 export default function GraphPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const projectId = params.projectId as string;
+  const focusNodeId = searchParams.get("nodeId");
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["graph", projectId],
@@ -28,7 +30,7 @@ export default function GraphPage() {
 
   return (
     <div className="h-[calc(100vh-12rem)]">
-      <GraphCanvas projectId={projectId} data={data} onDataChange={refetch} />
+      <GraphCanvas projectId={projectId} data={data} onDataChange={refetch} focusNodeId={focusNodeId} />
     </div>
   );
 }

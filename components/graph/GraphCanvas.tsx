@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, useEffect } from "react";
 import ReactFlow, {
   Node,
   Edge,
@@ -39,6 +39,7 @@ interface GraphCanvasProps {
   projectId: string;
   data: GraphData;
   onDataChange: () => void;
+  focusNodeId?: string | null;
 }
 
 const nodeTypes = {
@@ -81,13 +82,25 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = "LR") => 
   return { nodes, edges };
 };
 
-export function GraphCanvas({ projectId, data, onDataChange }: GraphCanvasProps) {
+export function GraphCanvas({ projectId, data, onDataChange, focusNodeId }: GraphCanvasProps) {
   const [filterStatus, setFilterStatus] = useState<string>("ALL");
   const [searchQuery, setSearchQuery] = useState("");
   const [pendingConnection, setPendingConnection] = useState<Connection | null>(null);
   const [editingEdge, setEditingEdge] = useState<Edge | null>(null);
   const [relation, setRelation] = useState<string>("DEPENDS_ON");
   const [isSyncing, setIsSyncing] = useState(false);
+
+  // Focus on specific node when focusNodeId is provided
+  useEffect(() => {
+    if (focusNodeId) {
+      setNodes((nds) =>
+        nds.map((node) => ({
+          ...node,
+          selected: node.id === focusNodeId,
+        }))
+      );
+    }
+  }, [focusNodeId, setNodes]);
 
   const { layoutedNodes, layoutedEdges } = useMemo(() => {
     const initialNodes: Node[] = data.nodes
