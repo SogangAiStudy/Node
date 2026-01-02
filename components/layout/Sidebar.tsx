@@ -203,7 +203,7 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
   };
 
   const currentWorkspace = workspaces?.find((w) => w.orgId === currentOrgId);
-  const projects = projectsData?.projects || [];
+  const projects = useMemo(() => projectsData?.projects || [], [projectsData]);
 
   // Enrich projects with workspace metadata for search
   const enrichedProjects = useMemo(() => {
@@ -265,7 +265,7 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
       subjects: allKnownSubjects,
       grouped
     };
-  }, [enrichedProjects, subjectsData?.subjects]);
+  }, [enrichedProjects, subjectsData]);
 
   // Keep local state in sync
   useEffect(() => {
