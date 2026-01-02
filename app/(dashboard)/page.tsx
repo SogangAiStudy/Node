@@ -51,10 +51,8 @@ export default function DashboardPage() {
         return;
       }
     } else if (workspaces) {
-      // If truly zero workspaces, it means auto-provisioning didn't run or failed.
-      // But /api/workspaces should handle it. Let's redirect to onboarding as a last resort.
-      console.log(`[DEBUG] Dashboard - Zero workspaces. Redirecting to /onboarding`);
-      router.push("/onboarding");
+      // If truly zero workspaces, show error (onboarding removed)
+      console.log(`[DEBUG] Dashboard - Zero workspaces. This should not happen with auto-provisioning.`);
     }
   }, [workspaces, isLoading, isError, router]);
 

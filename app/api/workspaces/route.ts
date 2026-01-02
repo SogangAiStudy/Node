@@ -29,6 +29,20 @@ export async function GET() {
     if (orgMemberships.length === 0) {
       console.log(`[DEBUG] No workspaces found for ${user.email}. Creating personal workspace...`);
 
+      // CRITICAL: Ensure user exists in database before creating organization
+      // NextAuth session may contain user data before the user is created in our DB
+      const dbUser = await prisma.user.findUnique({
+        where: { id: user.id },
+      });
+
+      if (!dbUser) {
+        console.log(`[DEBUG] User ${user.email} not found in database. This should not happen with NextAuth setup.`);
+        return NextResponse.json(
+          { error: "User not found in database. Please sign out and sign in again." },
+          { status: 500 }
+        );
+      }
+
       const personalOrg = await prisma.$transaction(async (tx: any) => {
         // 1. Create the Personal Workspace (Organization)
         const org = await tx.organization.create({
