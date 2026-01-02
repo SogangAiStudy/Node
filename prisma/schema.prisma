@@ -26,6 +26,7 @@ model User {
   sessions           Session[]
   teamMemberships    TeamMember[]
   nodeOwners         NodeOwner[]
+  orgInboxStates     OrgInboxState[]
 
   @@map("users")
 }
@@ -79,10 +80,11 @@ model Organization {
   edges        Edge[]
   nodes        Node[]
   members      OrgMember[]
-  owner        User          @relation("OrganizationOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  owner        User            @relation("OrganizationOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   projects     Project[]
   requests     Request[]
   teams        Team[]
+  inboxStates  OrgInboxState[]
 
   @@index([ownerId])
   @@map("organizations")
@@ -318,6 +320,22 @@ model ActivityLog {
   @@index([userId])
   @@index([createdAt])
   @@map("activity_logs")
+}
+
+model OrgInboxState {
+  id         String       @id @default(cuid())
+  orgId      String
+  userId     String
+  lastSeenAt DateTime     @default(now())
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, userId])
+  @@index([orgId])
+  @@index([userId])
+  @@map("org_inbox_states")
 }
 
 enum OrgRole {
