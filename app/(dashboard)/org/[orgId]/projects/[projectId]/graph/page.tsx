@@ -30,7 +30,13 @@ export default function ProjectGraphPage() {
 
   return (
     <div className="h-[calc(100vh-8rem)]">
-      <GraphCanvas projectId={projectId} data={data} onDataChange={refetch} focusNodeId={focusNodeId} />
+      <GraphCanvas
+        projectId={projectId}
+        orgId={params.orgId as string}
+        data={data}
+        onDataChange={refetch}
+        focusNodeId={focusNodeId}
+      />
     </div>
   );
 }
