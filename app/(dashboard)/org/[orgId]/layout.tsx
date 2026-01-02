@@ -8,10 +8,10 @@ export default function OrgLayout({
   params: { orgId: string };
 }) {
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-screen overflow-hidden bg-white">
       <Sidebar currentOrgId={params.orgId} />
-      <main className="flex-1 overflow-y-auto bg-gray-50">
-        <div className="container mx-auto px-6 py-8">
+      <main className="flex-1 overflow-y-auto custom-scrollbar">
+        <div className="max-w-[1200px] mx-auto px-8 py-10">
           {children}
         </div>
       </main>

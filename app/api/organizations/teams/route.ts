@@ -79,16 +79,31 @@ export async function POST(request: NextRequest) {
 
 /**
  * GET /api/organizations/teams
- * List all teams in the user's current organization
+ * List all teams in a specific organization
+ * Query params: orgId (required)
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
     try {
         const user = await requireAuth();
 
-        // Get user's current organization
-        const orgMember = await prisma.orgMember.findFirst({
+        // Get orgId from query parameters
+        const { searchParams } = new URL(request.url);
+        const orgId = searchParams.get('orgId');
+
+        if (!orgId) {
+            return NextResponse.json(
+                { error: "orgId query parameter is required" },
+                { status: 400 }
+            );
+        }
+
+        // Verify user is a member of this organization
+        const orgMember = await prisma.orgMember.findUnique({
             where: {
-                userId: user.id,
+                orgId_userId: {
+                    orgId,
+                    userId: user.id,
+                },
             },
             select: {
                 orgId: true,
@@ -96,10 +111,11 @@ export async function GET() {
         });
 
         if (!orgMember) {
-            return NextResponse.json({ teams: [] });
+            return NextResponse.json(
+                { error: "Access denied to this organization" },
+                { status: 403 }
+            );
         }
-
-        const orgId = orgMember.orgId;
 
         const teams = await prisma.team.findMany({
             where: {

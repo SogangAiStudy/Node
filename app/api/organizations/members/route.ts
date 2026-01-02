@@ -4,16 +4,31 @@ import { requireAuth, isOrgAdmin } from "@/lib/utils/auth";
 
 /**
  * GET /api/organizations/members
- * List all members of the user's current organization
+ * List all members of a specific organization
+ * Query params: orgId (required)
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
     try {
         const user = await requireAuth();
 
-        // Get user's current organization
-        const orgMember = await prisma.orgMember.findFirst({
+        // Get orgId from query parameters
+        const { searchParams } = new URL(request.url);
+        const orgId = searchParams.get('orgId');
+
+        if (!orgId) {
+            return NextResponse.json(
+                { error: "orgId query parameter is required" },
+                { status: 400 }
+            );
+        }
+
+        // Verify user is a member of this organization
+        const orgMember = await prisma.orgMember.findUnique({
             where: {
-                userId: user.id,
+                orgId_userId: {
+                    orgId,
+                    userId: user.id,
+                },
             },
             select: {
                 orgId: true,
@@ -21,10 +36,11 @@ export async function GET() {
         });
 
         if (!orgMember) {
-            return NextResponse.json({ members: [] });
+            return NextResponse.json(
+                { error: "Access denied to this organization" },
+                { status: 403 }
+            );
         }
-
-        const orgId = orgMember.orgId;
 
         // Fetch all members of the organization
         const members = await prisma.orgMember.findMany({
@@ -75,13 +91,13 @@ export async function GET() {
         });
 
         const memberDTOs = members.map((om: any) => ({
-            id: om.id,
             userId: om.userId,
-            name: om.user.name,
-            email: om.user.email,
-            image: om.user.image,
+            userName: om.user.name,
+            userEmail: om.user.email,
+            userImage: om.user.image,
             role: om.role,
             status: om.status,
+            teamName: userTeams[om.userId]?.[0]?.name || null,
             teams: userTeams[om.userId] || [],
             joinedAt: om.createdAt.toISOString(),
         }));

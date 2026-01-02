@@ -36,9 +36,11 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
 interface GraphCanvasProps {
+  orgId: string;
   projectId: string;
   data: GraphData;
   onDataChange: () => void;
+  focusNodeId?: string | null;
 }
 
 const nodeTypes = {
@@ -81,33 +83,45 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = "LR") => 
   return { nodes, edges };
 };
 
-export function GraphCanvas({ projectId, data, onDataChange }: GraphCanvasProps) {
+export function GraphCanvas({ orgId, projectId, data, onDataChange, focusNodeId }: GraphCanvasProps) {
   const [filterStatus, setFilterStatus] = useState<string>("ALL");
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([]);
   const [pendingConnection, setPendingConnection] = useState<Connection | null>(null);
   const [editingEdge, setEditingEdge] = useState<Edge | null>(null);
   const [relation, setRelation] = useState<string>("DEPENDS_ON");
   const [isSyncing, setIsSyncing] = useState(false);
 
   const { layoutedNodes, layoutedEdges } = useMemo(() => {
-    const initialNodes: Node[] = data.nodes
-      .filter((node) => {
-        if (filterStatus !== "ALL" && node.computedStatus !== filterStatus) return false;
-        if (searchQuery && !node.title.toLowerCase().includes(searchQuery.toLowerCase()))
-          return false;
-        return true;
-      })
-      .map((node) => {
-        const x = typeof node.positionX === 'number' && !Number.isNaN(node.positionX) ? node.positionX : 0;
-        const y = typeof node.positionY === 'number' && !Number.isNaN(node.positionY) ? node.positionY : 0;
+    const initialNodes: Node[] = data.nodes.map((node) => {
+      const x = typeof node.positionX === 'number' && !Number.isNaN(node.positionX) ? node.positionX : 0;
+      const y = typeof node.positionY === 'number' && !Number.isNaN(node.positionY) ? node.positionY : 0;
 
-        return {
-          id: node.id,
-          type: "custom",
-          position: { x, y },
-          data: { node },
-        };
-      });
+      // Calculate if this node matches the current filters
+      let isFaded = false;
+      if (filterStatus !== "ALL" && node.computedStatus !== filterStatus) isFaded = true;
+      if (searchQuery && !node.title.toLowerCase().includes(searchQuery.toLowerCase())) isFaded = true;
+
+      if (selectedTeamIds.length > 0) {
+        const nodeTeamIds = node.teams.map((t) => t.id);
+        const hasMatch = selectedTeamIds.some((id) => nodeTeamIds.includes(id));
+        if (!hasMatch) isFaded = true;
+      }
+
+      return {
+        id: node.id,
+        type: "custom",
+        position: { x, y },
+        data: {
+          node,
+          projectId,
+          onDataChange,
+          blockedBy: [], // This will be calculated in a moment
+          blocking: [],   // This will be calculated in a moment
+          isFaded
+        },
+      };
+    });
 
     const visibleNodeIds = new Set(initialNodes.map((n) => n.id));
     const initialEdges: Edge[] = data.edges
@@ -204,7 +218,7 @@ export function GraphCanvas({ projectId, data, onDataChange }: GraphCanvasProps)
     });
 
     return { layoutedNodes: nodesWithExtraData, layoutedEdges: edges };
-  }, [data.nodes, data.edges, filterStatus, searchQuery, projectId, onDataChange]);
+  }, [data.nodes, data.edges, filterStatus, searchQuery, selectedTeamIds, projectId, onDataChange]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(layoutedNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(layoutedEdges);
@@ -322,11 +336,14 @@ export function GraphCanvas({ projectId, data, onDataChange }: GraphCanvasProps)
   return (
     <div className="relative h-full w-full rounded-lg border bg-white overflow-hidden shadow-inner">
       <Toolbar
+        orgId={orgId}
         projectId={projectId}
         filterStatus={filterStatus}
         onFilterChange={setFilterStatus}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
+        selectedTeamIds={selectedTeamIds}
+        onTeamChange={setSelectedTeamIds}
         onDataChange={onDataChange}
       />
 

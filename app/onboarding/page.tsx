@@ -1,101 +1,43 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Search, Building2, UserPlus } from "lucide-react";
+import { Laptop, Search, Plus, UserPlus, Loader2, Sparkles, Building2 } from "lucide-react";
 import { toast } from "sonner";
-import { useSession } from "next-auth/react";
-import { Navbar } from "@/components/layout/Navbar";
 
 export default function OnboardingPage() {
   const { data: session } = useSession();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<string>("join");
-
-  // Join Org State
+  const [isCreating, setIsCreating] = useState(false);
+  const [organizationName, setOrganizationName] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<Array<{ id: string, name: string }>>([]);
-  const [isSearching, setIsSearching] = useState(false);
+  const [activeTab, setActiveTab] = useState("create");
   const [isSubmittingJoin, setIsSubmittingJoin] = useState(false);
 
-  // Create Org State
-  const [organizationName, setOrganizationName] = useState("");
-  const [isCreating, setIsCreating] = useState(false);
-
-  // Check if user already has an organization and redirect
-  const { data: orgStatus } = useQuery({
-    queryKey: ["organization-status"],
+  const { data: searchResults = [], isLoading: isSearching } = useQuery({
+    queryKey: ["org-search", searchQuery],
     queryFn: async () => {
-      const res = await fetch("/api/user/organization-status");
-      if (!res.ok) return null;
-      return res.json() as Promise<{ hasOrganization: boolean }>;
+      if (!searchQuery) return [];
+      const res = await fetch(`/api/organizations/search?q=${encodeURIComponent(searchQuery)}`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return data.organizations as Array<{ id: string; name: string }>;
     },
+    enabled: searchQuery.length >= 2,
   });
-
-  useEffect(() => {
-    if (orgStatus?.hasOrganization) {
-      router.push("/");
-    }
-  }, [orgStatus, router]);
-
-  // Search logic
-  useEffect(() => {
-    const timer = setTimeout(async () => {
-      if (searchQuery.length < 2) {
-        setSearchResults([]);
-        return;
-      }
-      setIsSearching(true);
-      try {
-        const res = await fetch(`/api/organizations/search?q=${encodeURIComponent(searchQuery)}`);
-        if (res.ok) {
-          const data = await res.json();
-          setSearchResults(data.organizations);
-        }
-      } catch (err) {
-        console.error("Search error", err);
-      } finally {
-        setIsSearching(false);
-      }
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
-
-  const handleJoinRequest = async (orgId: string) => {
-    setIsSubmittingJoin(true);
-    try {
-      const res = await fetch("/api/organizations/join", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orgId }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to submit request");
-      }
-
-      toast.success("Join request submitted! Wait for admin approval.");
-      // For now, we don't redirect because they are still pending
-      // You might want a "Pending Approval" state page later
-    } catch (err: any) {
-      toast.error(err.message);
-    } finally {
-      setIsSubmittingJoin(false);
-    }
-  };
 
   const handleCreateOrganization = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsCreating(true);
+    if (!organizationName) return;
 
+    setIsCreating(true);
     try {
       const res = await fetch("/api/organizations", {
         method: "POST",
@@ -110,11 +52,13 @@ export default function OnboardingPage() {
         const data = await res.json();
         throw new Error(data.error || "Failed to create organization");
       }
-
+      const orgData = await res.json();
       toast.success("Organization created successfully!");
+      // Invalidate both workspace and status queries
+      await queryClient.invalidateQueries({ queryKey: ["workspaces"] });
       await queryClient.invalidateQueries({ queryKey: ["organization-status"] });
-      router.push("/");
-      router.refresh();
+
+      router.push(`/org/${orgData.organization.id}/projects`);
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -122,122 +66,166 @@ export default function OnboardingPage() {
     }
   };
 
-  return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      {session?.user && <Navbar user={session.user} />}
-      <div className="flex-1 flex items-center justify-center px-4 py-12">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <CardTitle className="text-2xl font-bold">Welcome to Node</CardTitle>
-            <CardDescription>
-              Join an existing organization or create a new one to get started.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-2 mb-6">
-                <TabsTrigger value="join" className="flex items-center gap-2">
-                  <UserPlus className="h-4 w-4" /> Join
-                </TabsTrigger>
-                <TabsTrigger value="create" className="flex items-center gap-2">
-                  <Building2 className="h-4 w-4" /> Create
-                </TabsTrigger>
-              </TabsList>
+  const handleJoinRequest = async (orgId: string) => {
+    setIsSubmittingJoin(true);
+    try {
+      const res = await fetch("/api/organizations/join", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orgId }),
+      });
 
-              <TabsContent value="join" className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="searchOrg">Search Organization</Label>
-                  <div className="relative">
-                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to submit join request");
+      }
+
+      toast.success("Join request submitted!");
+      setActiveTab("pending");
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setIsSubmittingJoin(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-[#fbfbfa] flex flex-col items-center justify-center p-6 select-none">
+      <div className="w-full max-w-[480px] space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <div className="text-center space-y-3">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-3xl bg-[#37352f] text-white shadow-xl shadow-black/10 mb-4 ring-4 ring-white">
+            <Laptop className="w-8 h-8" />
+          </div>
+          <h1 className="text-4xl font-extrabold text-[#1a1b1e] tracking-tight">Setup Workspace</h1>
+          <p className="text-[#7b7c7e] text-lg leading-relaxed">Create a private space or join a shared organization.</p>
+        </div>
+
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full space-y-6">
+          <TabsList className="grid w-full grid-cols-2 h-12 p-1 bg-[#f1f1ef] rounded-xl border border-[#e1e1de]">
+            <TabsTrigger value="create" className="rounded-lg font-bold text-sm data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-[#1a1b1e]">
+              <Plus className="w-4 h-4 mr-2" /> Create
+            </TabsTrigger>
+            <TabsTrigger value="join" className="rounded-lg font-bold text-sm data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-[#1a1b1e]">
+              <UserPlus className="w-4 h-4 mr-2" /> Join
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="create" className="mt-0">
+            <Card className="border-none shadow-2xl shadow-black/5 rounded-3xl overflow-hidden bg-white">
+              <CardContent className="p-8 space-y-6">
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-[#7b7c7e] uppercase tracking-widest ml-1">Workspace Name</label>
                     <Input
-                      id="searchOrg"
-                      type="text"
-                      placeholder="Type organization name..."
-                      className="pl-9"
+                      placeholder="Acme Corp, Personal Space, etc."
+                      value={organizationName}
+                      onChange={(e) => setOrganizationName(e.target.value)}
+                      className="h-14 text-lg border-none bg-[#f7f7f5] focus-visible:ring-0 focus-visible:bg-[#f1f1ef] transition-all rounded-2xl px-5"
+                      disabled={isCreating}
+                    />
+                  </div>
+                </div>
+                <Button
+                  onClick={handleCreateOrganization}
+                  disabled={!organizationName || isCreating}
+                  className="w-full h-14 rounded-2xl bg-[#37352f] hover:bg-[#1a1b1e] text-white font-bold text-lg shadow-xl shadow-[#37352f]/20 transition-all active:scale-95 disabled:opacity-30"
+                >
+                  {isCreating ? (
+                    <Loader2 className="w-5 h-5 animate-spin mr-3" />
+                  ) : (
+                    <Sparkles className="w-5 h-5 mr-3" />
+                  )}
+                  Launch Workspace
+                </Button>
+                <p className="text-[11px] text-center text-[#7b7c7e] leading-relaxed">
+                  By creating a workspace, you agree to our <span className="underline cursor-pointer">Terms of Service</span> and <span className="underline cursor-pointer">Privacy Policy</span>.
+                </p>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="join" className="mt-0">
+            <Card className="border-none shadow-2xl shadow-black/5 rounded-3xl overflow-hidden bg-white">
+              <CardContent className="p-8 space-y-6">
+                <div className="space-y-4">
+                  <div className="relative">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#7b7c7e]" />
+                    <Input
+                      placeholder="Search by name..."
+                      className="pl-11 h-12 border-none bg-[#f7f7f5] focus-visible:ring-0 focus-visible:bg-[#f1f1ef] transition-all rounded-xl text-sm"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                     />
                   </div>
                 </div>
 
-                <div className="space-y-2 max-h-64 overflow-y-auto border rounded-md p-1">
+                <div className="space-y-2 max-h-64 overflow-y-auto no-scrollbar pr-1 -mr-1">
                   {isSearching ? (
-                    <div className="flex items-center justify-center py-8">
-                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    <div className="flex flex-col items-center justify-center py-12 space-y-3 opacity-40">
+                      <Loader2 className="h-8 w-8 animate-spin" />
+                      <p className="text-xs font-bold uppercase tracking-widest">Searching...</p>
                     </div>
                   ) : searchResults.length > 0 ? (
                     searchResults.map((org) => (
                       <div
                         key={org.id}
-                        className="flex items-center justify-between p-3 hover:bg-accent rounded-sm transition-colors"
+                        className="flex items-center justify-between p-4 bg-[#fbfbfa] hover:bg-[#f1f1ef] rounded-2xl transition-all group"
                       >
-                        <span className="font-medium">{org.name}</span>
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center border border-[#e1e1de] shadow-sm">
+                            <Building2 className="w-5 h-5 text-[#37352f]" />
+                          </div>
+                          <span className="font-bold text-[#1a1b1e] truncate pr-4">{org.name}</span>
+                        </div>
                         <Button
                           size="sm"
+                          variant="ghost"
+                          className="rounded-lg h-9 px-4 font-bold text-[11px] uppercase tracking-widest hover:bg-[#37352f] hover:text-white transition-all shrink-0"
                           disabled={isSubmittingJoin}
                           onClick={() => handleJoinRequest(org.id)}
                         >
-                          Request Access
+                          Join
                         </Button>
                       </div>
                     ))
                   ) : searchQuery.length >= 2 ? (
-                    <div className="text-center py-8 text-sm text-muted-foreground">
-                      No organizations found matching "{searchQuery}"
+                    <div className="text-center py-12 text-[#7b7c7e] space-y-2 opacity-60">
+                      <p className="text-sm font-medium">No results for "{searchQuery}"</p>
+                      <p className="text-xs uppercase tracking-widest font-bold">Try another name</p>
                     </div>
                   ) : (
-                    <div className="text-center py-8 text-sm text-muted-foreground">
-                      Start typing to search...
+                    <div className="text-center py-12 text-[#7b7c7e] space-y-2 opacity-60">
+                      <p className="text-xs uppercase tracking-widest font-bold">Search above to find teams</p>
                     </div>
                   )}
                 </div>
-              </TabsContent>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-              <TabsContent value="create">
-                <form onSubmit={handleCreateOrganization} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="orgName">Organization Name</Label>
-                    <Input
-                      id="orgName"
-                      type="text"
-                      placeholder="e.g. Acme Corp"
-                      value={organizationName}
-                      onChange={(e) => setOrganizationName(e.target.value)}
-                      required
-                      disabled={isCreating}
-                    />
-                    <p className="text-sm text-muted-foreground">
-                      This will be your private workspace name.
-                    </p>
-                  </div>
-
-                  <Button
-                    type="submit"
-                    className="w-full"
-                    disabled={isCreating || !organizationName.trim()}
-                  >
-                    {isCreating ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Creating...
-                      </>
-                    ) : (
-                      "Create Organization"
-                    )}
-                  </Button>
-                </form>
-              </TabsContent>
-            </Tabs>
-
-            <div className="mt-8 rounded-lg bg-blue-50/50 p-4 border border-blue-100/50">
-              <h4 className="text-sm font-semibold text-blue-900 mb-1">How it works</h4>
-              <ul className="text-xs text-blue-800 space-y-1.5 list-disc list-inside">
-                <li>Joining requires approval from an organization administrator.</li>
-                <li>You'll be notified once access is granted and teams are assigned.</li>
-                <li>Creating a new organization makes you the primary administrator.</li>
-              </ul>
-            </div>
-          </CardContent>
-        </Card>
+          <TabsContent value="pending" className="mt-0">
+            <Card className="border-none shadow-2xl shadow-black/5 rounded-3xl overflow-hidden bg-white">
+              <CardContent className="p-12 text-center space-y-6">
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-amber-50 text-amber-500 mb-2">
+                  <Loader2 className="w-8 h-8 animate-spin" />
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-xl font-bold text-[#1a1b1e]">Access Pending</h3>
+                  <p className="text-[#7b7c7e] text-sm leading-relaxed">
+                    Your request has been sent to the admins. You'll be notified once access is granted.
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  className="rounded-xl border-[#e1e1de] h-11 px-6 font-bold text-xs uppercase tracking-widest"
+                  onClick={() => setActiveTab("create")}
+                >
+                  Create another workspace
+                </Button>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );

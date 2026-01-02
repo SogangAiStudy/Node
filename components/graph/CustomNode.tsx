@@ -45,6 +45,7 @@ interface CustomNodeProps {
     onDataChange: () => void;
     blockedBy: string[];
     blocking: string[];
+    isFaded?: boolean;
   };
   selected?: boolean;
 }
@@ -77,7 +78,7 @@ function getInitials(name: string | null) {
 }
 
 export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
-  const { node, projectId, onDataChange, blockedBy, blocking } = data;
+  const { node, projectId, onDataChange, blockedBy, blocking, isFaded } = data;
   const [createRequestOpen, setCreateRequestOpen] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
 
@@ -243,7 +244,8 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
         "min-w-[280px] max-w-[320px] rounded-lg border-2 bg-white shadow-sm transition-all duration-200",
         selected ? "scale-105 border-primary z-50 ring-2 ring-primary/20" : "hover:border-slate-300",
         hasNoOwner ? "opacity-70 border-amber-300 bg-amber-50/30" : "border-slate-200",
-        node.computedStatus === "BLOCKED" && "border-red-300"
+        node.computedStatus === "BLOCKED" && "border-red-300",
+        isFaded && "opacity-20 grayscale-[0.5] pointer-events-none hover:opacity-40"
       )}
     >
       <Handle
@@ -395,7 +397,7 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
                           updateNode({ ownerIds: newOwnerIds } as any);
                         }}
                       >
-                        <Checkbox checked={isSelected} onCheckedChange={() => {}} className="pointer-events-none" />
+                        <Checkbox checked={isSelected} onCheckedChange={() => { }} className="pointer-events-none" />
                         <Avatar className="h-6 w-6 border border-slate-100">
                           <AvatarFallback className="text-[9px] font-bold">
                             {getInitials(m.userName)}
