@@ -94,9 +94,7 @@ export default function OrgSubjectsPage() {
   }, [data?.projects]);
 
   const allSubjects = useMemo(() => {
-    const realSubjects = subjectsData?.subjects || [];
-    // Only use mock subjects as a fallback
-    return realSubjects.length > 0 ? realSubjects : [];
+    return subjectsData?.subjects || [];
   }, [subjectsData?.subjects]);
 
   // Filter projects by active tab
