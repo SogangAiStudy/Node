@@ -37,6 +37,7 @@ import { toast } from "sonner";
 
 interface GraphCanvasProps {
   projectId: string;
+  orgId: string;
   data: GraphData;
   onDataChange: () => void;
   focusNodeId?: string | null;
@@ -82,7 +83,7 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = "LR") => 
   return { nodes, edges };
 };
 
-export function GraphCanvas({ projectId, data, onDataChange, focusNodeId }: GraphCanvasProps) {
+export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId }: GraphCanvasProps) {
   const [filterStatus, setFilterStatus] = useState<string>("ALL");
   const [searchQuery, setSearchQuery] = useState("");
   const [pendingConnection, setPendingConnection] = useState<Connection | null>(null);
@@ -336,6 +337,7 @@ export function GraphCanvas({ projectId, data, onDataChange, focusNodeId }: Grap
     <div className="relative h-full w-full rounded-lg border bg-white overflow-hidden shadow-inner">
       <Toolbar
         projectId={projectId}
+        orgId={orgId}
         filterStatus={filterStatus}
         onFilterChange={setFilterStatus}
         searchQuery={searchQuery}

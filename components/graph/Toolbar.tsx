@@ -15,6 +15,7 @@ import { AddEdgeDialog } from "./AddEdgeDialog";
 
 interface ToolbarProps {
   projectId: string;
+  orgId: string;
   filterStatus: string;
   onFilterChange: (status: string) => void;
   searchQuery: string;
@@ -24,6 +25,7 @@ interface ToolbarProps {
 
 export function Toolbar({
   projectId,
+  orgId,
   filterStatus,
   onFilterChange,
   searchQuery,
@@ -65,6 +67,7 @@ export function Toolbar({
 
       <AddNodeDialog
         projectId={projectId}
+        orgId={orgId}
         open={addNodeOpen}
         onOpenChange={setAddNodeOpen}
         onSuccess={() => {
