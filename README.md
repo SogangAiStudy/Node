@@ -39,10 +39,13 @@ npm install
 If you have [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed, you don't need to install Postgres manually.
 
 ```bash
-# 1. Start the database container
+# 1. Copy the template (you can adjust ports/credentials if needed)
+cp docker-compose.example.yml docker-compose.yml
+
+# 2. Start the database container
 docker-compose up -d
 
-# 2. Proceed directly to Step B
+# 3. Proceed directly to Step B
 ```
 
 #### Option 2: Manual Setup (No Docker)
