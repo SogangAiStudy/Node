@@ -53,16 +53,16 @@ export async function POST(req: NextRequest) {
                     break;
                 }
 
-                const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+                const subscription = await stripe.subscriptions.retrieve(subscriptionId) as any;
 
                 await prisma.organization.update({
                     where: { id: orgId },
                     data: {
                         stripeCustomerId: session.customer as string,
                         stripeSubscriptionId: subscription.id,
-                        stripePriceId: subscription.items.data[0]?.price.id,
+                        stripePriceId: subscription.items?.data?.[0]?.price?.id,
                         stripeSubscriptionStatus: subscription.status,
-                        stripeCurrentPeriodEnd: new Date(subscription.current_period_end * 1000),
+                        stripeCurrentPeriodEnd: subscription.current_period_end ? new Date(subscription.current_period_end * 1000) : null,
                     },
                 });
 
@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
             }
 
             case "customer.subscription.updated": {
-                const subscription = event.data.object as Stripe.Subscription;
+                const subscription = event.data.object as any;
                 const customerId = subscription.customer as string;
 
                 const org = await prisma.organization.findUnique({
@@ -87,9 +87,9 @@ export async function POST(req: NextRequest) {
                     where: { id: org.id },
                     data: {
                         stripeSubscriptionId: subscription.id,
-                        stripePriceId: subscription.items.data[0]?.price.id,
+                        stripePriceId: subscription.items?.data?.[0]?.price?.id,
                         stripeSubscriptionStatus: subscription.status,
-                        stripeCurrentPeriodEnd: new Date(subscription.current_period_end * 1000),
+                        stripeCurrentPeriodEnd: subscription.current_period_end ? new Date(subscription.current_period_end * 1000) : null,
                     },
                 });
 
@@ -130,7 +130,7 @@ export async function POST(req: NextRequest) {
 
                 if (!subscriptionId) break;
 
-                const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+                const subscription = await stripe.subscriptions.retrieve(subscriptionId) as any;
                 const customerId = subscription.customer as string;
 
                 const org = await prisma.organization.findUnique({
@@ -146,7 +146,7 @@ export async function POST(req: NextRequest) {
                     where: { id: org.id },
                     data: {
                         stripeSubscriptionStatus: subscription.status,
-                        stripeCurrentPeriodEnd: new Date(subscription.current_period_end * 1000),
+                        stripeCurrentPeriodEnd: subscription.current_period_end ? new Date(subscription.current_period_end * 1000) : null,
                     },
                 });
 
@@ -160,7 +160,7 @@ export async function POST(req: NextRequest) {
 
                 if (!subscriptionId) break;
 
-                const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+                const subscription = await stripe.subscriptions.retrieve(subscriptionId) as any;
                 const customerId = subscription.customer as string;
 
                 const org = await prisma.organization.findUnique({
