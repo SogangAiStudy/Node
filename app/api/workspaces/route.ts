@@ -142,20 +142,11 @@ export async function GET() {
         const orgId = membership.orgId;
 
         // Only check for unread requests for active-ish members
+        // Inbox state feature disabled for now
         let hasUnreadInbox = false;
+        const lastSeenAt = null;
 
         if (["ACTIVE", "PENDING_TEAM_ASSIGNMENT"].includes(membership.status)) {
-          // Get user's inbox state for this org
-          const inboxState = await prisma.orgInboxState.findUnique({
-            where: {
-              orgId_userId: {
-                orgId,
-                userId: user.id,
-              },
-            },
-          });
-
-          const lastSeenAt = inboxState?.lastSeenAt;
 
           // Get user's teams in this org
           const userTeams = await prisma.teamMember.findMany({
@@ -185,11 +176,6 @@ export async function GET() {
               status: {
                 not: "CLOSED",
               },
-              ...(lastSeenAt && {
-                updatedAt: {
-                  gt: lastSeenAt,
-                },
-              }),
             },
             select: {
               id: true,
