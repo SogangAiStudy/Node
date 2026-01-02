@@ -72,11 +72,12 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
   const { data: projectsData } = useQuery({
     queryKey: ["projects", currentOrgId],
     queryFn: async () => {
+      if (!currentOrgId || currentOrgId === "undefined") return { projects: [] };
       const res = await fetch(`/api/projects?orgId=${currentOrgId}`);
       if (!res.ok) throw new Error("Failed to fetch projects");
       return res.json() as Promise<{ projects: Project[] }>;
     },
-    enabled: !!currentOrgId,
+    enabled: !!currentOrgId && currentOrgId !== "undefined",
   });
 
   const currentWorkspace = workspaces?.find((w) => w.orgId === currentOrgId);
@@ -85,6 +86,9 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
   // Categorize projects
   const privateProjects = projects.filter(p => p.teamCount <= 1);
   const sharedProjects = projects.filter(p => p.teamCount > 1);
+
+  // Debugging
+  console.log(`[DEBUG] Sidebar - currentOrgId: ${currentOrgId}`);
 
   const NavItem = ({
     href,
@@ -170,98 +174,111 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
 
       {/* Main Navigation */}
       <div className="flex-1 overflow-y-auto px-1.5 pb-4 custom-scrollbar">
-        <div className="space-y-0.5">
-          <NavItem
-            href={`/org/${currentOrgId}/search`}
-            icon={Search}
-            label="Search"
-            isActive={pathname.includes("/search")}
-          />
-          <NavItem
-            href={`/org/${currentOrgId}/projects`}
-            icon={Home}
-            label="Home"
-            isActive={pathname === `/org/${currentOrgId}/projects`}
-          />
-          <NavItem
-            href={`/org/${currentOrgId}/inbox`}
-            icon={Inbox}
-            label="Inbox"
-            isActive={pathname.includes("/inbox")}
-            unread={currentWorkspace?.hasUnreadInbox}
-          />
-        </div>
-
-        {/* Private Section */}
-        <div className="mt-6 pt-2">
-          <div className="flex items-center justify-between px-3 mb-1 group">
-            <div className="flex items-center gap-2 text-[11px] font-bold text-[#7b7c7e] uppercase tracking-wider">
-              <Lock className="h-3 w-3" /> Private
+        {currentOrgId && currentOrgId !== "undefined" ? (
+          <>
+            <div className="space-y-0.5">
+              <NavItem
+                href={`/org/${currentOrgId}/search`}
+                icon={Search}
+                label="Search"
+                isActive={pathname.includes("/search")}
+              />
+              <NavItem
+                href={`/org/${currentOrgId}/projects`}
+                icon={Home}
+                label="Home"
+                isActive={pathname === `/org/${currentOrgId}/projects`}
+              />
+              <NavItem
+                href={`/org/${currentOrgId}/inbox`}
+                icon={Inbox}
+                label="Inbox"
+                isActive={pathname.includes("/inbox")}
+                unread={currentWorkspace?.hasUnreadInbox}
+              />
             </div>
-            <button className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 hover:bg-[#2c2d31] rounded">
-              <Plus className="h-3.5 w-3.5 text-[#7b7c7e]" />
-            </button>
-          </div>
-          <div className="space-y-0.5">
-            {privateProjects.map((project) => (
-              <Link
-                key={project.id}
-                href={`/org/${currentOrgId}/projects/${project.id}/graph`}
-                className={cn(
-                  "flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] transition-colors group",
-                  currentProjectId === project.id
-                    ? "bg-[#2c2d31] text-white"
-                    : "text-[#d1d2d5] hover:bg-[#2c2d31] hover:text-white"
-                )}
-              >
-                <FolderKanban className={cn("h-4 w-4 shrink-0 opacity-60", currentProjectId === project.id && "opacity-100")} />
-                <span className="truncate">{project.name}</span>
-              </Link>
-            ))}
-            {privateProjects.length === 0 && (
-              <div className="px-3 py-1.5 text-[12px] text-[#7b7c7e] italic">No private projects</div>
-            )}
-          </div>
-        </div>
 
-        {/* Shared Section */}
-        <div className="mt-6">
-          <div className="flex items-center justify-between px-3 mb-1 group">
-            <div className="flex items-center gap-2 text-[11px] font-bold text-[#7b7c7e] uppercase tracking-wider">
-              <Users2 className="h-3 w-3" /> Shared
-            </div>
-          </div>
-          <div className="space-y-0.5">
-            {sharedProjects.map((project) => (
-              <Link
-                key={project.id}
-                href={`/org/${currentOrgId}/projects/${project.id}/graph`}
-                className={cn(
-                  "flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] transition-colors group",
-                  currentProjectId === project.id
-                    ? "bg-[#2c2d31] text-white"
-                    : "text-[#d1d2d5] hover:bg-[#2c2d31] hover:text-white"
+            {/* Private Section */}
+            <div className="mt-6 pt-2">
+              <div className="flex items-center justify-between px-3 mb-1 group">
+                <div className="flex items-center gap-2 text-[11px] font-bold text-[#7b7c7e] uppercase tracking-wider">
+                  <Lock className="h-3 w-3" /> Private
+                </div>
+                <Link
+                  href={`/org/${currentOrgId}/projects/new`}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 hover:bg-[#2c2d31] rounded"
+                >
+                  <Plus className="h-3.5 w-3.5 text-[#7b7c7e]" />
+                </Link>
+              </div>
+              <div className="space-y-0.5">
+                {privateProjects.map((project) => (
+                  <Link
+                    key={project.id}
+                    href={`/org/${currentOrgId}/projects/${project.id}/graph`}
+                    className={cn(
+                      "flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] transition-colors group",
+                      currentProjectId === project.id
+                        ? "bg-[#2c2d31] text-white"
+                        : "text-[#d1d2d5] hover:bg-[#2c2d31] hover:text-white"
+                    )}
+                  >
+                    <FolderKanban className={cn("h-4 w-4 shrink-0 opacity-60", currentProjectId === project.id && "opacity-100")} />
+                    <span className="truncate">{project.name}</span>
+                  </Link>
+                ))}
+                {privateProjects.length === 0 && (
+                  <div className="px-3 py-1.5 text-[12px] text-[#7b7c7e] italic">No private projects</div>
                 )}
-              >
-                <FolderKanban className={cn("h-4 w-4 shrink-0 opacity-60", currentProjectId === project.id && "opacity-100")} />
-                <span className="truncate">{project.name}</span>
-              </Link>
-            ))}
-            {sharedProjects.length === 0 && (
-              <div className="px-3 py-1.5 text-[12px] text-[#7b7c7e] italic">No shared projects</div>
-            )}
+              </div>
+            </div>
+
+            {/* Shared Section */}
+            <div className="mt-6">
+              <div className="flex items-center justify-between px-3 mb-1 group">
+                <div className="flex items-center gap-2 text-[11px] font-bold text-[#7b7c7e] uppercase tracking-wider">
+                  <Users2 className="h-3 w-3" /> Shared
+                </div>
+              </div>
+              <div className="space-y-0.5">
+                {sharedProjects.map((project) => (
+                  <Link
+                    key={project.id}
+                    href={`/org/${currentOrgId}/projects/${project.id}/graph`}
+                    className={cn(
+                      "flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] transition-colors group",
+                      currentProjectId === project.id
+                        ? "bg-[#2c2d31] text-white"
+                        : "text-[#d1d2d5] hover:bg-[#2c2d31] hover:text-white"
+                    )}
+                  >
+                    <FolderKanban className={cn("h-4 w-4 shrink-0 opacity-60", currentProjectId === project.id && "opacity-100")} />
+                    <span className="truncate">{project.name}</span>
+                  </Link>
+                ))}
+                {sharedProjects.length === 0 && (
+                  <div className="px-3 py-1.5 text-[12px] text-[#7b7c7e] italic">No shared projects</div>
+                )}
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="px-3 py-12 text-center">
+            <p className="text-xs text-[#7b7c7e]">Please select a workspace</p>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Sidebar Footer */}
       <div className="mt-auto p-1.5 border-t border-[#2c2d31] bg-[#1a1b1e]/50">
-        <NavItem
-          href={`/org/${currentOrgId}/settings`}
-          icon={Settings}
-          label="Settings"
-          isActive={pathname.includes("/settings")}
-        />
+        {currentOrgId && currentOrgId !== "undefined" && (
+          <NavItem
+            href={`/org/${currentOrgId}/settings`}
+            icon={Settings}
+            label="Settings"
+            isActive={pathname.includes("/settings") && !pathname.includes("/profile")}
+          />
+        )}
         <div className="mt-1">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -281,9 +298,11 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-56 bg-[#1a1b1e] border-[#2c2d31] text-[#d1d2d5]" align="end" side="right">
-              <DropdownMenuItem className="focus:bg-[#2c2d31] focus:text-white hover:bg-[#2c2d31] hover:text-white cursor-pointer">
-                <Settings className="h-3.5 w-3.5 mr-2" />
-                <span>Profile Settings</span>
+              <DropdownMenuItem asChild className="focus:bg-[#2c2d31] focus:text-white hover:bg-[#2c2d31] hover:text-white cursor-pointer">
+                <Link href="/settings/profile" className="flex items-center w-full">
+                  <UserCircle2 className="h-3.5 w-3.5 mr-2" />
+                  <span>Profile Settings</span>
+                </Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator className="bg-[#2c2d31]" />
               <DropdownMenuItem

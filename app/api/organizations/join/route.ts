@@ -4,18 +4,40 @@ import { requireAuth } from "@/lib/utils/auth";
 import { z } from "zod";
 
 const joinOrgSchema = z.object({
-    orgId: z.string().min(1, "Organization ID is required"),
+    orgId: z.string().optional(),
+    inviteCode: z.string().optional(),
 });
 
 /**
  * POST /api/organizations/join
- * Submit a request to join an organization
+ * Submit a request to join an organization or join directly via invite code
  */
 export async function POST(request: NextRequest) {
     try {
         const user = await requireAuth();
         const body = await request.json();
-        const { orgId } = joinOrgSchema.parse(body);
+        const { orgId: bodyOrgId, inviteCode } = joinOrgSchema.parse(body);
+
+        let targetOrgId = bodyOrgId;
+        let autoApprove = false;
+
+        if (inviteCode) {
+            const org = await prisma.organization.findUnique({
+                where: { inviteCode },
+                select: { id: true }
+            });
+            if (!org) {
+                return NextResponse.json({ error: "Invalid invite code" }, { status: 400 });
+            }
+            targetOrgId = org.id;
+            autoApprove = true;
+        }
+
+        if (!targetOrgId) {
+            return NextResponse.json({ error: "Organization ID or invite code is required" }, { status: 400 });
+        }
+
+        const orgId = targetOrgId;
 
         // Check if user already has a membership in this org
         const existingMembership = await prisma.orgMember.findUnique({
@@ -34,13 +56,13 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Create a membership with PENDING_APPROVAL status
+        // Create a membership with appropriate status
         const orgMember = await prisma.orgMember.create({
             data: {
                 orgId,
                 userId: user.id,
                 role: "MEMBER",
-                status: "PENDING_APPROVAL",
+                status: autoApprove ? "PENDING_TEAM_ASSIGNMENT" : "PENDING_APPROVAL",
             },
         });
 
