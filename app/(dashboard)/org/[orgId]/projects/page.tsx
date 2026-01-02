@@ -67,6 +67,7 @@ export default function OrgProjectsPage() {
       unfiled: filterProjectsByTab(enrichedProjects, "unfiled").length,
     };
   }, [enrichedProjects]);
+
   if (isLoading) {
     return <div className="text-center text-muted-foreground">Loading projects...</div>;
   }

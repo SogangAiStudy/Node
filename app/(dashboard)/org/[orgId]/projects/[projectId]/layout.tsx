@@ -23,6 +23,7 @@ export default function ProjectLayout({ children }: { children: ReactNode }) {
     },
     enabled: !!projectId,
   });
+
   const currentTab = pathname.includes("/now")
     ? "now"
     : pathname.includes("/graph")

@@ -211,7 +211,6 @@ export function AddNodeDialog({ projectId, orgId, open, onOpenChange, onSuccess 
                     searchPlaceholder="Search teams..."
                   />
                 </div>
-              </div>
 
               <div className="grid gap-2">
                 <Label htmlFor="description" className="text-sm font-medium">Description (optional)</Label>

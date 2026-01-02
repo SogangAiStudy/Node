@@ -143,6 +143,8 @@ export async function POST(request: NextRequest) {
     const validated = CreateProjectSchema.parse(body);
 
     // Get user's organization and teams
+    const requestedOrgId = body.orgId;
+
     const orgMember = await prisma.orgMember.findFirst({
       where: {
         userId: user.id,

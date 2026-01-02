@@ -1,5 +1,3 @@
-"use client";
-
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -28,7 +26,6 @@ import {
 } from "lucide-react";
 import { AddNodeDialog } from "./AddNodeDialog";
 import { AddEdgeDialog } from "./AddEdgeDialog";
-import { ShareButton } from "@/components/project/ShareButton";
 
 interface ToolbarProps {
   projectId: string;
@@ -214,6 +211,7 @@ export function Toolbar({
         </div>
       </div>
 
+      {/* Dialogs */}
       <AddNodeDialog
         projectId={projectId}
         orgId={orgId}

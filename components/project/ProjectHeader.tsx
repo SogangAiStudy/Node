@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter, useParams } from "next/navigation";
 import { Star, Share2, MoreHorizontal, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -13,7 +14,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { ShareDialog } from "./ShareDialog";
-import { ShareModal } from "./ShareModal";
 
 interface Collaborator {
     id: string;
@@ -39,9 +39,10 @@ export function ProjectHeader({
     isFavorite = false,
     onFavoriteToggle,
 }: ProjectHeaderProps) {
+    const router = useRouter();
+    const params = useParams();
     const [favorite, setFavorite] = useState(isFavorite);
     const [shareOpen, setShareOpen] = useState(false);
-    const [memberManagementOpen, setMemberManagementOpen] = useState(false);
 
     const handleFavoriteClick = () => {
         const newState = !favorite;
@@ -55,7 +56,8 @@ export function ProjectHeader({
     };
 
     const handleMemberManagement = () => {
-        setMemberManagementOpen(true);
+        const currentOrgId = params.orgId as string;
+        router.push(`/org/${currentOrgId}/projects/${projectId}/members`);
     };
 
     // Mock collaborators if none provided
@@ -169,14 +171,6 @@ export function ProjectHeader({
             <ShareDialog
                 open={shareOpen}
                 onOpenChange={setShareOpen}
-                projectId={projectId}
-                orgId={orgId}
-            />
-
-            {/* Full Member Management Modal */}
-            <ShareModal
-                open={memberManagementOpen}
-                onOpenChange={setMemberManagementOpen}
                 projectId={projectId}
                 orgId={orgId}
             />
