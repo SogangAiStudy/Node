@@ -18,22 +18,11 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { name, createDefaultTeam } = createOrgSchema.parse(body);
 
-    // Check if user already belongs to an organization
-    const existingMembership = await prisma.orgMember.findFirst({
-      where: {
-        userId: user.id,
-      },
-    });
-
-    if (existingMembership) {
-      return NextResponse.json(
-        { error: "User already belongs to an organization" },
-        { status: 400 }
-      );
-    }
+    // We no longer block users from creating/joining multiple organizations.
+    // This allows them to have a 'Personal' space AND 'Team' spaces.
 
     // Create organization, org membership, and optionally a default team
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: any) => {
       // Create organization
       const organization = await tx.organization.create({
         data: {
@@ -134,7 +123,7 @@ export async function GET() {
       },
     });
 
-    const organizations = orgMembers.map((om) => ({
+    const organizations = orgMembers.map((om: any) => ({
       id: om.organization.id,
       name: om.organization.name,
       role: om.role,
