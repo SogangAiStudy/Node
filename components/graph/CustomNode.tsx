@@ -125,6 +125,8 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
       setIsAnalyzing(false);
     }
   };
+
+  const fetchMetadata = async () => {
     try {
       const res = await fetch(`/api/projects/${projectId}/members`);
       if (res.ok) {
