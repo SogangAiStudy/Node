@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Star, Share2, MoreHorizontal } from "lucide-react";
+import { Star, Share2, MoreHorizontal, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -12,6 +12,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { ShareDialog } from "./ShareDialog";
 import { ShareModal } from "./ShareModal";
 
 interface Collaborator {
@@ -40,6 +41,7 @@ export function ProjectHeader({
 }: ProjectHeaderProps) {
     const [favorite, setFavorite] = useState(isFavorite);
     const [shareOpen, setShareOpen] = useState(false);
+    const [memberManagementOpen, setMemberManagementOpen] = useState(false);
 
     const handleFavoriteClick = () => {
         const newState = !favorite;
@@ -50,6 +52,10 @@ export function ProjectHeader({
 
     const handleShareClick = () => {
         setShareOpen(true);
+    };
+
+    const handleMemberManagement = () => {
+        setMemberManagementOpen(true);
     };
 
     // Mock collaborators if none provided
@@ -136,6 +142,11 @@ export function ProjectHeader({
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuItem onClick={handleMemberManagement}>
+                            <Users className="h-4 w-4 mr-2" />
+                            <span>Manage members</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
                         <DropdownMenuItem>
                             <span>Duplicate project</span>
                         </DropdownMenuItem>
@@ -154,10 +165,18 @@ export function ProjectHeader({
                 </DropdownMenu>
             </div>
 
-            {/* Share Modal */}
-            <ShareModal
+            {/* Simple Share Dialog for quick invites */}
+            <ShareDialog
                 open={shareOpen}
                 onOpenChange={setShareOpen}
+                projectId={projectId}
+                orgId={orgId}
+            />
+
+            {/* Full Member Management Modal */}
+            <ShareModal
+                open={memberManagementOpen}
+                onOpenChange={setMemberManagementOpen}
                 projectId={projectId}
                 orgId={orgId}
             />
