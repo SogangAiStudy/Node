@@ -13,6 +13,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { useCompletion } from "@ai-sdk/react";
+import { Loader2, Sparkles } from "lucide-react";
 
 interface CreateRequestDialogProps {
   projectId: string;
@@ -34,6 +36,48 @@ export function CreateRequestDialog({
   const [toUserId, setToUserId] = useState("");
   const [toTeam, setToTeam] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+
+  // AI Streaming Hook
+  const { complete, completion, isLoading: isDrafting, setCompletion } = useCompletion({
+    api: "/api/ai/draft-request",
+    onFinish: (_, result) => {
+      setQuestion(result);
+      toast.success("Draft generated!");
+    },
+    onError: (err) => {
+      toast.error("Failed to generate draft: " + err.message);
+    }
+  });
+
+  // Sync completion to question state while streaming
+  // We can't easily sync state *during* stream without a useEffect or controlled input.
+  // Actually, useCompletion gives us `completion`. We can just use that to update `question` when done, 
+  // or show it in the UI. 
+  // BETTER UX: Let's just update `question` directly via `input` which `useCompletion` supports,
+  // OR manually call `complete`.
+
+  const handleAutoDraft = async () => {
+    if (!linkedNodeId) return;
+    try {
+      await complete("", {
+        body: {
+          nodeId: linkedNodeId,
+          recipientId: targetType === 'user' ? toUserId : undefined,
+          context: question // Send current text as context 
+        }
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Effect to update the textarea as stream comes in
+  // NOTE: This overrides user input while streaming.
+  if (isDrafting && completion) {
+    if (question !== completion) {
+      setQuestion(completion);
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,7 +129,20 @@ export function CreateRequestDialog({
           </DialogHeader>
           <div className="space-y-4 my-4">
             <div>
-              <Label htmlFor="question">Question</Label>
+              <div className="flex items-center justify-between mb-2">
+                <Label htmlFor="question">Question</Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-xs text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+                  onClick={handleAutoDraft}
+                  disabled={isDrafting}
+                >
+                  {isDrafting ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Sparkles className="h-3 w-3 mr-1" />}
+                  {isDrafting ? "Drafting..." : "Auto-Draft"}
+                </Button>
+              </div>
               <Textarea
                 id="question"
                 value={question}

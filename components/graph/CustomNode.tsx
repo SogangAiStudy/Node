@@ -93,6 +93,30 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
   const [hasLoadedMetadata, setHasLoadedMetadata] = useState(false);
   const [showSecondaryTeams, setShowSecondaryTeams] = useState(false);
 
+  // AI Agent State
+  const [aiAnalysis, setAiAnalysis] = useState<any>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  const handleAnalyzeBlock = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsAnalyzing(true);
+    try {
+      const res = await fetch("/api/ai/analyze-block", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nodeId: node.id }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAiAnalysis(data);
+      }
+    } catch (error) {
+      console.error("Analysis failed", error);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
   const fetchMetadata = async () => {
     try {
       const res = await fetch(`/api/projects/${projectId}/members`);
@@ -460,27 +484,68 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
           </div>
         </div>
 
-        {/* (4) BLOCKED-SPECIFIC SECTION - Conditional */}
-        {node.computedStatus === "BLOCKED" && blockedBy.length > 0 && (
-          <div className="rounded-lg bg-red-50 border-2 border-red-200 p-3 space-y-2">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 text-red-600" />
-              <p className="font-bold text-[11px] text-red-900 uppercase tracking-wide">Why Blocked</p>
-            </div>
-            <div className="space-y-1.5">
+        {/* (4) BLOCKED-SPECIFIC SECTION - with AI Agent */}
+        {node.computedStatus === "BLOCKED" && (
+          <div className="rounded-lg bg-red-50 border-2 border-red-200 p-3 space-y-2 animate-in slide-in-from-top-1">
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="text-[10px] font-semibold text-red-700">DEPENDS_ON:</div>
-                <div className="text-[10px] text-red-600">{blockedBy.length} incomplete dependencies</div>
+                <AlertCircle className="h-4 w-4 text-red-600" />
+                <p className="font-bold text-[11px] text-red-900 uppercase tracking-wide">Why Blocked?</p>
               </div>
-              <ul className="space-y-1 pl-3">
-                {blockedBy.map((title, i) => (
-                  <li key={i} className="text-[10px] text-red-700 flex items-center gap-1.5">
-                    <span className="h-1 w-1 rounded-full bg-red-500" />
-                    <span className="truncate">{title}</span>
-                  </li>
-                ))}
-              </ul>
+              {/* AI Agent Trigger */}
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 px-2 text-[10px] text-red-700 hover:bg-red-100 hover:text-red-900 border border-red-200 bg-white shadow-sm"
+                onClick={handleAnalyzeBlock}
+                disabled={isAnalyzing}
+              >
+                {isAnalyzing ? (
+                  <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                ) : (
+                  <span className="mr-1">✨</span>
+                )}
+                {isAnalyzing ? "Analyzing..." : "Ask AI"}
+              </Button>
             </div>
+
+            {/* AI Analysis Result */}
+            {aiAnalysis ? (
+              <div className="space-y-2 bg-white rounded-md border border-red-100 p-2 shadow-sm">
+                <p className="text-[11px] font-medium text-slate-800 leading-tight">
+                  {aiAnalysis.summary}
+                </p>
+
+                {/* Action Items */}
+                {aiAnalysis.whoShouldAct?.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="text-[9px] font-bold text-slate-400 uppercase">Action Needed By</p>
+                    {aiAnalysis.whoShouldAct.map((actor: any, i: number) => (
+                      <div key={i} className="flex items-start gap-1.5 text-[10px] text-slate-700">
+                        <User className="h-3 w-3 mt-0.5 text-slate-400" />
+                        <span className="font-semibold">{actor.name}</span>: {actor.nextStep}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Standard Blocked Reasons (Fallback/Initial) */
+              <div className="space-y-1.5">
+                {blockedBy.length > 0 ? (
+                  <ul className="space-y-1 pl-3">
+                    {blockedBy.map((title, i) => (
+                      <li key={i} className="text-[10px] text-red-700 flex items-center gap-1.5">
+                        <span className="h-1 w-1 rounded-full bg-red-500" />
+                        <span className="truncate">{title}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-[10px] text-red-600 italic pl-1">Blocked by external factors or open requests.</p>
+                )}
+              </div>
+            )}
           </div>
         )}
 
