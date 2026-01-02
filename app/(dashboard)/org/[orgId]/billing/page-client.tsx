@@ -17,7 +17,7 @@ interface BillingPageClientProps {
 export default function BillingPageClient({
     orgId,
     isOrgPro,
-    nodeCount,
+    nodeCount = 0,
     stripeCustomerId,
 }: BillingPageClientProps) {
     const [loading, setLoading] = useState(false);
@@ -107,12 +107,12 @@ export default function BillingPageClient({
                         <div className="relative h-2 bg-secondary rounded-full overflow-hidden">
                             <div
                                 className={`h-full transition-all ${isOrgPro
-                                        ? "bg-green-500"
-                                        : nodeCount >= NODE_LIMIT
-                                            ? "bg-red-500"
-                                            : nodeCount >= NODE_LIMIT * 0.8
-                                                ? "bg-yellow-500"
-                                                : "bg-blue-500"
+                                    ? "bg-green-500"
+                                    : nodeCount >= NODE_LIMIT
+                                        ? "bg-red-500"
+                                        : nodeCount >= NODE_LIMIT * 0.8
+                                            ? "bg-yellow-500"
+                                            : "bg-blue-500"
                                     }`}
                                 style={{
                                     width: isOrgPro ? "100%" : `${Math.min((nodeCount / NODE_LIMIT) * 100, 100)}%`,

@@ -1,4 +1,4 @@
-import { auth } from "@/auth";
+import { requireAuth } from "@/lib/utils/auth";
 import { prisma } from "@/lib/db/prisma";
 import { redirect } from "next/navigation";
 import { isOrgPro } from "@/lib/subscription";
@@ -9,10 +9,7 @@ export default async function BillingPage({
 }: {
     params: Promise<{ orgId: string }>;
 }) {
-    const session = await auth();
-    if (!session?.user?.id) {
-        redirect("/");
-    }
+    const user = await requireAuth();
 
     const { orgId } = await params;
 
@@ -21,11 +18,11 @@ export default async function BillingPage({
         where: {
             id: orgId,
             OR: [
-                { ownerId: session.user.id },
+                { ownerId: user.id },
                 {
                     members: {
                         some: {
-                            userId: session.user.id,
+                            userId: user.id,
                         },
                     },
                 },
@@ -33,7 +30,6 @@ export default async function BillingPage({
         },
         select: {
             id: true,
-            nodeCount: true,
             stripeCustomerId: true,
         },
     });
@@ -44,11 +40,20 @@ export default async function BillingPage({
 
     const isPro = await isOrgPro(orgId);
 
+    // Count nodes in this organization
+    const nodeCount = await prisma.node.count({
+        where: {
+            project: {
+                orgId,
+            },
+        },
+    });
+
     return (
         <BillingPageClient
             orgId={org.id}
             isOrgPro={isPro}
-            nodeCount={org.nodeCount}
+            nodeCount={nodeCount}
             stripeCustomerId={org.stripeCustomerId}
         />
     );
