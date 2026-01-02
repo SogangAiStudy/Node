@@ -12,21 +12,43 @@ const CreateProjectSchema = z.object({
 });
 
 // GET /api/projects - List user's projects (ProjectTeam-based)
-export async function GET() {
+// Query params: orgId (optional) - if provided, filter by specific organization
+export async function GET(request: NextRequest) {
   try {
     const user = await requireAuth();
+    const searchParams = request.nextUrl.searchParams;
+    const requestedOrgId = searchParams.get("orgId");
 
     // Get user's organization
-    const orgMember = await prisma.orgMember.findFirst({
-      where: {
-        userId: user.id,
-        status: { in: ["ACTIVE", "PENDING_TEAM_ASSIGNMENT"] },
-      },
-      select: {
-        orgId: true,
-        role: true,
-      },
-    });
+    let orgMember;
+    if (requestedOrgId) {
+      // Verify user is a member of the requested org
+      orgMember = await prisma.orgMember.findUnique({
+        where: {
+          orgId_userId: {
+            orgId: requestedOrgId,
+            userId: user.id,
+          },
+          status: { in: ["ACTIVE", "PENDING_TEAM_ASSIGNMENT"] },
+        },
+        select: {
+          orgId: true,
+          role: true,
+        },
+      });
+    } else {
+      // Default to user's first active org
+      orgMember = await prisma.orgMember.findFirst({
+        where: {
+          userId: user.id,
+          status: { in: ["ACTIVE", "PENDING_TEAM_ASSIGNMENT"] },
+        },
+        select: {
+          orgId: true,
+          role: true,
+        },
+      });
+    }
 
     if (!orgMember) {
       return NextResponse.json({ projects: [] });
