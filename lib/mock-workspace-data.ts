@@ -60,7 +60,7 @@ export const mockPreviewThumbnails = [
  * Enrich project data with mock workspace metadata
  * This simulates what would come from the backend API
  */
-export function enrichProjectWithWorkspaceData<T extends { id: string; updatedAt?: string }>(
+export function enrichProjectWithWorkspaceData<T extends { id: string; updatedAt?: string; isFavorite?: boolean; subjectId?: string }>(
     project: T,
     index: number = 0
 ): T & {
@@ -69,27 +69,20 @@ export function enrichProjectWithWorkspaceData<T extends { id: string; updatedAt
     lastUpdated?: string;
     isFavorite?: boolean;
 } {
-    // Distribute projects across subjects in a round-robin fashion
-    const subjectIndex = index % mockSubjects.length;
-    const subject = mockSubjects[subjectIndex];
-
     // Assign preview thumbnail
     const thumbnailIndex = index % mockPreviewThumbnails.length;
 
     // Format last updated (use updatedAt if available, otherwise mock it)
     const lastUpdated = project.updatedAt
         ? formatRelativeTime(new Date(project.updatedAt))
-        : "2 days ago";
-
-    // Mock favorite status (every 3rd project is favorited)
-    const isFavorite = index % 3 === 0;
+        : "Recently";
 
     return {
         ...project,
-        subjectId: (project as any).subjectId || subject.id,
-        previewThumbnail: mockPreviewThumbnails[thumbnailIndex],
+        subjectId: project.subjectId || undefined,
+        previewThumbnail: (project as any).previewThumbnail || mockPreviewThumbnails[thumbnailIndex],
         lastUpdated,
-        isFavorite,
+        isFavorite: project.isFavorite || false,
     };
 }
 

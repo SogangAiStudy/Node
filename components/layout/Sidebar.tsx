@@ -204,17 +204,24 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
   const sidebarGroupedProjects = useMemo(() => {
     const grouped = new Map<string, any[]>();
     const realSubjects = subjectsData?.subjects || [];
-    const allKnownSubjects = realSubjects.length > 0
-      ? realSubjects
-      : mockSubjects;
+    // Only use mock subjects as a fallback to show what's possible, 
+    // but don't force projects into them if they don't belong.
+    const allKnownSubjects = realSubjects.length > 0 ? realSubjects : [];
 
     allKnownSubjects.forEach(s => grouped.set(s.id, []));
     grouped.set("unfiled", []);
 
     enrichedProjects.forEach(p => {
       const subjectId = p.subjectId || "unfiled";
-      const existing = grouped.get(subjectId) || [];
-      grouped.set(subjectId, [...existing, p]);
+      // If we have a subject ID that isn't in our list (e.g. mock data or deleted), 
+      // put it in unfiled instead of crashing or ignoring it.
+      if (subjectId !== "unfiled" && !grouped.has(subjectId)) {
+        const unfiled = grouped.get("unfiled") || [];
+        grouped.set("unfiled", [...unfiled, p]);
+      } else {
+        const existing = grouped.get(subjectId) || [];
+        grouped.set(subjectId, [...existing, p]);
+      }
     });
 
     return {

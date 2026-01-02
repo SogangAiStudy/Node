@@ -83,19 +83,32 @@ export async function GET(request: NextRequest) {
         },
       });
     } else {
-      // MEMBER sees only projects their teams have access to
+      // MEMBER sees:
+      // 1. Projects they own
+      // 2. Projects they are an explicit member of
+      // 3. Projects their teams have access to
       const myTeams = await getUserTeams(orgMember.orgId, user.id);
 
       projects = await prisma.project.findMany({
         where: {
           orgId: orgMember.orgId,
-          projectTeams: {
-            some: {
-              teamId: {
-                in: myTeams,
-              },
+          OR: [
+            { ownerId: user.id },
+            {
+              members: {
+                some: { userId: user.id }
+              }
             },
-          },
+            {
+              projectTeams: {
+                some: {
+                  teamId: {
+                    in: myTeams,
+                  },
+                },
+              },
+            }
+          ]
         },
         include: {
           _count: {
