@@ -10,7 +10,7 @@ import { toast } from "sonner";
 interface BillingPageClientProps {
     orgId: string;
     isOrgPro: boolean;
-    nodeCount?: number;
+    nodeCount: number;
     stripeCustomerId: string | null;
 }
 
