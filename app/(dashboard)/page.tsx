@@ -16,7 +16,7 @@ export default function DashboardPage() {
         // If unauthorized or error, return empty array
         return [];
       }
-      return res.json() as Promise<Array<{ orgId: string; name: string; hasUnreadInbox: boolean }>>;
+      return res.json() as Promise<Array<{ orgId: string; name: string; status: string; hasUnreadInbox: boolean }>>;
     },
     retry: 1, // Only retry once
     staleTime: 0,
@@ -27,7 +27,17 @@ export default function DashboardPage() {
     if (isLoading || isError) return;
 
     if (workspaces && workspaces.length > 0) {
-      router.push(`/org/${workspaces[0].orgId}/projects`);
+      // Find first active-ish workspace
+      const activeWorkspace = workspaces.find(w =>
+        ["ACTIVE", "PENDING_TEAM_ASSIGNMENT"].includes(w.status)
+      );
+
+      if (activeWorkspace) {
+        router.push(`/org/${activeWorkspace.orgId}/projects`);
+      } else {
+        // User has organizations but NONE are active (e.g. all PENDING_APPROVAL)
+        router.push("/onboarding");
+      }
     } else if (workspaces && workspaces.length === 0) {
       // ONLY redirect to onboarding if we explicitly have zero workspaces
       router.push("/onboarding");
