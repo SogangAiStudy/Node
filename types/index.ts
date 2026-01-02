@@ -186,6 +186,12 @@ export interface ProjectDTO {
   memberCount?: number; // Deprecated - use teamCount
   teamCount?: number; // Number of teams with access
   userRole?: ProjectRole | null; // Current user's role in the project
+
+  // Workspace UI enhancements
+  subjectId?: string; // For grouping projects by subject
+  previewThumbnail?: string; // URL to node graph preview image
+  lastUpdated?: string; // Last activity timestamp (formatted)
+  isFavorite?: boolean; // User's favorite status
 }
 
 // API Error response

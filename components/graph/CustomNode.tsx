@@ -210,18 +210,8 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
           </Button>
         );
       case "BLOCKED":
-        return (
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={(e) => {
-              e.stopPropagation();
-              setCreateRequestOpen(true);
-            }}
-          >
-            Create Request
-          </Button>
-        );
+        // No primary action for blocked - user can create request in expanded panel
+        return null;
       default:
         return null;
     }
@@ -592,18 +582,17 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
           {/* Action Buttons */}
           <div className="flex items-center gap-2 pt-2">
             {getPrimaryAction()}
-            {node.computedStatus === "BLOCKED" && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setCreateRequestOpen(true);
-                }}
-              >
-                Create Request
-              </Button>
-            )}
+            {/* Create Request - Available for all nodes */}
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={(e) => {
+                e.stopPropagation();
+                setCreateRequestOpen(true);
+              }}
+            >
+              Create Request
+            </Button>
           </div>
         </div>
       )}
