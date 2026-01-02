@@ -29,7 +29,7 @@ export async function PUT(request: NextRequest) {
             items.map((item) =>
                 prisma.subject.update({
                     where: { id: item.id },
-                    data: { order: item.order },
+                    data: { sortOrder: item.order },
                 })
             )
         );

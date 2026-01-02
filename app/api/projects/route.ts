@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
           },
         },
         orderBy: [
-          { order: "asc" },
+          { sortOrder: "asc" },
           { createdAt: "desc" },
         ],
       });
@@ -124,7 +124,7 @@ export async function GET(request: NextRequest) {
           },
         },
         orderBy: [
-          { order: "asc" },
+          { sortOrder: "asc" },
           { createdAt: "desc" },
         ],
       });

@@ -31,7 +31,7 @@ export async function PUT(request: NextRequest) {
                 prisma.project.update({
                     where: { id: item.id },
                     data: {
-                        order: item.order,
+                        sortOrder: item.order,
                         // Only update subjectId if it is explicitly provided (including null)
                         ...(item.subjectId !== undefined ? { subjectId: item.subjectId } : {})
                     },
