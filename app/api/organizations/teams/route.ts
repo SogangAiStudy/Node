@@ -81,19 +81,30 @@ export async function POST(request: NextRequest) {
  * GET /api/organizations/teams
  * List all teams in the user's current organization
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
     try {
         const user = await requireAuth();
+        const searchParams = request.nextUrl.searchParams;
+        const requestedOrgId = searchParams.get("orgId");
 
-        // Get user's current organization
-        const orgMember = await prisma.orgMember.findFirst({
-            where: {
-                userId: user.id,
-            },
-            select: {
-                orgId: true,
-            },
-        });
+        // Get user's organization
+        let orgMember;
+        if (requestedOrgId) {
+            orgMember = await prisma.orgMember.findUnique({
+                where: {
+                    orgId_userId: {
+                        orgId: requestedOrgId,
+                        userId: user.id,
+                    },
+                },
+                select: { orgId: true },
+            });
+        } else {
+            orgMember = await prisma.orgMember.findFirst({
+                where: { userId: user.id },
+                select: { orgId: true },
+            });
+        }
 
         if (!orgMember) {
             return NextResponse.json({ teams: [] });

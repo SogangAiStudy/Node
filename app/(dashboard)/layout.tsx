@@ -14,8 +14,7 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar user={session.user} />
+    <div className="min-h-screen">
       <main>{children}</main>
     </div>
   );
