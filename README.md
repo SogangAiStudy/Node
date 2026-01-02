@@ -156,6 +156,17 @@ Close any process locking the files (VSCode, another terminal) and run:
 <code>taskkill /F /IM node.exe</code> then retry.
 </details>
 
+<details>
+<summary><b>Stripe Checkout Fails: "must provide at least one recurring price"</b></summary>
+Your <code>STRIPE_PRICE_ID</code> points to a one-time price instead of a recurring subscription price.
+<br>Go to <a href="https://dashboard.stripe.com/test/products">Stripe Products</a>, create a product with a <b>Monthly</b> or <b>Yearly</b> recurring price, and update <code>.env.local</code> with the correct Price ID.
+</details>
+
+<details>
+<summary><b>Stripe PRICE_ID not configured</b></summary>
+Make sure <code>STRIPE_PRICE_ID</code> is set in <code>.env.local</code> and restart the dev server. See the <a href="#-stripe-payment-setup-optional">Stripe Payment Setup</a> section above.
+</details>
+
 ---
 
 Made with ❤️ by the Node Team
