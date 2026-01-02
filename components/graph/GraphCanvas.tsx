@@ -90,18 +90,6 @@ export function GraphCanvas({ projectId, data, onDataChange, focusNodeId }: Grap
   const [relation, setRelation] = useState<string>("DEPENDS_ON");
   const [isSyncing, setIsSyncing] = useState(false);
 
-  // Focus on specific node when focusNodeId is provided
-  useEffect(() => {
-    if (focusNodeId) {
-      setNodes((nds) =>
-        nds.map((node) => ({
-          ...node,
-          selected: node.id === focusNodeId,
-        }))
-      );
-    }
-  }, [focusNodeId, setNodes]);
-
   const { layoutedNodes, layoutedEdges } = useMemo(() => {
     const initialNodes: Node[] = data.nodes
       .filter((node) => {
@@ -221,6 +209,18 @@ export function GraphCanvas({ projectId, data, onDataChange, focusNodeId }: Grap
 
   const [nodes, setNodes, onNodesChange] = useNodesState(layoutedNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(layoutedEdges);
+
+  // Focus on specific node when focusNodeId is provided
+  useEffect(() => {
+    if (focusNodeId) {
+      setNodes((nds) =>
+        nds.map((node) => ({
+          ...node,
+          selected: node.id === focusNodeId,
+        }))
+      );
+    }
+  }, [focusNodeId, setNodes]);
 
   useMemo(() => {
     setNodes((nds) =>
