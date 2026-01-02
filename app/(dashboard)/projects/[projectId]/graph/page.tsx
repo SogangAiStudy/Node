@@ -26,9 +26,11 @@ export default function GraphPage() {
     return <div className="text-center text-muted-foreground">No data available</div>;
   }
 
+  const orgId = data.nodes[0]?.orgId;
+
   return (
     <div className="h-[calc(100vh-12rem)]">
-      <GraphCanvas projectId={projectId} data={data} onDataChange={refetch} />
+      <GraphCanvas projectId={projectId} orgId={orgId} data={data} onDataChange={refetch} />
     </div>
   );
 }

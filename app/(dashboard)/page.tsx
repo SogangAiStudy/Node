@@ -32,20 +32,27 @@ export default function DashboardPage() {
     console.log(`[DEBUG] Dashboard - Workspaces: ${workspaces?.length || 0}`);
 
     if (workspaces && workspaces.length > 0) {
+      // Find active or pending team assignment
       const activeWorkspace = workspaces.find(w =>
         ["ACTIVE", "PENDING_TEAM_ASSIGNMENT"].includes(w.status)
       );
 
-      if (activeWorkspace) {
+      if (activeWorkspace && activeWorkspace.orgId) {
         console.log(`[DEBUG] Dashboard - Redirecting to active: ${activeWorkspace.orgId}`);
         router.push(`/org/${activeWorkspace.orgId}/projects`);
-      } else {
-        const pending = workspaces.find(w => w.status === "PENDING_APPROVAL");
-        console.log(`[DEBUG] Dashboard - No active. Pending found: ${!!pending}. Redirecting to /onboarding`);
-        router.push("/onboarding");
+        return;
+      }
+
+      // Fallback to first available workspace if no active one found
+      const firstWorkspace = workspaces[0];
+      if (firstWorkspace && firstWorkspace.orgId) {
+        console.log(`[DEBUG] Dashboard - Fallback to first: ${firstWorkspace.orgId}`);
+        router.push(`/org/${firstWorkspace.orgId}/projects`);
+        return;
       }
     } else if (workspaces) {
-      // Explicitly zero workspaces
+      // If truly zero workspaces, it means auto-provisioning didn't run or failed.
+      // But /api/workspaces should handle it. Let's redirect to onboarding as a last resort.
       console.log(`[DEBUG] Dashboard - Zero workspaces. Redirecting to /onboarding`);
       router.push("/onboarding");
     }

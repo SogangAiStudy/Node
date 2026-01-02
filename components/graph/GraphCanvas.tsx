@@ -93,32 +93,32 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
   const [isSyncing, setIsSyncing] = useState(false);
 
   const { layoutedNodes, layoutedEdges } = useMemo(() => {
-    const initialNodes: Node[] = data.nodes
-      .filter((node) => {
-        if (filterStatus !== "ALL" && node.computedStatus !== filterStatus) return false;
-        if (searchQuery && !node.title.toLowerCase().includes(searchQuery.toLowerCase()))
-          return false;
+    const initialNodes: Node[] = data.nodes.map((node) => {
+      const x = typeof node.positionX === 'number' && !Number.isNaN(node.positionX) ? node.positionX : 0;
+      const y = typeof node.positionY === 'number' && !Number.isNaN(node.positionY) ? node.positionY : 0;
 
-        if (selectedTeamIds.length > 0) {
-          const nodeTeamIds = node.teams.map((t) => t.id);
-          const hasMatch = selectedTeamIds.some((id) => nodeTeamIds.includes(id));
-          if (!hasMatch) return false;
-        }
+      // Calculate if this node matches the current filters
+      let isFaded = false;
+      if (filterStatus !== "ALL" && node.computedStatus !== filterStatus) isFaded = true;
+      if (searchQuery && !node.title.toLowerCase().includes(searchQuery.toLowerCase())) isFaded = true;
 
-        return true;
-      })
-      .map((node) => {
-        const x = typeof node.positionX === 'number' && !Number.isNaN(node.positionX) ? node.positionX : 0;
-        const y = typeof node.positionY === 'number' && !Number.isNaN(node.positionY) ? node.positionY : 0;
+      if (selectedTeamIds.length > 0) {
+        const nodeTeamIds = node.teams.map((t) => t.id);
+        const hasMatch = selectedTeamIds.some((id) => nodeTeamIds.includes(id));
+        if (!hasMatch) isFaded = true;
+      }
 
-        return {
-          id: node.id,
-          type: "custom",
-          position: { x, y },
-          data: { node },
-        };
-      });
-    // ... (rest of the mapping logic remains same)
+      return {
+        id: node.id,
+        type: "custom",
+        position: { x, y },
+        data: {
+          node,
+          isFaded // Pass faded state to the node component
+        },
+      };
+    });
+
     const visibleNodeIds = new Set(initialNodes.map((n) => n.id));
     const initialEdges: Edge[] = data.edges
       .filter((edge) => visibleNodeIds.has(edge.fromNodeId) && visibleNodeIds.has(edge.toNodeId))

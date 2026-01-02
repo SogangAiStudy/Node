@@ -1,8 +1,9 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { useParams, usePathname } from "next/navigation";
+import { useParams, usePathname, useRouter } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
 import {
   DropdownMenu,
@@ -50,6 +51,7 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
   const { data: session } = useSession();
   const params = useParams();
   const pathname = usePathname();
+  const router = useRouter();
   const currentProjectId = params.projectId as string | undefined;
 
   const initials = session?.user?.name
@@ -67,6 +69,13 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
       return res.json() as Promise<Workspace[]>;
     },
   });
+
+  // Safety redirect if currentOrgId is invalid
+  useEffect(() => {
+    if ((currentOrgId === "undefined" || !currentOrgId) && workspaces && workspaces.length > 0) {
+      router.push(`/org/${workspaces[0].orgId}/projects`);
+    }
+  }, [currentOrgId, workspaces, router]);
 
   // Fetch projects for current workspace
   const { data: projectsData } = useQuery({
