@@ -25,7 +25,7 @@ export async function isOrgPro(orgId: string): Promise<boolean> {
         !org.stripeCurrentPeriodEnd ||
         org.stripeCurrentPeriodEnd.getTime() > Date.now();
 
-    return hasValidStatus && isNotExpired;
+    return Boolean(hasValidStatus && isNotExpired);
 }
 
 /**
