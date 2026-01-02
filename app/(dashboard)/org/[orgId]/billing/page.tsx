@@ -43,10 +43,20 @@ export default async function BillingPage({
 
     const isPro = await isOrgPro(orgId);
 
+    // Count nodes in this organization
+    const nodeCount = await prisma.node.count({
+        where: {
+            project: {
+                orgId,
+            },
+        },
+    });
+
     return (
         <BillingPageClient
             orgId={org.id}
             isOrgPro={isPro}
+            nodeCount={nodeCount}
             stripeCustomerId={org.stripeCustomerId}
         />
     );
