@@ -45,10 +45,37 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        const priceId = process.env.STRIPE_PRICE_ID;
-        if (!priceId) {
+        const configuredPriceId = process.env.STRIPE_PRICE_ID;
+        if (!configuredPriceId) {
             return NextResponse.json(
                 { error: "Stripe price ID not configured" },
+                { status: 500 }
+            );
+        }
+
+        // Support both price IDs and product IDs with default recurring prices
+        let priceId = configuredPriceId;
+        if (configuredPriceId.startsWith("prod_")) {
+            const product = await stripe.products.retrieve(configuredPriceId);
+            const defaultPriceId =
+                typeof product.default_price === "string"
+                    ? product.default_price
+                    : product.default_price?.id;
+
+            if (!defaultPriceId) {
+                return NextResponse.json(
+                    { error: "Stripe product is missing a default recurring price" },
+                    { status: 500 }
+                );
+            }
+
+            priceId = defaultPriceId;
+        }
+
+        const price = await stripe.prices.retrieve(priceId);
+        if (price.type !== "recurring") {
+            return NextResponse.json(
+                { error: "Stripe price must be a recurring price for subscriptions" },
                 { status: 500 }
             );
         }
