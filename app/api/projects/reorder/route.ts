@@ -40,8 +40,10 @@ export async function PUT(request: NextRequest) {
         );
 
         return NextResponse.json({ success: true });
-    } catch (error) {
+    } catch (error: any) {
         console.error("PUT /api/projects/reorder error:", error);
-        return NextResponse.json({ error: "Failed to reorder projects" }, { status: 500 });
+        if (error.code) console.error("Error code:", error.code);
+        if (error.meta) console.error("Error meta:", error.meta);
+        return NextResponse.json({ error: "Failed to reorder projects", details: error.message }, { status: 500 });
     }
 }
