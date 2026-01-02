@@ -281,32 +281,37 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
   }, [sidebarGroupedProjects]);
 
 
-  // Handle Drag End for Sidebar
-  const onDragEnd = (result: DropResult) => {
+  const onDragEnd = async (result: any) => {
     const { source, destination, type } = result;
 
     if (!destination) return;
 
-    // 1. Reordering Subjects
+    // Reordering Subjects (Folders)
     if (type === "SUBJECT") {
-      // For subjects, we might not render them all as draggable in this simplified sidebar, 
-      // but if we did, logic would go here. The text says "subjects be shown in sidebar", 
-      // which imply reordering. 
-      // However, subjectsData returns sorted array.
-      // We will implement Draggable for the subject headers in the render loop.
-      const newSubjects = Array.from(sidebarGroupedProjects.subjects);
-      const [removed] = newSubjects.splice(source.index, 1);
-      newSubjects.splice(destination.index, 0, removed);
+      const newSubjects = Array.from(subjectsData?.subjects || []);
+      const [moved] = newSubjects.splice(source.index, 1);
+      newSubjects.splice(destination.index, 0, moved);
 
-      const updates = newSubjects.map((s, index) => ({
+      // Optimistic update if needed, but for now just API
+      const items = newSubjects.map((s: any, index: number) => ({
         id: s.id,
         order: index,
       }));
-      reorderSubjectsMutation.mutate(updates);
+
+      try {
+        await fetch("/api/subjects/reorder", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ orgId: currentOrgId, items }),
+        });
+        queryClient.invalidateQueries({ queryKey: ["subjects", currentOrgId] });
+      } catch (err) {
+        console.error("Failed to reorder subjects", err);
+      }
       return;
     }
 
-    // 2. Reordering Projects
+    // Reordering Projects
     if (type === "PROJECT") {
       const sourceSubjectId = source.droppableId;
       const destSubjectId = destination.droppableId;
@@ -314,39 +319,67 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
       const sourceList = localGroupedProjects.get(sourceSubjectId) || [];
       const destList = localGroupedProjects.get(destSubjectId) || [];
 
+      // Create a copy of the map for local state update
+      const newGrouped = new Map(localGroupedProjects);
+
       if (sourceSubjectId === destSubjectId) {
         const newList = Array.from(sourceList);
-        const [removed] = newList.splice(source.index, 1);
-        newList.splice(destination.index, 0, removed);
+        const [movedProject] = newList.splice(source.index, 1);
+        newList.splice(destination.index, 0, movedProject);
 
-        const newGrouped = new Map(localGroupedProjects);
         newGrouped.set(sourceSubjectId, newList);
         setLocalGroupedProjects(newGrouped);
 
-        const updates = newList.map((p, index) => ({
+        const items = newList.map((p, index) => ({
           id: p.id,
           order: index,
           subjectId: sourceSubjectId === "unfiled" ? null : sourceSubjectId,
         }));
-        reorderProjectsMutation.mutate(updates);
+
+        try {
+          await fetch("/api/projects/reorder", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ orgId: currentOrgId, items }),
+          });
+          queryClient.invalidateQueries({ queryKey: ["projects", currentOrgId] });
+        } catch (err) {
+          console.error("Failed to reorder projects", err);
+        }
 
       } else {
         const newSourceList = Array.from(sourceList);
-        const [removed] = newSourceList.splice(source.index, 1);
+        const [movedProject] = newSourceList.splice(source.index, 1);
         const newDestList = Array.from(destList);
-        newDestList.splice(destination.index, 0, removed);
 
-        const newGrouped = new Map(localGroupedProjects);
+        // Update subjectId for the moved project
+        const newSubjectId = destSubjectId === "unfiled" ? null : destSubjectId;
+        const updatedProject = { ...movedProject, subjectId: newSubjectId };
+
+        newDestList.splice(destination.index, 0, updatedProject);
+
         newGrouped.set(sourceSubjectId, newSourceList);
         newGrouped.set(destSubjectId, newDestList);
         setLocalGroupedProjects(newGrouped);
 
-        const updates = newDestList.map((p, index) => ({
+        // We need to update the destination list logic in the API. 
+        // Sending the whole list at destination with new order and subjectId.
+        const items = newDestList.map((p, index) => ({
           id: p.id,
           order: index,
-          subjectId: destSubjectId === "unfiled" ? null : destSubjectId,
+          subjectId: newSubjectId,
         }));
-        reorderProjectsMutation.mutate(updates);
+
+        try {
+          await fetch("/api/projects/reorder", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ orgId: currentOrgId, items }),
+          });
+          queryClient.invalidateQueries({ queryKey: ["projects", currentOrgId] });
+        } catch (err) {
+          console.error("Failed to reorder projects", err);
+        }
       }
     }
   };
