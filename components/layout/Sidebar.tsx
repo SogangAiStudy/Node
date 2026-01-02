@@ -243,7 +243,7 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
     const realSubjects = subjectsData?.subjects || [];
     // Only use mock subjects as a fallback to show what's possible, 
     // but don't force projects into them if they don't belong.
-    const allKnownSubjects = realSubjects.length > 0 ? realSubjects : [];
+    const allKnownSubjects = realSubjects.length > 0 ? realSubjects : mockSubjects;
 
     allKnownSubjects.forEach(s => grouped.set(s.id, []));
     grouped.set("unfiled", []);
