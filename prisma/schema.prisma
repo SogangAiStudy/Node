@@ -76,6 +76,17 @@ model Organization {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   ownerId      String
+  
+  // Stripe subscription fields
+  stripeCustomerId         String?   @unique @map("stripe_customer_id")
+  stripeSubscriptionId     String?   @unique @map("stripe_subscription_id")
+  stripePriceId            String?   @map("stripe_price_id")
+  stripeSubscriptionStatus String?   @map("stripe_subscription_status")
+  stripeCurrentPeriodEnd   DateTime? @map("stripe_current_period_end")
+  
+  // Node count for efficient limit checking
+  nodeCount    Int           @default(0) @map("node_count")
+  
   activityLogs ActivityLog[]
   edges        Edge[]
   nodes        Node[]

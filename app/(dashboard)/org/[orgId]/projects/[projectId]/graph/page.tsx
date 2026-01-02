@@ -9,6 +9,7 @@ export default function ProjectGraphPage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const projectId = params.projectId as string;
+  const orgId = params.orgId as string;
   const focusNodeId = searchParams.get("nodeId");
 
   const { data, isLoading, refetch } = useQuery({
@@ -30,7 +31,7 @@ export default function ProjectGraphPage() {
 
   return (
     <div className="h-[calc(100vh-8rem)]">
-      <GraphCanvas projectId={projectId} data={data} onDataChange={refetch} focusNodeId={focusNodeId} />
+      <GraphCanvas projectId={projectId} orgId={orgId} data={data} onDataChange={refetch} focusNodeId={focusNodeId} />
     </div>
   );
 }
