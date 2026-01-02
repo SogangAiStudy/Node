@@ -35,13 +35,20 @@ export default function OnboardingPage() {
     queryFn: async () => {
       const res = await fetch("/api/workspaces");
       if (!res.ok) return [];
-      return res.json() as Promise<Array<{ orgId: string; name: string; hasUnreadInbox: boolean }>>;
+      return res.json() as Promise<Array<{ orgId: string; name: string; status: string; hasUnreadInbox: boolean }>>;
     },
   });
 
+  const pendingOrg = workspaces?.find(w => w.status === "PENDING_APPROVAL");
+
   useEffect(() => {
     if (!isCheckingWorkspaces && workspaces && workspaces.length > 0) {
-      router.push(`/org/${workspaces[0].orgId}/projects`);
+      const activeOrg = workspaces.find(w =>
+        ["ACTIVE", "PENDING_TEAM_ASSIGNMENT"].includes(w.status)
+      );
+      if (activeOrg) {
+        router.push(`/org/${activeOrg.orgId}/projects`);
+      }
     }
   }, [workspaces, isCheckingWorkspaces, router]);
 
@@ -135,99 +142,120 @@ export default function OnboardingPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-2 mb-6">
-                <TabsTrigger value="join" className="flex items-center gap-2">
-                  <UserPlus className="h-4 w-4" /> Join
-                </TabsTrigger>
-                <TabsTrigger value="create" className="flex items-center gap-2">
-                  <Building2 className="h-4 w-4" /> Create
-                </TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="join" className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="searchOrg">Search Organization</Label>
-                  <div className="relative">
-                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="searchOrg"
-                      type="text"
-                      placeholder="Type organization name..."
-                      className="pl-9"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                    />
-                  </div>
+            {pendingOrg ? (
+              <div className="py-8 text-center space-y-4">
+                <div className="bg-amber-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 border border-amber-100">
+                  <Loader2 className="h-8 w-8 animate-spin text-amber-600" />
                 </div>
-
-                <div className="space-y-2 max-h-64 overflow-y-auto border rounded-md p-1">
-                  {isSearching ? (
-                    <div className="flex items-center justify-center py-8">
-                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : searchResults.length > 0 ? (
-                    searchResults.map((org) => (
-                      <div
-                        key={org.id}
-                        className="flex items-center justify-between p-3 hover:bg-accent rounded-sm transition-colors"
-                      >
-                        <span className="font-medium">{org.name}</span>
-                        <Button
-                          size="sm"
-                          disabled={isSubmittingJoin}
-                          onClick={() => handleJoinRequest(org.id)}
-                        >
-                          Request Access
-                        </Button>
-                      </div>
-                    ))
-                  ) : searchQuery.length >= 2 ? (
-                    <div className="text-center py-8 text-sm text-muted-foreground">
-                      No organizations found matching "{searchQuery}"
-                    </div>
-                  ) : (
-                    <div className="text-center py-8 text-sm text-muted-foreground">
-                      Start typing to search...
-                    </div>
-                  )}
-                </div>
-              </TabsContent>
-
-              <TabsContent value="create">
-                <form onSubmit={handleCreateOrganization} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="orgName">Organization Name</Label>
-                    <Input
-                      id="orgName"
-                      type="text"
-                      placeholder="e.g. Acme Corp"
-                      value={organizationName}
-                      onChange={(e) => setOrganizationName(e.target.value)}
-                      required
-                      disabled={isCreating}
-                    />
-                    <p className="text-sm text-muted-foreground">
-                      This will be your private workspace name.
-                    </p>
-                  </div>
-
+                <h3 className="text-xl font-bold text-gray-900">Pending Approval</h3>
+                <p className="text-sm text-muted-foreground max-w-[280px] mx-auto">
+                  Your request to join <span className="font-semibold text-foreground">"{pendingOrg.name}"</span> is currently being reviewed by an administrator.
+                </p>
+                <div className="pt-4">
                   <Button
-                    type="submit"
+                    variant="outline"
+                    onClick={() => queryClient.invalidateQueries({ queryKey: ["workspaces"] })}
                     className="w-full"
-                    disabled={isCreating || !organizationName.trim()}
                   >
-                    {isCreating ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Creating...
-                      </>
-                    ) : (
-                      "Create Organization"
-                    )}
+                    Refresh Status
                   </Button>
-                </form>
-              </TabsContent>
-            </Tabs>
+                </div>
+              </div>
+            ) : (
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                <TabsList className="grid w-full grid-cols-2 mb-6">
+                  <TabsTrigger value="join" className="flex items-center gap-2">
+                    <UserPlus className="h-4 w-4" /> Join
+                  </TabsTrigger>
+                  <TabsTrigger value="create" className="flex items-center gap-2">
+                    <Building2 className="h-4 w-4" /> Create
+                  </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="join" className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="searchOrg">Search Organization</Label>
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="searchOrg"
+                        type="text"
+                        placeholder="Type organization name..."
+                        className="pl-9"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 max-h-64 overflow-y-auto border rounded-md p-1">
+                    {isSearching ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : searchResults.length > 0 ? (
+                      searchResults.map((org) => (
+                        <div
+                          key={org.id}
+                          className="flex items-center justify-between p-3 hover:bg-accent rounded-sm transition-colors"
+                        >
+                          <span className="font-medium">{org.name}</span>
+                          <Button
+                            size="sm"
+                            disabled={isSubmittingJoin}
+                            onClick={() => handleJoinRequest(org.id)}
+                          >
+                            Request Access
+                          </Button>
+                        </div>
+                      ))
+                    ) : searchQuery.length >= 2 ? (
+                      <div className="text-center py-8 text-sm text-muted-foreground">
+                        No organizations found matching "{searchQuery}"
+                      </div>
+                    ) : (
+                      <div className="text-center py-8 text-sm text-muted-foreground">
+                        Start typing to search...
+                      </div>
+                    )}
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="create">
+                  <form onSubmit={handleCreateOrganization} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="orgName">Organization Name</Label>
+                      <Input
+                        id="orgName"
+                        type="text"
+                        placeholder="e.g. Acme Corp"
+                        value={organizationName}
+                        onChange={(e) => setOrganizationName(e.target.value)}
+                        required
+                        disabled={isCreating}
+                      />
+                      <p className="text-sm text-muted-foreground">
+                        This will be your private workspace name.
+                      </p>
+                    </div>
+
+                    <Button
+                      type="submit"
+                      className="w-full"
+                      disabled={isCreating || !organizationName.trim()}
+                    >
+                      {isCreating ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Creating...
+                        </>
+                      ) : (
+                        "Create Organization"
+                      )}
+                    </Button>
+                  </form>
+                </TabsContent>
+              </Tabs>
+            )}
 
             <div className="mt-8 rounded-lg bg-blue-50/50 p-4 border border-blue-100/50">
               <h4 className="text-sm font-semibold text-blue-900 mb-1">How it works</h4>

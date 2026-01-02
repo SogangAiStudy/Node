@@ -8,13 +8,10 @@ export async function GET() {
     const user = await requireAuth();
     console.log(`[DEBUG] GET /api/workspaces - User: ${user.email} (${user.id})`);
 
-    // Get all organizations where user is a member
+    // Get all organizations where user is a member (any status)
     const orgMemberships = await prisma.orgMember.findMany({
       where: {
         userId: user.id,
-        status: {
-          in: ["ACTIVE", "PENDING_TEAM_ASSIGNMENT"],
-        },
       },
       include: {
         organization: {
@@ -30,64 +27,72 @@ export async function GET() {
 
     // For each org, check if there are unread inbox items
     const workspaces = await Promise.all(
-      orgMemberships.map(async (membership: { orgId: string; organization: { id: string; name: string } }) => {
+      orgMemberships.map(async (membership: { orgId: string; status: string; organization: { id: string; name: string } }) => {
         const orgId = membership.orgId;
 
-        // Get user's inbox state for this org
-        const inboxState = await prisma.orgInboxState.findUnique({
-          where: {
-            orgId_userId: {
+        // Only check for unread requests for active-ish members
+        let hasUnreadInbox = false;
+
+        if (["ACTIVE", "PENDING_TEAM_ASSIGNMENT"].includes(membership.status)) {
+          // Get user's inbox state for this org
+          const inboxState = await prisma.orgInboxState.findUnique({
+            where: {
+              orgId_userId: {
+                orgId,
+                userId: user.id,
+              },
+            },
+          });
+
+          const lastSeenAt = inboxState?.lastSeenAt;
+
+          // Get user's teams in this org
+          const userTeams = await prisma.teamMember.findMany({
+            where: {
               orgId,
               userId: user.id,
             },
-          },
-        });
-
-        const lastSeenAt = inboxState?.lastSeenAt;
-
-        // Get user's teams in this org
-        const userTeams = await prisma.teamMember.findMany({
-          where: {
-            orgId,
-            userId: user.id,
-          },
-          select: {
-            team: {
-              select: {
-                name: true,
+            select: {
+              team: {
+                select: {
+                  name: true,
+                },
               },
             },
-          },
-        });
+          });
 
-        const teamNames = userTeams.map((tm: { team: { name: string } }) => tm.team.name);
+          const teamNames = userTeams.map((tm: { team: { name: string } }) => tm.team.name);
 
-        // Check for unread requests
-        const unreadCount = await prisma.request.findMany({
-          where: {
-            orgId,
-            OR: [
-              { toUserId: user.id },
-              { toTeam: { in: teamNames } },
-            ],
-            status: {
-              not: "CLOSED",
-            },
-            ...(lastSeenAt && {
-              updatedAt: {
-                gt: lastSeenAt,
+          // Check for unread requests
+          const unreadCount = await prisma.request.findMany({
+            where: {
+              orgId,
+              OR: [
+                { toUserId: user.id },
+                { toTeam: { in: teamNames } },
+              ],
+              status: {
+                not: "CLOSED",
               },
-            }),
-          },
-          select: {
-            id: true,
-          },
-        });
+              ...(lastSeenAt && {
+                updatedAt: {
+                  gt: lastSeenAt,
+                },
+              }),
+            },
+            select: {
+              id: true,
+            },
+          });
+
+          hasUnreadInbox = unreadCount.length > 0;
+        }
 
         return {
           orgId: membership.organization.id,
           name: membership.organization.name,
-          hasUnreadInbox: unreadCount.length > 0,
+          status: membership.status,
+          hasUnreadInbox,
         };
       })
     );
