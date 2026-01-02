@@ -468,7 +468,7 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
             {/* Subjects & Projects */}
             <div className="space-y-1">
               <div className="px-3 mb-2 flex items-center justify-between group">
-                <div className="text-[11px] font-bold text-[#7b7c7e] uppercase tracking-wider">Folders</div>
+                <div className="text-[11px] font-bold text-[#7b7c7e] uppercase tracking-wider">Projects</div>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 hover:bg-[#2c2d31] rounded">
