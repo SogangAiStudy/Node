@@ -1,23 +1,20 @@
-import { auth } from "@/auth";
+import { requireAuth } from "@/lib/utils/auth";
 import { prisma } from "@/lib/db/prisma";
 import { redirect } from "next/navigation";
 import ProfilePageClient from "./page-client";
 
 export default async function ProfilePage() {
-    const session = await auth();
-    if (!session?.user?.id) {
-        redirect("/");
-    }
+    const user = await requireAuth();
 
     // Get user's primary organization (owner or first membership)
     const userOrg = await prisma.organization.findFirst({
         where: {
             OR: [
-                { ownerId: session.user.id },
+                { ownerId: user.id },
                 {
                     members: {
                         some: {
-                            userId: session.user.id,
+                            userId: user.id,
                         },
                     },
                 },
@@ -30,14 +27,14 @@ export default async function ProfilePage() {
             stripeCurrentPeriodEnd: true,
         },
         orderBy: [
-            { ownerId: session.user.id ? "asc" : "desc" },
+            { ownerId: user.id ? "asc" : "desc" },
             { createdAt: "asc" },
         ],
     });
 
     return (
         <ProfilePageClient
-            user={session.user}
+            user={user}
             organization={userOrg}
         />
     );
