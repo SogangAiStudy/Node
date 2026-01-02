@@ -1,11 +1,66 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/utils/auth";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Check if an organization has unread inbox items for a user
+ */
+async function checkHasUnreadInbox(orgId: string, userId: string): Promise<boolean> {
+  const inboxState = await prisma.orgInboxState.findUnique({
+    where: {
+      orgId_userId: {
+        orgId,
+        userId,
+      },
+    },
+  });
+
+  const lastSeenAt = inboxState?.lastSeenAt || new Date(0);
+
+  // Get user's teams in this org
+  const userTeams = await prisma.teamMember.findMany({
+    where: {
+      orgId,
+      userId,
+    },
+    select: {
+      team: {
+        select: {
+          name: true,
+        },
+      },
+    },
+  });
+
+  const teamNames = userTeams.map((tm: any) => tm.team.name);
+
+  // Check for unread requests
+  const unreadCount = await prisma.request.findMany({
+    where: {
+      orgId,
+      OR: [
+        { toUserId: userId },
+        { toTeam: { in: teamNames } },
+      ],
+      status: {
+        not: "CLOSED",
+      },
+      createdAt: {
+        gt: lastSeenAt,
+      },
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  return unreadCount.length > 0;
+}
+
 // GET /api/workspaces - Get all user's workspaces with unread inbox indicator
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const user = await requireAuth();
     console.log(`[DEBUG] GET /api/workspaces - User: ${user.email} (${user.id})`);
@@ -34,22 +89,70 @@ export async function GET() {
       });
 
       if (!dbUser) {
-        console.log(`[DEBUG] User ${user.email} not found in database. Attempting to create...`);
-        try {
-          dbUser = await prisma.user.create({
-            data: {
-              id: user.id,
-              name: user.name || null,
-              email: user.email!,
-              image: user.image || null,
-            },
-          });
-        } catch (createError) {
-          console.error("[DEBUG] Failed to auto-create user:", createError);
-          return NextResponse.json(
-            { error: "User not found and could not be created." },
-            { status: 500 }
-          );
+        console.log(`[DEBUG] User ${user.email} not found by ID: ${user.id}. Checking by email...`);
+        const existingByEmail = await prisma.user.findUnique({
+          where: { email: user.email! },
+        });
+
+        if (existingByEmail) {
+          console.log(`[DEBUG] Found user by email with different ID: ${existingByEmail.id}. Re-syncing ID to ${user.id}...`);
+          try {
+            dbUser = await prisma.user.update({
+              where: { id: existingByEmail.id },
+              data: { id: user.id },
+            });
+
+            // CRITICAL: Re-check memberships after sync. They might have data!
+            const syncedMemberships = await prisma.orgMember.findMany({
+              where: {
+                userId: user.id,
+                status: { in: ["ACTIVE", "PENDING_TEAM_ASSIGNMENT"] },
+              },
+              include: {
+                organization: {
+                  select: { id: true, name: true },
+                },
+              },
+            });
+
+            if (syncedMemberships.length > 0) {
+              console.log(`[DEBUG] User already has ${syncedMemberships.length} memberships after ID sync. Skipping workspace creation.`);
+              // Return existing workspaces immediately
+              const workspaces = await Promise.all(
+                syncedMemberships.map(async (m) => {
+                  const hasUnread = await checkHasUnreadInbox(m.orgId, user.id);
+                  return {
+                    orgId: m.orgId,
+                    name: m.organization.name,
+                    status: m.status,
+                    hasUnreadInbox: hasUnread,
+                  };
+                })
+              );
+              return NextResponse.json(workspaces);
+            }
+          } catch (updateError) {
+            console.error("[DEBUG] Failed to re-sync user ID, using existing record as fallback:", updateError);
+            dbUser = existingByEmail;
+          }
+        } else {
+          console.log(`[DEBUG] User ${user.email} not found. Attempting to create...`);
+          try {
+            dbUser = await prisma.user.create({
+              data: {
+                id: user.id,
+                name: user.name || null,
+                email: user.email!,
+                image: user.image || null,
+              },
+            });
+          } catch (createError) {
+            console.error("[DEBUG] Failed to auto-create user:", createError);
+            return NextResponse.json(
+              { error: "User not found and could not be created." },
+              { status: 500 }
+            );
+          }
         }
       }
 
@@ -113,7 +216,7 @@ export async function GET() {
         });
 
         // 7. Add dummy content
-        const node = await tx.node.create({
+        await tx.node.create({
           data: {
             orgId: org.id,
             projectId: project.id,
@@ -128,17 +231,12 @@ export async function GET() {
         return org;
       });
 
-      // Re-fetch memberships to include the new one (with status)
+      // Re-fetch memberships to include the new one
       orgMemberships = await prisma.orgMember.findMany({
-        where: {
-          userId: user.id,
-        },
+        where: { userId: user.id },
         include: {
           organization: {
-            select: {
-              id: true,
-              name: true,
-            },
+            select: { id: true, name: true },
           },
         },
       });
@@ -148,73 +246,21 @@ export async function GET() {
 
     // For each org, check if there are unread inbox items
     const workspaces = await Promise.all(
-      orgMemberships.map(async (membership: { orgId: string; status: string; organization: { id: string; name: string } }) => {
-        const orgId = membership.orgId;
-        // For each org, check if there are unread inbox items
-        const inboxState = await prisma.orgInboxState.findUnique({
-          where: {
-            orgId_userId: {
-              orgId,
-              userId: user.id,
-            },
-          },
-        });
-
+      orgMemberships.map(async (m: any) => {
         let hasUnreadInbox = false;
-        const lastSeenAt = inboxState?.lastSeenAt || new Date(0);
-
-        if (["ACTIVE", "PENDING_TEAM_ASSIGNMENT"].includes(membership.status)) {
-
-          // Get user's teams in this org
-          const userTeams = await prisma.teamMember.findMany({
-            where: {
-              orgId,
-              userId: user.id,
-            },
-            select: {
-              team: {
-                select: {
-                  name: true,
-                },
-              },
-            },
-          });
-
-          const teamNames = userTeams.map((tm: { team: { name: string } }) => tm.team.name);
-
-          // Check for unread requests
-          const unreadCount = await prisma.request.findMany({
-            where: {
-              orgId,
-              OR: [
-                { toUserId: user.id },
-                { toTeam: { in: teamNames } },
-              ],
-              status: {
-                not: "CLOSED",
-              },
-              createdAt: {
-                gt: lastSeenAt,
-              },
-            },
-            select: {
-              id: true,
-            },
-          });
-
-          hasUnreadInbox = unreadCount.length > 0;
+        if (["ACTIVE", "PENDING_TEAM_ASSIGNMENT"].includes(m.status)) {
+          hasUnreadInbox = await checkHasUnreadInbox(m.orgId, user.id);
         }
-
         return {
-          orgId: membership.organization.id,
-          name: membership.organization.name,
-          status: membership.status,
+          orgId: m.orgId,
+          name: m.organization.name,
+          status: m.status,
           hasUnreadInbox,
         };
       })
     );
 
-    console.log(`[DEBUG] GET /api/workspaces - Returning ${workspaces.length} workspaces:`, JSON.stringify(workspaces));
+    console.log(`[DEBUG] GET /api/workspaces - Returning ${workspaces.length} workspaces`);
     return NextResponse.json(workspaces);
   } catch (error) {
     console.error("GET /api/workspaces error:", error);

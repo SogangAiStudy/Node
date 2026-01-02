@@ -84,10 +84,22 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
     },
   });
 
-  // Safety redirect if currentOrgId is invalid
+  // Safety redirect if currentOrgId is invalid or missing
   useEffect(() => {
-    if ((currentOrgId === "undefined" || !currentOrgId) && workspaces && workspaces.length > 0) {
-      router.push(`/org/${workspaces[0].orgId}/projects`);
+    if (workspaces && workspaces.length > 0) {
+      // 1. If no orgId or "undefined" in URL
+      if (!currentOrgId || currentOrgId === "undefined") {
+        console.log("[DEBUG] Sidebar - No orgId in URL. Redirecting to first workspace...");
+        router.push(`/org/${workspaces[0].orgId}/projects`);
+        return;
+      }
+
+      // 2. If current orgId is NOT in the user's workspace list
+      const isValid = workspaces.some(w => w.orgId === currentOrgId);
+      if (!isValid) {
+        console.log(`[DEBUG] Sidebar - User has no access to org ${currentOrgId}. Redirecting to first available workspace...`);
+        router.push(`/org/${workspaces[0].orgId}/projects`);
+      }
     }
   }, [currentOrgId, workspaces, router]);
 
