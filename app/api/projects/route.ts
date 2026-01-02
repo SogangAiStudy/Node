@@ -9,7 +9,7 @@ const CreateProjectSchema = z.object({
   description: z.string().optional(),
   primaryTeamId: z.string().optional(),
   subjectId: z.string().optional(),
-  teamIds: z.array(z.string()).min(1, "Select at least one team"),
+  teamIds: z.array(z.string()).optional().default([]),
 });
 
 // GET /api/projects - List user's projects (ProjectTeam-based)
@@ -180,10 +180,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Determine primary team (must be one of the selected teams)
-    const primaryTeamId = validated.primaryTeamId || validated.teamIds[0];
+    // Determine primary team (must be one of the selected teams if teams are selected)
+    let primaryTeamId = validated.primaryTeamId || (validated.teamIds.length > 0 ? validated.teamIds[0] : null);
 
-    if (!validated.teamIds.includes(primaryTeamId)) {
+    if (primaryTeamId && !validated.teamIds.includes(primaryTeamId)) {
       return NextResponse.json(
         { error: "Primary team must be one of the selected teams" },
         { status: 400 }

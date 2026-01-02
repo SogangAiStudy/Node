@@ -191,10 +191,10 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
   // Group enriched projects by subject for sidebar display
   const sidebarGroupedProjects = useMemo(() => {
     const grouped = new Map<string, any[]>();
-    const allKnownSubjects = [
-      ...(subjectsData?.subjects || []),
-      ...mockSubjects.filter(ms => !subjectsData?.subjects?.some((s: any) => s.id === ms.id))
-    ];
+    const realSubjects = subjectsData?.subjects || [];
+    const allKnownSubjects = realSubjects.length > 0
+      ? realSubjects
+      : mockSubjects;
 
     allKnownSubjects.forEach(s => grouped.set(s.id, []));
     grouped.set("unfiled", []);

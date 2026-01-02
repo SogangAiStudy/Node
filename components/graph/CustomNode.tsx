@@ -439,49 +439,6 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
           </div>
         </div>
 
-        {/* (3) TEAM SECTION - Accountability */}
-        <div className="space-y-1.5">
-          <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Team</p>
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {primaryTeam ? (
-              <>
-                {/* Primary Team - Always Visible */}
-                <div className="bg-indigo-100 border border-indigo-300 rounded-md px-2.5 py-1 text-[11px] font-bold text-indigo-800 uppercase tracking-tight">
-                  {primaryTeam.name}
-                </div>
-
-                {/* Secondary Teams - Collapsed */}
-                {secondaryTeams.length > 0 && (
-                  <TooltipProvider>
-                    <Tooltip open={showSecondaryTeams} onOpenChange={setShowSecondaryTeams}>
-                      <TooltipTrigger asChild>
-                        <button
-                          className="bg-slate-100 border border-slate-300 rounded-md px-2 py-1 text-[10px] font-semibold text-slate-600 hover:bg-slate-200 transition-colors"
-                          onMouseEnter={() => setShowSecondaryTeams(true)}
-                          onMouseLeave={() => setShowSecondaryTeams(false)}
-                        >
-                          +{secondaryTeams.length}
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <div className="space-y-1">
-                          <p className="text-xs font-semibold">Additional Teams:</p>
-                          {secondaryTeams.map((t) => (
-                            <div key={t.id} className="text-xs">
-                              • {t.name}
-                            </div>
-                          ))}
-                        </div>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                )}
-              </>
-            ) : (
-              <div className="text-[11px] text-slate-400 italic">No team assigned</div>
-            )}
-          </div>
-        </div>
 
         {/* (4) BLOCKED-SPECIFIC SECTION - with AI Agent */}
         {node.computedStatus === "BLOCKED" && (

@@ -173,46 +173,6 @@ export function Toolbar({
             )}
           </div>
 
-          {/* Bottom: Team Filter Badges */}
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-2 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-              <Users2 className="h-3 w-3" /> Teams
-            </div>
-
-            <div className="flex items-center gap-1.5">
-              <Badge
-                variant="outline"
-                className={cn(
-                  "h-6 px-2.5 cursor-pointer transition-all border-slate-200 text-[12px] font-medium whitespace-nowrap",
-                  selectedTeamIds.length === 0
-                    ? "bg-slate-900 text-white border-slate-900 shadow-sm"
-                    : "bg-transparent text-slate-600 hover:bg-slate-100"
-                )}
-                onClick={() => onTeamFilterChange([])}
-              >
-                All Teams
-              </Badge>
-
-              {teams.map((team) => (
-                <Badge
-                  key={team.id}
-                  variant="outline"
-                  className={cn(
-                    "h-6 px-2.5 cursor-pointer transition-all border-slate-200 text-[12px] font-medium whitespace-nowrap group relative",
-                    selectedTeamIds.includes(team.id)
-                      ? "bg-blue-600 text-white border-blue-600 shadow-sm"
-                      : "bg-white text-slate-600 hover:bg-slate-50 hover:border-slate-300"
-                  )}
-                  onClick={() => toggleTeamFilter(team.id)}
-                >
-                  {team.name}
-                  {selectedTeamIds.includes(team.id) && (
-                    <X className="ml-1.5 h-3 w-3 opacity-70 group-hover:opacity-100" />
-                  )}
-                </Badge>
-              ))}
-            </div>
-          </div>
         </div>
       </div>
 

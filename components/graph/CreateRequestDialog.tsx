@@ -21,7 +21,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { toast } from "sonner";
 import { useCompletion } from "@ai-sdk/react";
-import { Loader2, Sparkles, User, Users2 } from "lucide-react";
+import { Loader2, Sparkles, User } from "lucide-react";
 
 interface CreateRequestDialogProps {
   projectId: string;
@@ -56,9 +56,7 @@ export function CreateRequestDialog({
   onSuccess,
 }: CreateRequestDialogProps) {
   const [question, setQuestion] = useState("");
-  const [targetType, setTargetType] = useState<"user" | "team">("user");
   const [toUserId, setToUserId] = useState("");
-  const [toTeam, setToTeam] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   // AI Streaming Hook
@@ -75,7 +73,6 @@ export function CreateRequestDialog({
 
   // Data fetching state
   const [members, setMembers] = useState<Member[]>([]);
-  const [teams, setTeams] = useState<Team[]>([]);
   const [nodeData, setNodeData] = useState<NodeData | null>(null);
 
   // Fetch project members, teams, and node data
@@ -89,7 +86,6 @@ export function CreateRequestDialog({
         if (membersRes.ok) {
           const data = await membersRes.json();
           setMembers(data.members || []);
-          setTeams(data.teams || []);
         }
 
         // Fetch node data to get owners
@@ -115,7 +111,7 @@ export function CreateRequestDialog({
       await complete("", {
         body: {
           nodeId: linkedNodeId,
-          recipientId: targetType === 'user' ? toUserId : undefined,
+          recipientId: toUserId || undefined,
           context: question // Send current text as context 
         }
       });
@@ -146,17 +142,6 @@ export function CreateRequestDialog({
       return 0;
     });
 
-  // Get suggested teams (node teams first, then others)
-  const suggestedTeams = teams
-    .map((t) => ({
-      ...t,
-      isNodeTeam: nodeData?.teams.some((nt) => nt.id === t.id) || false,
-    }))
-    .sort((a, b) => {
-      if (a.isNodeTeam && !b.isNodeTeam) return -1;
-      if (!a.isNodeTeam && b.isNodeTeam) return 1;
-      return 0;
-    });
 
   const getInitials = (name: string) => {
     return name
@@ -176,13 +161,10 @@ export function CreateRequestDialog({
         question,
       };
 
-      if (targetType === "user" && toUserId) {
-        body.toUserId = toUserId;
-      } else if (targetType === "team" && toTeam) {
-        body.toTeam = toTeam;
-      } else {
-        throw new Error("Please select a user or team");
+      if (!toUserId) {
+        throw new Error("Please select a person to send this request to");
       }
+      body.toUserId = toUserId;
 
       const res = await fetch(`/api/projects/${projectId}/requests`, {
         method: "POST",
@@ -198,7 +180,6 @@ export function CreateRequestDialog({
       toast.success("Request created successfully");
       setQuestion("");
       setToUserId("");
-      setToTeam("");
       onSuccess();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to create request");
@@ -241,104 +222,41 @@ export function CreateRequestDialog({
               />
             </div>
             <div>
-              <Label>Request To</Label>
-              <div className="flex gap-4 mt-2">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    checked={targetType === "user"}
-                    onChange={() => setTargetType("user")}
-                    className="cursor-pointer"
-                  />
-                  <User className="h-4 w-4" />
-                  <span>User</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    checked={targetType === "team"}
-                    onChange={() => setTargetType("team")}
-                    className="cursor-pointer"
-                  />
-                  <Users2 className="h-4 w-4" />
-                  <span>Team</span>
-                </label>
-              </div>
-            </div>
-            {targetType === "user" ? (
-              <div>
-                <Label htmlFor="toUserId">Select User</Label>
-                <Select value={toUserId} onValueChange={setToUserId}>
-                  <SelectTrigger className="mt-2">
-                    <SelectValue placeholder="Choose a user..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {suggestedUsers.map((user) => (
-                      <SelectItem key={user.id} value={user.id}>
-                        <div className="flex items-center gap-2">
-                          <Avatar className="h-6 w-6">
-                            <AvatarFallback className="text-[9px] bg-gradient-to-br from-blue-500 to-purple-500 text-white">
-                              {getInitials(user.name)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="flex flex-col">
-                            <span className="text-sm font-medium">
-                              {user.name}
-                              {user.isOwner && (
-                                <span className="ml-2 text-xs text-blue-600 font-semibold">
-                                  (Owner)
-                                </span>
-                              )}
-                            </span>
-                            {user.teamName && (
-                              <span className="text-xs text-muted-foreground">
-                                {user.teamName}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </SelectItem>
-                    ))}
-                    {suggestedUsers.length === 0 && (
-                      <div className="px-2 py-4 text-sm text-muted-foreground text-center">
-                        No users available
-                      </div>
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-            ) : (
-              <div>
-                <Label htmlFor="toTeam">Select Team</Label>
-                <Select value={toTeam} onValueChange={setToTeam}>
-                  <SelectTrigger className="mt-2">
-                    <SelectValue placeholder="Choose a team..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {suggestedTeams.map((team) => (
-                      <SelectItem key={team.id} value={team.name}>
-                        <div className="flex items-center gap-2">
-                          <Users2 className="h-4 w-4 text-muted-foreground" />
-                          <span>
-                            {team.name}
-                            {team.isNodeTeam && (
+              <Label htmlFor="toUserId">Request To</Label>
+              <Select value={toUserId} onValueChange={setToUserId}>
+                <SelectTrigger className="mt-2 text-left h-10">
+                  <SelectValue placeholder="Select a person..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {suggestedUsers.map((user) => (
+                    <SelectItem key={user.id} value={user.id}>
+                      <div className="flex items-center gap-2">
+                        <Avatar className="h-6 w-6">
+                          <AvatarFallback className="text-[9px] bg-gradient-to-br from-blue-500 to-purple-500 text-white">
+                            {getInitials(user.name)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex flex-col">
+                          <span className="text-sm font-medium">
+                            {user.name}
+                            {user.isOwner && (
                               <span className="ml-2 text-xs text-blue-600 font-semibold">
-                                (Node Team)
+                                (Owner)
                               </span>
                             )}
                           </span>
                         </div>
-                      </SelectItem>
-                    ))}
-                    {suggestedTeams.length === 0 && (
-                      <div className="px-2 py-4 text-sm text-muted-foreground text-center">
-                        No teams available
                       </div>
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
+                    </SelectItem>
+                  ))}
+                  {suggestedUsers.length === 0 && (
+                    <div className="px-2 py-4 text-sm text-muted-foreground text-center">
+                      No members available
+                    </div>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

@@ -86,7 +86,7 @@ export function enrichProjectWithWorkspaceData<T extends { id: string; updatedAt
 
     return {
         ...project,
-        subjectId: subject.id,
+        subjectId: (project as any).subjectId || subject.id,
         previewThumbnail: mockPreviewThumbnails[thumbnailIndex],
         lastUpdated,
         isFavorite,

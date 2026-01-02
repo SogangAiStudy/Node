@@ -68,7 +68,18 @@ export async function isOrgMember(orgId: string, userId: string): Promise<boolea
       status: true,
     },
   });
-  return !!orgMember && ["ACTIVE", "PENDING_TEAM_ASSIGNMENT"].includes(orgMember.status);
+
+  if (!orgMember) {
+    console.log(`[DEBUG] isOrgMember - User ${userId} is NOT a member of org ${orgId}`);
+    return false;
+  }
+
+  const isActive = ["ACTIVE", "PENDING_TEAM_ASSIGNMENT"].includes(orgMember.status);
+  if (!isActive) {
+    console.log(`[DEBUG] isOrgMember - User ${userId} has status ${orgMember.status} in org ${orgId}`);
+  }
+
+  return isActive;
 }
 
 /**
@@ -126,42 +137,63 @@ export async function isTeamMember(teamId: string, userId: string): Promise<bool
  * - Users can view if any of their teams are in the project's ProjectTeam list
  */
 export async function canViewProject(projectId: string, userId: string): Promise<boolean> {
-  // Get project with orgId
+  // Get project with orgId and ownerId
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { orgId: true },
+    select: { orgId: true, ownerId: true },
   });
 
   if (!project) {
     return false;
   }
 
-  // Check if user is org admin (bypass all restrictions)
+  // 1. Check if user is org admin (bypass all restrictions)
   if (await isOrgAdmin(project.orgId, userId)) {
     return true;
   }
 
+  // 2. Check if user is the project owner
+  if (project.ownerId === userId) {
+    return true;
+  }
+
+  // 3. Check if user is an explicit project member
+  const projectMember = await prisma.projectMember.findUnique({
+    where: {
+      projectId_userId: {
+        projectId,
+        userId,
+      },
+    },
+  });
+  if (projectMember) {
+    return true;
+  }
+
+  // 4. Check team-based access
   // Get user's teams
   const myTeams = await getUserTeams(project.orgId, userId);
 
-  if (myTeams.length === 0) {
-    return false;
+  if (myTeams.length > 0) {
+    // Get teams that have access to this project
+    const projectTeams = await prisma.projectTeam.findMany({
+      where: {
+        projectId,
+        teamId: {
+          in: myTeams,
+        },
+      },
+      select: {
+        teamId: true,
+      },
+    });
+
+    if (projectTeams.length > 0) {
+      return true;
+    }
   }
 
-  // Get teams that have access to this project
-  const projectTeams = await prisma.projectTeam.findMany({
-    where: {
-      projectId,
-    },
-    select: {
-      teamId: true,
-    },
-  });
-
-  const projectTeamIds = projectTeams.map((pt: any) => pt.teamId);
-
-  // Check intersection: myTeams ∩ projectTeams ≠ ∅
-  return myTeams.some((teamId) => projectTeamIds.includes(teamId));
+  return false;
 }
 
 /**
@@ -182,42 +214,50 @@ export async function requireProjectView(projectId: string, userId: string) {
  * - Users can edit if any of their teams has EDITOR or PROJECT_ADMIN role
  */
 export async function canEditProject(projectId: string, userId: string): Promise<boolean> {
-  // Get project with orgId
+  // Get project with orgId and ownerId
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { orgId: true },
+    select: { orgId: true, ownerId: true },
   });
 
   if (!project) {
     return false;
   }
 
-  // Check if user is org admin (bypass all restrictions)
+  // 1. Check if user is org admin (bypass all restrictions)
   if (await isOrgAdmin(project.orgId, userId)) {
     return true;
   }
 
+  // 2. Check if user is project owner
+  if (project.ownerId === userId) {
+    return true;
+  }
+
+  // 3. Check team-based access
   // Get user's teams
   const myTeams = await getUserTeams(project.orgId, userId);
 
-  if (myTeams.length === 0) {
-    return false;
+  if (myTeams.length > 0) {
+    // Get teams with EDITOR or PROJECT_ADMIN access
+    const projectTeams = await prisma.projectTeam.findMany({
+      where: {
+        projectId,
+        teamId: {
+          in: myTeams,
+        },
+        role: {
+          in: [ProjectRole.EDITOR, ProjectRole.PROJECT_ADMIN],
+        },
+      },
+    });
+
+    if (projectTeams.length > 0) {
+      return true;
+    }
   }
 
-  // Get teams with EDITOR or PROJECT_ADMIN access
-  const projectTeams = await prisma.projectTeam.findMany({
-    where: {
-      projectId,
-      teamId: {
-        in: myTeams,
-      },
-      role: {
-        in: [ProjectRole.EDITOR, ProjectRole.PROJECT_ADMIN],
-      },
-    },
-  });
-
-  return projectTeams.length > 0;
+  return false;
 }
 
 /**
@@ -240,50 +280,67 @@ export async function getUserProjectRole(
 ): Promise<ProjectRole | null> {
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { orgId: true },
+    select: { orgId: true, ownerId: true },
   });
 
   if (!project) {
     return null;
   }
 
-  // Org admins have PROJECT_ADMIN role
+  // 1. Org admins have PROJECT_ADMIN role
   if (await isOrgAdmin(project.orgId, userId)) {
     return ProjectRole.PROJECT_ADMIN;
   }
 
-  // Get user's teams
-  const myTeams = await getUserTeams(project.orgId, userId);
-
-  if (myTeams.length === 0) {
-    return null;
+  // 2. Project owner has PROJECT_ADMIN role
+  if (project.ownerId === userId) {
+    return ProjectRole.PROJECT_ADMIN;
   }
 
-  // Get all project team roles for user's teams
-  const projectTeams = await prisma.projectTeam.findMany({
+  // 3. Check for explicit project membership (default to VIEWER if no higher role found)
+  const projectMember = await prisma.projectMember.findUnique({
     where: {
-      projectId,
-      teamId: {
-        in: myTeams,
+      projectId_userId: {
+        projectId,
+        userId,
       },
-    },
-    select: {
-      role: true,
     },
   });
 
-  if (projectTeams.length === 0) {
-    return null;
+  let highestRole: ProjectRole | null = projectMember ? ProjectRole.VIEWER : null;
+
+  // 4. Check team-based roles
+  // Get user's teams
+  const myTeams = await getUserTeams(project.orgId, userId);
+
+  if (myTeams.length > 0) {
+    // Get all project team roles for user's teams
+    const projectTeams = await prisma.projectTeam.findMany({
+      where: {
+        projectId,
+        teamId: {
+          in: myTeams,
+        },
+      },
+      select: {
+        role: true,
+      },
+    });
+
+    const roles = projectTeams.map((pt: any) => pt.role);
+
+    if (roles.includes(ProjectRole.PROJECT_ADMIN)) {
+      return ProjectRole.PROJECT_ADMIN;
+    }
+    if (roles.includes(ProjectRole.EDITOR)) {
+      return ProjectRole.EDITOR;
+    }
+    if (roles.includes(ProjectRole.VIEWER)) {
+      highestRole = ProjectRole.VIEWER;
+    }
   }
 
-  // Return highest role (PROJECT_ADMIN > EDITOR > VIEWER)
-  if (projectTeams.some((pt: any) => pt.role === ProjectRole.PROJECT_ADMIN)) {
-    return ProjectRole.PROJECT_ADMIN;
-  }
-  if (projectTeams.some((pt: any) => pt.role === ProjectRole.EDITOR)) {
-    return ProjectRole.EDITOR;
-  }
-  return ProjectRole.VIEWER;
+  return highestRole;
 }
 
 // ============================================================================

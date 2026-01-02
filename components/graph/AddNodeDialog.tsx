@@ -50,9 +50,7 @@ export function AddNodeDialog({ projectId, orgId, open, onOpenChange, onSuccess 
   const [description, setDescription] = useState("");
   const [type, setType] = useState("TASK");
   const [ownerIds, setOwnerIds] = useState<string[]>([]);
-  const [teamIds, setTeamIds] = useState<string[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
-  const [teams, setTeams] = useState<Team[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showLimitDialog, setShowLimitDialog] = useState(false);
 
@@ -62,18 +60,12 @@ export function AddNodeDialog({ projectId, orgId, open, onOpenChange, onSuccess 
       if (res.ok) {
         const data = await res.json();
         setMembers(data.members || []);
-        setTeams(data.teams || []);
 
         // Auto-set current user as owner if they are a member and none selected
         if (session?.user?.id && ownerIds.length === 0) {
           const isMember = data.members.some((m: Member) => m.userId === session.user?.id);
           if (isMember) {
             setOwnerIds([session.user.id]);
-            // Also try to set their team
-            const currentMember = data.members.find((m: Member) => m.userId === session.user?.id);
-            if (currentMember?.teamId) {
-              setTeamIds([currentMember.teamId]);
-            }
           }
         }
       }
@@ -101,7 +93,7 @@ export function AddNodeDialog({ projectId, orgId, open, onOpenChange, onSuccess 
           description,
           type,
           ownerIds,
-          teamIds,
+          teamIds: [],
         }),
       });
 
@@ -133,7 +125,6 @@ export function AddNodeDialog({ projectId, orgId, open, onOpenChange, onSuccess 
     setDescription("");
     setType("TASK");
     setOwnerIds([]);
-    setTeamIds([]);
   };
 
   const ownerItems: MultiSelectItem[] = members.map((m: Member) => ({
@@ -143,11 +134,6 @@ export function AddNodeDialog({ projectId, orgId, open, onOpenChange, onSuccess 
     type: "user",
   }));
 
-  const teamItems: MultiSelectItem[] = teams.map((t: Team) => ({
-    id: t.id,
-    name: t.name,
-    type: "team",
-  }));
 
   return (
     <>
@@ -200,17 +186,6 @@ export function AddNodeDialog({ projectId, orgId, open, onOpenChange, onSuccess 
                   />
                 </div>
 
-                <div className="grid gap-2">
-                  <Label className="text-sm font-medium">Assigned Teams</Label>
-                  <MultiSelectSearch
-                    items={teamItems}
-                    selectedIds={teamIds}
-                    onSelect={(id: string) => setTeamIds((prev: string[]) => [...prev, id])}
-                    onRemove={(id: string) => setTeamIds((prev: string[]) => prev.filter((i: string) => i !== id))}
-                    placeholder="Select teams"
-                    searchPlaceholder="Search teams..."
-                  />
-                </div>
               </div>
             </div>
 
