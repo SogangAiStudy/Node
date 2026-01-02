@@ -33,7 +33,6 @@ export default async function BillingPage({
         },
         select: {
             id: true,
-            nodeCount: true,
             stripeCustomerId: true,
         },
     });
@@ -48,7 +47,6 @@ export default async function BillingPage({
         <BillingPageClient
             orgId={org.id}
             isOrgPro={isPro}
-            nodeCount={org.nodeCount}
             stripeCustomerId={org.stripeCustomerId}
         />
     );
