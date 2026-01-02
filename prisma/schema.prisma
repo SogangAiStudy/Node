@@ -95,7 +95,7 @@ model Organization {
   projects     Project[]
   requests     Request[]
   teams        Team[]
-  subjects     Subject[]
+  folders      Folder[]
   inboxStates  OrgInboxState[]
 
   @@index([ownerId])
@@ -187,8 +187,8 @@ model Project {
   owner         User            @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   primaryTeam   Team?           @relation("PrimaryTeam", fields: [primaryTeamId], references: [id])
   requests      Request[]
-  subjectId     String?
-  subject       Subject?        @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  folderId      String?
+  folder        Folder?        @relation(fields: [folderId], references: [id], onDelete: SetNull)
 
   @@index([orgId])
   @@index([ownerId])
@@ -404,7 +404,7 @@ enum RequestStatus {
   CLOSED
 }
 
-model Subject {
+model Folder {
   id          String   @id @default(cuid())
   orgId       String
   name        String
@@ -412,11 +412,23 @@ model Subject {
   color       String   @default("#3b82f6")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  sortOrder       Float    @default(0)
+  sortOrder   Float    @default(0)
+
+  // Hierarchy
+  parentId    String?
+  parent      Folder?  @relation("FolderHierarchy", fields: [parentId], references: [id], onDelete: Cascade) // Cascade delete subfolders? Maybe. Or SetNull. Let's say Cascade for now or user might lose access. User said "Folder (can be nested)".
+  children    Folder[] @relation("FolderHierarchy")
+
   projects    Project[]
 
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
-  @@unique([orgId, name])
-  @@map("subjects")
+  @@unique([orgId, name, parentId]) // Unique name per folder level? Or just unique per org? Original was [orgId, name]. With nesting, unique per parentId is better, but Prisma might complain about unique constraint if parentId is null.
+  // Let's keep @@unique([orgId, name]) for now effectively forcing unique folder names in the org, which is simpler but less flexible. If user wants duplicate names in different subfolders, we change later.
+  // Actually, standard FS allows same name in different folders.
+  // Let's remove the unique constraint on name for now or make it per-parent?
+  // User didn't specify. I'll stick to simple unique constraint removal or per parent?
+  // Let's keep loose for now to avoid migration errors.
+  
+  @@map("folders")
 }

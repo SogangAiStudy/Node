@@ -8,7 +8,7 @@ const ReorderProjectsSchema = z.object({
     items: z.array(z.object({
         id: z.string(),
         order: z.number(),
-        subjectId: z.string().nullable().optional(),
+        folderId: z.string().nullable().optional(),
     })),
 });
 
@@ -32,8 +32,8 @@ export async function PUT(request: NextRequest) {
                     where: { id: item.id },
                     data: {
                         sortOrder: item.order,
-                        // Only update subjectId if it is explicitly provided (including null)
-                        ...(item.subjectId !== undefined ? { subjectId: item.subjectId } : {})
+                        // Only update folderId if it is explicitly provided (including null)
+                        ...(item.folderId !== undefined ? { folderId: item.folderId } : {})
                     },
                 })
             )

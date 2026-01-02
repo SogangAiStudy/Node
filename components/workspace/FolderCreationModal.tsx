@@ -13,17 +13,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Layers } from "lucide-react";
 
-interface SubjectCreationModalProps {
+interface FolderCreationModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSubmit: (name: string) => void;
 }
 
-export function SubjectCreationModal({
+export function FolderCreationModal({
     isOpen,
     onClose,
     onSubmit,
-}: SubjectCreationModalProps) {
+}: FolderCreationModalProps) {
     const [name, setName] = useState("");
 
     const handleCreate = () => {

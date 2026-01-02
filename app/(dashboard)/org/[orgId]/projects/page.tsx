@@ -2,205 +2,147 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { useParams } from "next/navigation";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Plus, FolderKanban } from "lucide-react";
 import Link from "next/link";
 import { WorkspaceTabs } from "@/components/workspace/WorkspaceTabs";
-import { SubjectSection } from "@/components/workspace/SubjectSection";
+import { FolderSection } from "@/components/workspace/FolderSection";
 import { ProjectDTO } from "@/types";
 import {
   WorkspaceTab,
   enrichProjectWithWorkspaceData,
   filterProjectsByTab,
-  mockSubjects,
 } from "@/lib/mock-workspace-data";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import { toast } from "sonner";
+import { useWorkspaceStructure, Folder, Project } from "@/hooks/use-workspace-structure";
+import { useMoveItem } from "@/hooks/use-move-item";
 
-interface Project {
-  id: string;
-  name: string;
-  description: string | null;
-  primaryTeamName: string | null;
-  createdAt: string;
-  updatedAt: string;
-  subjectId?: string | null;
-  isFavorite?: boolean;
-}
-
-export default function OrgSubjectsPage() {
+export default function OrgProjectsPage() {
   const params = useParams();
   const orgId = params.orgId as string;
   const [activeTab, setActiveTab] = useState<WorkspaceTab>("all");
   const queryClient = useQueryClient();
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["projects", orgId],
-    queryFn: async () => {
-      const res = await fetch(`/api/projects?orgId=${orgId}`);
-      if (!res.ok) throw new Error("Failed to fetch projects");
-      const json = await res.json();
-      return { projects: json.projects as Project[] };
-    },
-  });
+  // Unified Data Hook
+  const { data: structure, isLoading } = useWorkspaceStructure(orgId);
+  const { mutate: moveItem } = useMoveItem();
 
-  const { data: subjectsData, isLoading: isSubjectsLoading } = useQuery({
-    queryKey: ["subjects", orgId],
-    queryFn: async () => {
-      const res = await fetch(`/api/subjects?orgId=${orgId}`);
-      if (!res.ok) throw new Error("Failed to fetch subjects");
-      const json = await res.json();
-      return { subjects: json.subjects as any[] };
-    },
-  });
+  // Flatten all projects for "All Projects" / Filter logic
+  // Recursive function to gather all projects from tree
+  const getAllProjects = (folders: Folder[]): Project[] => {
+    let projects: Project[] = [];
+    for (const f of folders) {
+      projects = [...projects, ...f.projects, ...getAllProjects(f.children)];
+    }
+    return projects;
+  };
 
-  // Reorder Subjects Mutation
-  const reorderSubjectsMutation = useMutation({
-    mutationFn: async (items: { id: string; order: number }[]) => {
-      await fetch("/api/subjects/reorder", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orgId, items }),
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["subjects", orgId] });
-      toast.success("Subject order updated");
-    },
-  });
+  const allProjectsRaw = useMemo(() => {
+    if (!structure) return [];
+    return [...structure.root.unfiledProjects, ...getAllProjects(structure.root.folders)];
+  }, [structure]);
 
-  // Reorder/Move Projects Mutation
-  const reorderProjectsMutation = useMutation({
-    mutationFn: async (items: { id: string; order: number; subjectId?: string | null }[]) => {
-      await fetch("/api/projects/reorder", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orgId, items }),
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["projects", orgId] });
-      toast.success("Project updated");
-    },
-  });
-
-  // Enrich projects with workspace metadata
+  // Enrich with current logic (add lastUpdated text etc)
+  // Logic from mock-workspace-data expects simple object
   const enrichedProjects = useMemo(() => {
-    if (!data?.projects) return [];
-    return data.projects.map((project, index) =>
-      enrichProjectWithWorkspaceData(project, index)
+    return allProjectsRaw.map((project, index) =>
+      enrichProjectWithWorkspaceData(project as any, index)
     );
-  }, [data?.projects]);
-
-  const allSubjects = useMemo(() => {
-    return subjectsData?.subjects || [];
-  }, [subjectsData?.subjects]);
+  }, [allProjectsRaw]);
 
   // Filter projects by active tab
   const filteredProjects = useMemo(() => {
     return filterProjectsByTab(enrichedProjects, activeTab);
   }, [enrichedProjects, activeTab]);
 
-  // Group projects by subject - but for local state management during drag
-  // We need to keep this stable for DnD
-  const [groupedProjects, setGroupedProjects] = useState<Map<string, ProjectDTO[]>>(new Map());
-
-  // Sync grouped projects when data changes
-  useEffect(() => {
-    const grouped = new Map<string, ProjectDTO[]>();
-    allSubjects.forEach(s => grouped.set(s.id, []));
-    grouped.set("unfiled", []);
-
-    filteredProjects.forEach(p => {
-      const subjectId = p.subjectId || "unfiled";
-      const existing = grouped.get(subjectId) || [];
-      // Only add if not already there (though filterProjectsByTab shouldn't duplicate)
-      // Check if we need to initialize if map didn't have subject
-      if (!grouped.has(subjectId)) {
-        const unfiled = grouped.get("unfiled") || [];
-        grouped.set("unfiled", [...unfiled, p as ProjectDTO]);
-      } else {
-        grouped.set(subjectId, [...existing, p as ProjectDTO]);
-      }
-    });
-    setGroupedProjects(grouped);
-  }, [filteredProjects, allSubjects]);
-
-
   // Handle Drag End
   const onDragEnd = (result: DropResult) => {
     const { source, destination, type } = result;
 
     if (!destination) return;
+    if (source.droppableId === destination.droppableId && source.index === destination.index) return;
 
-    // 1. Reordering Subjects
-    if (type === "SUBJECT") {
-      const newSubjects = Array.from(allSubjects);
-      const [removed] = newSubjects.splice(source.index, 1);
-      newSubjects.splice(destination.index, 0, removed);
-
-      // Optimistic update if we had local state for subjects, but here we trigger verified mutation
-      const updates = newSubjects.map((s, index) => ({
-        id: s.id,
-        order: index,
-      }));
-      reorderSubjectsMutation.mutate(updates);
-      return;
-    }
-
-    // 2. Reordering Projects (possibly between subjects)
+    // Moving a Project
     if (type === "PROJECT") {
-      const sourceSubjectId = source.droppableId;
-      const destSubjectId = destination.droppableId;
+      const destFolderId = destination.droppableId === "unfiled" ? null : destination.droppableId;
 
-      const sourceList = groupedProjects.get(sourceSubjectId) || [];
-      const destList = groupedProjects.get(destSubjectId) || [];
+      // Find the target lists to calculate new sortOrder
+      // We need to find the list of projects in the destination folder
+      // AND the sortOrder of neighbors at destination.index
 
-      // If moving within same list
-      if (sourceSubjectId === destSubjectId) {
-        const newList = Array.from(sourceList);
-        const [removed] = newList.splice(source.index, 1);
-        newList.splice(destination.index, 0, removed);
+      // Helper to find projects by folderId
+      const findProjectsInFolder = (fid: string | null): Project[] => {
+        if (fid === null) return structure?.root.unfiledProjects || [];
+        // Recursive find folder
+        const findF = (folders: Folder[]): Folder | null => {
+          for (const f of folders) {
+            if (f.id === fid) return f;
+            const found = findF(f.children);
+            if (found) return found;
+          }
+          return null;
+        }
+        const folder = findF(structure?.root.folders || []);
+        return folder ? folder.projects : [];
+      };
 
-        const newGrouped = new Map(groupedProjects);
-        newGrouped.set(sourceSubjectId, newList);
-        setGroupedProjects(newGrouped);
+      const destProjects = findProjectsInFolder(destFolderId);
 
-        // API Update
-        const updates = newList.map((p, index) => ({
-          id: p.id,
-          order: index,
-          subjectId: sourceSubjectId === "unfiled" ? null : sourceSubjectId,
-        }));
-        reorderProjectsMutation.mutate(updates);
+      // Calculate new sortOrder
+      // destProjects is ordered by sortOrder (asc) from API? Yes.
+      // But drag result index is based on the *rendered* list.
+      // Assuming the rendered list matches structure order.
 
+      // Note: If we drag within same list, destProjects includes the moved item at old index.
+      // If different list, it doesn't.
+      // This makes index calc tricky without modifying list first.
+
+      // Simplified Logic: 
+      // 1. Get ordered list of projects at destination (excluding the moved item if it was already there?)
+      // Actually, 'destProjects' contains the state BEFORE the move.
+
+      let prevOrder = 0;
+      let nextOrder = 0;
+
+      // Remove source item from calculation context if same list is targeted
+      const cleanDestProjects = destProjects.filter(p => p.id !== result.draggableId);
+
+      if (cleanDestProjects.length === 0) {
+        // Empty list
+        prevOrder = 1000;
+        nextOrder = 2000;
+      } else if (destination.index === 0) {
+        // Top of list
+        nextOrder = cleanDestProjects[0].sortOrder;
+        prevOrder = nextOrder - 1000;
+      } else if (destination.index >= cleanDestProjects.length) {
+        // End of list
+        prevOrder = cleanDestProjects[cleanDestProjects.length - 1].sortOrder;
+        nextOrder = prevOrder + 1000;
       } else {
-        // Moving to different list
-        const newSourceList = Array.from(sourceList);
-        const [removed] = newSourceList.splice(source.index, 1);
-        const newDestList = Array.from(destList);
-        newDestList.splice(destination.index, 0, removed);
-
-        const newGrouped = new Map(groupedProjects);
-        newGrouped.set(sourceSubjectId, newSourceList);
-        newGrouped.set(destSubjectId, newDestList);
-        setGroupedProjects(newGrouped);
-
-        // API Updates
-        // Update destination list order and ownership
-        const updates = newDestList.map((p, index) => ({
-          id: p.id,
-          order: index,
-          subjectId: destSubjectId === "unfiled" ? null : destSubjectId,
-        }));
-        // Note: we strictly only need to update the moved item's subjectId, 
-        // but updating the whole list orders is safer for consistency.
-        reorderProjectsMutation.mutate(updates);
+        // In between
+        prevOrder = cleanDestProjects[destination.index - 1].sortOrder;
+        nextOrder = cleanDestProjects[destination.index].sortOrder;
       }
-    }
-  };
 
+      const newSortOrder = (prevOrder + nextOrder) / 2;
+
+      moveItem({
+        orgId,
+        itemType: "PROJECT",
+        itemId: result.draggableId,
+        destinationParentId: destFolderId,
+        newSortOrder
+      });
+
+      toast.info("Moving project...");
+    }
+
+    // Handle Folder Move (if type === SUBJECT/FOLDER)
+    // Not implemented in UI drag handle yet, but logic would be similar
+  };
 
   // Calculate tab counts
   const tabCounts = useMemo(() => {
@@ -213,8 +155,38 @@ export default function OrgSubjectsPage() {
   }, [enrichedProjects]);
 
   if (isLoading) {
-    return <div className="text-center text-muted-foreground">Loading subjects...</div>;
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-muted-foreground">Loading workspace...</div>
+      </div>
+    );
   }
+
+  // Recursive Renderer for Folder Sections
+  const renderFolderSection = (folder: Folder) => {
+    // If we are filtering (e.g. Favorites tab), we might show projects even if they are deep.
+    // But typically filtering flattens the view.
+    // "All Projects" tab preserves hierarchy. Others flatten.
+
+    if (activeTab !== "all") return null;
+
+    return (
+      <div key={folder.id}>
+        <FolderSection
+          folder={folder as any} // Cast due to missing projectIds, handled by UI logic
+          projects={folder.projects as any[]}
+          orgId={orgId}
+          isDropZone={true}
+        />
+        {/* Render Children (Nested Folders) with indentation */}
+        {folder.children.length > 0 && (
+          <div className="pl-6 border-l border-border/50 ml-2 mt-2">
+            {folder.children.map(renderFolderSection)}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -244,61 +216,62 @@ export default function OrgSubjectsPage() {
             </p>
           </div>
         ) : (
-          <Droppable droppableId="subjects-list" type="SUBJECT">
-            {(provided) => (
-              <div
-                {...provided.droppableProps}
-                ref={provided.innerRef}
-                className="space-y-8"
-              >
-                {/* Show subjects with projects */}
-                {allSubjects.map((subject, index) => {
-                  const subjectProjects = groupedProjects.get(subject.id) || [];
-                  if (subjectProjects.length === 0 && activeTab !== "all") return null;
+          <div className="space-y-8">
+            {/* 
+                Scenario A: 'All' Tab -> Hierarchy View 
+                Scenario B: Filtered Tab -> Flat View 
+            */}
 
-                  return (
-                    <Draggable key={subject.id} draggableId={subject.id} index={index}>
-                      {(providedDrag) => (
-                        <div
-                          ref={providedDrag.innerRef}
-                          {...providedDrag.draggableProps}
-                        >
-                          <div {...providedDrag.dragHandleProps} className="mb-2 opacity-50 hover:opacity-100 cursor-grab active:cursor-grabbing w-fit">
-                            {/* Drag handle icon or just make the header draggable */}
-                          </div>
-                          <SubjectSection
-                            subject={subject}
-                            projects={subjectProjects}
-                            orgId={orgId}
-                            // We need to pass droppable props to SubjectSection to make it a drop zone for projects
-                            isDropZone={true}
-                          />
-                        </div>
-                      )}
-                    </Draggable>
-                  );
-                })}
-                {provided.placeholder}
+            {activeTab === "all" ? (
+              <>
+                {/* Folders & Projects Tree */}
+                {structure?.root.folders.map(renderFolderSection)}
 
-                {/* Unfiled projects section - Not draggable as a subject, but contains droppable projects */}
-                {(groupedProjects.get("unfiled") || []).length > 0 && (
-                  <SubjectSection
-                    subject={{
+                {/* Unfiled Projects */}
+                {structure?.root.unfiledProjects.length > 0 && (
+                  <FolderSection
+                    folder={{
                       id: "unfiled",
                       name: "Unfiled",
-                      description: "Projects without a subject",
+                      description: "Projects without a folder",
                       color: "#9ca3af",
                       projectIds: [],
                       isExpanded: true,
-                    }}
-                    projects={groupedProjects.get("unfiled") as ProjectDTO[]}
+                    } as any}
+                    projects={structure.root.unfiledProjects as any[]}
                     orgId={orgId}
                     isDropZone={true}
                   />
                 )}
+              </>
+            ) : (
+              /* Flat List for filtered tabs */
+              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                {filteredProjects.map((project) => (
+                  // Using ProjectCard directly or a wrapper?
+                  // Current design uses SubjectSection for layout. 
+                  // Flat list should probably use ProjectCard directly.
+                  // But imported `SubjectSection` uses `ProjectCard` internally.
+                  // I'll assume we can use `ProjectCard` if I import it, or just use a dummy Unfiled section to hold them all.
+                  // Dummy section is easiest for filtering layout consistency.
+                  <FolderSection
+                    key="filtered"
+                    folder={{
+                      id: activeTab,
+                      name: activeTab.charAt(0).toUpperCase() + activeTab.slice(1),
+                      description: "",
+                      color: "transparent",
+                      projectIds: [],
+                      isExpanded: true
+                    } as any}
+                    projects={filteredProjects as any[]}
+                    orgId={orgId}
+                    isDropZone={false} // No D&D in filtered view usually
+                  />
+                ))}
               </div>
             )}
-          </Droppable>
+          </div>
         )}
       </DragDropContext>
     </div>

@@ -4,17 +4,17 @@
  * TODO: Replace with backend API integration
  */
 
-export interface Subject {
+export interface Folder {
     id: string;
     name: string;
     description: string | null;
-    color: string; // Hex color for subject badge/accent
-    projectIds: string[]; // Projects that belong to this subject
+    color: string; // Hex color for folder badge/accent
+    projectIds: string[]; // Projects that belong to this folder
     isExpanded?: boolean; // Client-side expand/collapse state
 }
 
-// Sample subjects for testing
-export const mockSubjects: Subject[] = [
+// Sample folders for testing
+export const mockFolders: Folder[] = [
     {
         id: "subj-1",
         name: "Engineering",
@@ -60,11 +60,11 @@ export const mockPreviewThumbnails = [
  * Enrich project data with mock workspace metadata
  * This simulates what would come from the backend API
  */
-export function enrichProjectWithWorkspaceData<T extends { id: string; updatedAt?: string; isFavorite?: boolean; subjectId?: string | null }>(
+export function enrichProjectWithWorkspaceData<T extends { id: string; updatedAt?: string; isFavorite?: boolean; folderId?: string | null }>(
     project: T,
     index: number = 0
 ): T & {
-    subjectId?: string;
+    folderId?: string;
     previewThumbnail?: string;
     lastUpdated?: string;
     isFavorite?: boolean;
@@ -79,7 +79,7 @@ export function enrichProjectWithWorkspaceData<T extends { id: string; updatedAt
 
     return {
         ...project,
-        subjectId: project.subjectId || undefined,
+        folderId: project.folderId || undefined,
         previewThumbnail: (project as any).previewThumbnail || mockPreviewThumbnails[thumbnailIndex],
         lastUpdated,
         isFavorite: project.isFavorite || false,
@@ -87,26 +87,26 @@ export function enrichProjectWithWorkspaceData<T extends { id: string; updatedAt
 }
 
 /**
- * Group projects by subject
+ * Group projects by folder
  */
-export function groupProjectsBySubject<T extends { subjectId?: string }>(
+export function groupProjectsByFolder<T extends { folderId?: string }>(
     projects: T[]
 ): Map<string, T[]> {
     const grouped = new Map<string, T[]>();
 
-    // Initialize with all subjects
-    mockSubjects.forEach((subject) => {
-        grouped.set(subject.id, []);
+    // Initialize with all folders
+    mockFolders.forEach((folder) => {
+        grouped.set(folder.id, []);
     });
 
-    // Add "unfiled" category for projects without a subject
+    // Add "unfiled" category for projects without a folder
     grouped.set("unfiled", []);
 
     // Group projects
     projects.forEach((project) => {
-        const subjectId = project.subjectId || "unfiled";
-        const existing = grouped.get(subjectId) || [];
-        grouped.set(subjectId, [...existing, project]);
+        const folderId = project.folderId || "unfiled";
+        const existing = grouped.get(folderId) || [];
+        grouped.set(folderId, [...existing, project]);
     });
 
     return grouped;
@@ -117,7 +117,7 @@ export function groupProjectsBySubject<T extends { subjectId?: string }>(
  */
 export type WorkspaceTab = "all" | "recents" | "favorites" | "unfiled";
 
-export function filterProjectsByTab<T extends { isFavorite?: boolean; subjectId?: string; updatedAt?: string }>(
+export function filterProjectsByTab<T extends { isFavorite?: boolean; folderId?: string; updatedAt?: string }>(
     projects: T[],
     tab: WorkspaceTab
 ): T[] {
@@ -136,7 +136,7 @@ export function filterProjectsByTab<T extends { isFavorite?: boolean; subjectId?
         case "favorites":
             return projects.filter((p) => p.isFavorite);
         case "unfiled":
-            return projects.filter((p) => !p.subjectId || p.subjectId === "unfiled");
+            return projects.filter((p) => !p.folderId || p.folderId === "unfiled");
         default:
             return projects;
     }
@@ -170,16 +170,16 @@ function formatRelativeTime(date: Date): string {
  */
 export function searchWorkspace<T extends { name: string; description?: string | null }>(
     projects: T[],
-    subjects: Subject[],
+    folders: Folder[],
     query: string
 ): {
     projects: T[];
-    subjects: Subject[];
+    folders: Folder[];
 } {
     const lowerQuery = query.toLowerCase().trim();
 
     if (!lowerQuery) {
-        return { projects: [], subjects: [] };
+        return { projects: [], folders: [] };
     }
 
     const matchedProjects = projects.filter(
@@ -188,7 +188,7 @@ export function searchWorkspace<T extends { name: string; description?: string |
             (p.description && p.description.toLowerCase().includes(lowerQuery))
     );
 
-    const matchedSubjects = subjects.filter(
+    const matchedFolders = folders.filter(
         (s) =>
             s.name.toLowerCase().includes(lowerQuery) ||
             (s.description && s.description.toLowerCase().includes(lowerQuery))
@@ -196,6 +196,6 @@ export function searchWorkspace<T extends { name: string; description?: string |
 
     return {
         projects: matchedProjects,
-        subjects: matchedSubjects,
+        folders: matchedFolders,
     };
 }

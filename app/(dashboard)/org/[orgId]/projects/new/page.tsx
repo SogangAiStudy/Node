@@ -37,7 +37,7 @@ export default function NewProjectPage() {
     const queryClient = useQueryClient();
     const orgId = params.orgId as string;
 
-    const initialSubjectId = searchParams.get("subjectId") || "";
+    const initialFolderId = searchParams.get("folderId") || "";
 
     // Redirect if orgId is literally "undefined"
     if (orgId === "undefined") {
@@ -46,7 +46,7 @@ export default function NewProjectPage() {
 
     const [name, setName] = useState("");
     const [description, setDescription] = useState("");
-    const [subjectId, setSubjectId] = useState(initialSubjectId);
+    const [folderId, setFolderId] = useState(initialFolderId);
     const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([]);
 
     // Fetch teams for the workspace
@@ -59,21 +59,21 @@ export default function NewProjectPage() {
         },
     });
 
-    // Fetch subjects
-    const { data: subjectsData } = useQuery({
-        queryKey: ["subjects", orgId],
+    // Fetch folders
+    const { data: foldersData } = useQuery({
+        queryKey: ["folders", orgId],
         queryFn: async () => {
-            const res = await fetch(`/api/subjects?orgId=${orgId}`);
-            if (!res.ok) throw new Error("Failed to fetch subjects");
-            return res.json() as Promise<{ subjects: any[] }>;
+            const res = await fetch(`/api/folders?orgId=${orgId}`);
+            if (!res.ok) throw new Error("Failed to fetch folders");
+            return res.json() as Promise<{ folders: any[] }>;
         },
     });
 
     const teams = teamsData?.teams || [];
-    const subjects = subjectsData?.subjects || [];
+    const folders = foldersData?.folders || [];
 
     const createProjectMutation = useMutation({
-        mutationFn: async (data: { name: string; description: string; teamIds: string[]; subjectId?: string }) => {
+        mutationFn: async (data: { name: string; description: string; teamIds: string[]; folderId?: string }) => {
             const res = await fetch("/api/projects", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -107,7 +107,7 @@ export default function NewProjectPage() {
             name,
             description,
             teamIds: selectedTeamIds,
-            subjectId: subjectId && subjectId !== "none" ? subjectId : undefined,
+            folderId: folderId && folderId !== "none" ? folderId : undefined,
         });
     };
 
@@ -150,18 +150,18 @@ export default function NewProjectPage() {
                     </div>
 
                     <div className="space-y-2">
-                        <label className="text-sm font-semibold text-[#1a1b1e]">Subject (Optional)</label>
-                        <Select value={subjectId} onValueChange={setSubjectId}>
+                        <label className="text-sm font-semibold text-[#1a1b1e]">Folder (Optional)</label>
+                        <Select value={folderId} onValueChange={setFolderId}>
                             <SelectTrigger className="h-11 border-[#e9e9e9] focus:border-[#37352f] focus:ring-1 focus:ring-[#37352f]/10">
-                                <SelectValue placeholder="Select a subject to organize this project" />
+                                <SelectValue placeholder="Select a folder to organize this project" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="none">No Subject</SelectItem>
-                                {subjects.map((s: any) => (
-                                    <SelectItem key={s.id} value={s.id}>
+                                <SelectItem value="none">No Folder</SelectItem>
+                                {folders.map((f: any) => (
+                                    <SelectItem key={f.id} value={f.id}>
                                         <div className="flex items-center gap-2">
-                                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: s.color }} />
-                                            {s.name}
+                                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: f.color }} />
+                                            {f.name}
                                         </div>
                                     </SelectItem>
                                 ))}

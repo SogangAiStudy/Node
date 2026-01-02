@@ -7,7 +7,7 @@ import {
     DialogContent,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Search, FolderKanban, Layers, Command } from "lucide-react";
+import { Search, FolderKanban, Folder as FolderIcon, Command } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 
@@ -15,7 +15,7 @@ interface GlobalSearchModalProps {
     isOpen: boolean;
     onClose: () => void;
     orgId?: string;
-    onSearch: (query: string) => { projects: any[]; subjects: any[] };
+    onSearch: (query: string) => { projects: any[]; folders: any[] };
     onSelect: (item: any) => void;
 }
 
@@ -28,16 +28,16 @@ export function GlobalSearchModal({
 }: GlobalSearchModalProps) {
     const router = useRouter();
     const [query, setQuery] = useState("");
-    const [results, setResults] = useState<{ projects: any[]; subjects: any[] }>({
+    const [results, setResults] = useState<{ projects: any[]; folders: any[] }>({
         projects: [],
-        subjects: [],
+        folders: [],
     });
     const [selectedIndex, setSelectedIndex] = useState(0);
 
     useEffect(() => {
         if (isOpen) {
             setQuery("");
-            setResults({ projects: [], subjects: [] });
+            setResults({ projects: [], folders: [] });
             setSelectedIndex(0);
         }
     }, [isOpen]);
@@ -49,14 +49,14 @@ export function GlobalSearchModal({
     }, [query, onSearch]);
 
     const flatResults = [
-        ...results.subjects.map(s => ({ ...s, type: "subject" as const })),
+        ...results.folders.map(s => ({ ...s, type: "folder" as const })),
         ...results.projects.map(p => ({ ...p, type: "project" as const })),
     ];
 
     const handleSelect = useCallback((item: any) => {
         onClose();
-        if (item.type === "subject") {
-            router.push(`/org/${orgId}/projects#subject-${item.id}`);
+        if (item.type === "folder") {
+            router.push(`/org/${orgId}/projects#folder-${item.id}`);
         } else {
             router.push(`/org/${orgId}/projects/${item.id}/graph`);
         }
@@ -127,10 +127,10 @@ export function GlobalSearchModal({
                                         <div className="flex items-center gap-3">
                                             <div className={cn(
                                                 "p-1.5 rounded-md",
-                                                item.type === "subject" ? "bg-blue-500/10 text-blue-400" : "bg-purple-500/10 text-purple-400"
+                                                item.type === "folder" ? "bg-blue-500/10 text-blue-400" : "bg-purple-500/10 text-purple-400"
                                             )}>
-                                                {item.type === "subject" ? (
-                                                    <Layers className="h-4 w-4" />
+                                                {item.type === "folder" ? (
+                                                    <FolderIcon className="h-4 w-4" />
                                                 ) : (
                                                     <FolderKanban className="h-4 w-4" />
                                                 )}
@@ -138,7 +138,7 @@ export function GlobalSearchModal({
                                             <div className="flex flex-col items-start translate-y-[-1px]">
                                                 <span className="text-[14px] font-medium leading-tight">{item.name}</span>
                                                 <span className="text-[11px] text-[#7b7c7e] leading-tight">
-                                                    {item.type === "subject" ? "Organizational Divider" : "Project"}
+                                                    {item.type === "folder" ? "Folder" : "Project"}
                                                 </span>
                                             </div>
                                         </div>

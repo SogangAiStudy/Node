@@ -3,20 +3,21 @@ import { prisma } from "@/lib/db/prisma";
 import { requireAuth, isOrgMember } from "@/lib/utils/auth";
 import { z } from "zod";
 
-const ReorderSubjectsSchema = z.object({
+const ReorderFoldersSchema = z.object({
     orgId: z.string(),
     items: z.array(z.object({
         id: z.string(),
-        order: z.number(),
+        order: z.number(), // Mapped to sortOrder in DB
+        parentId: z.string().nullable().optional(), // Support moving between parents
     })),
 });
 
-// PUT /api/subjects/reorder - Bulk update subject order
+// PUT /api/folders/reorder - Bulk update folder order
 export async function PUT(request: NextRequest) {
     try {
         const user = await requireAuth();
         const body = await request.json();
-        const { orgId, items } = ReorderSubjectsSchema.parse(body);
+        const { orgId, items } = ReorderFoldersSchema.parse(body);
 
         // Verify membership
         const isMember = await isOrgMember(orgId, user.id);
@@ -27,18 +28,21 @@ export async function PUT(request: NextRequest) {
         // Use transaction to update all
         await prisma.$transaction(
             items.map((item) =>
-                prisma.subject.update({
+                prisma.folder.update({
                     where: { id: item.id },
-                    data: { sortOrder: item.order },
+                    data: {
+                        sortOrder: item.order,
+                        ...(item.parentId !== undefined ? { parentId: item.parentId } : {})
+                    },
                 })
             )
         );
 
         return NextResponse.json({ success: true });
     } catch (error: any) {
-        console.error("PUT /api/subjects/reorder error:", error);
+        console.error("PUT /api/folders/reorder error:", error);
         if (error.code) console.error("Error code:", error.code);
         if (error.meta) console.error("Error meta:", error.meta);
-        return NextResponse.json({ error: "Failed to reorder subjects", details: error.message }, { status: 500 });
+        return NextResponse.json({ error: "Failed to reorder folders", details: error.message }, { status: 500 });
     }
 }

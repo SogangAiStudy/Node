@@ -4,24 +4,24 @@ import { ChevronRight, Plus, GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ProjectDTO } from "@/types";
 import { ProjectCard } from "./ProjectCard";
-import { Subject } from "@/lib/mock-workspace-data";
+import { Folder } from "@/lib/mock-workspace-data";
 import { Droppable, Draggable } from "@hello-pangea/dnd";
 
-interface SubjectSectionProps {
-    subject: Subject;
+interface FolderSectionProps {
+    folder: Folder;
     projects: ProjectDTO[];
     orgId: string;
-    onExpandToggle?: (subjectId: string, isExpanded: boolean) => void;
+    onExpandToggle?: (folderId: string, isExpanded: boolean) => void;
     isDropZone?: boolean;
 }
 
-export function SubjectSection({ subject, projects, orgId, onExpandToggle, isDropZone = false }: SubjectSectionProps) {
-    const [isExpanded, setIsExpanded] = useState(subject.isExpanded ?? true);
+export function FolderSection({ folder, projects, orgId, onExpandToggle, isDropZone = false }: FolderSectionProps) {
+    const [isExpanded, setIsExpanded] = useState(folder.isExpanded ?? true);
 
     const handleToggle = () => {
         const newState = !isExpanded;
         setIsExpanded(newState);
-        onExpandToggle?.(subject.id, newState);
+        onExpandToggle?.(folder.id, newState);
     };
 
     const ProjectList = (
@@ -64,11 +64,11 @@ export function SubjectSection({ subject, projects, orgId, onExpandToggle, isDro
 
     return (
         <div className="mb-6">
-            {/* Subject Header */}
+            {/* Folder Header */}
             <div
                 className="flex items-center justify-between px-1 py-2 mb-3 group cursor-pointer select-none"
                 onClick={handleToggle}
-                id={`subject-${subject.id}`}
+                id={`folder-${folder.id}`}
             >
                 <div className="flex items-center gap-2">
                     <ChevronRight
@@ -78,24 +78,24 @@ export function SubjectSection({ subject, projects, orgId, onExpandToggle, isDro
                         )}
                     />
                     <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                        {subject.name}
+                        {folder.name}
                         <span className="text-xs font-normal text-muted-foreground">
                             ({projects.length})
                         </span>
                     </h3>
-                    {subject.description && (
+                    {folder.description && (
                         <span className="text-xs text-muted-foreground hidden md:inline">
-                            — {subject.description}
+                            — {folder.description}
                         </span>
                     )}
                 </div>
 
-                {/* Add Subject Button (TODO: implement functionality) */}
+                {/* Add Project Button (TODO: implement functionality) */}
                 <Link
-                    href={`/org/${orgId}/projects/new?subjectId=${subject.id}`}
+                    href={`/org/${orgId}/projects/new?folderId=${folder.id}`}
                     className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-accent rounded"
                     onClick={(e) => e.stopPropagation()}
-                    title="Add project to this subject"
+                    title="Add project to this folder"
                 >
                     <Plus className="h-4 w-4 text-muted-foreground" />
                 </Link>
@@ -104,7 +104,7 @@ export function SubjectSection({ subject, projects, orgId, onExpandToggle, isDro
             {/* Projects List */}
             {isExpanded && (
                 isDropZone ? (
-                    <Droppable droppableId={subject.id} type="PROJECT">
+                    <Droppable droppableId={folder.id} type="PROJECT">
                         {(provided, snapshot) => (
                             <div
                                 ref={provided.innerRef}
