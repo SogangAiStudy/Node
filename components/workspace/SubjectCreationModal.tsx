@@ -16,19 +16,19 @@ import { Layers } from "lucide-react";
 interface SubjectCreationModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onCreated: (name: string) => void;
+    onSubmit: (name: string) => void;
 }
 
 export function SubjectCreationModal({
     isOpen,
     onClose,
-    onCreated,
+    onSubmit,
 }: SubjectCreationModalProps) {
     const [name, setName] = useState("");
 
     const handleCreate = () => {
         if (name.trim()) {
-            onCreated(name.trim());
+            onSubmit(name.trim());
             setName("");
             onClose();
         }

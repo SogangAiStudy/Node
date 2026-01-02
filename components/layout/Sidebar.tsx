@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams, usePathname, useRouter } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
@@ -30,13 +30,16 @@ import {
   UserCircle2,
   X,
   Layers,
-  Star
+  Star,
+  GripVertical
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { mockSubjects, searchWorkspace, enrichProjectWithWorkspaceData } from "@/lib/mock-workspace-data";
 import { SubjectCreationModal } from "@/components/workspace/SubjectCreationModal";
 import { GlobalSearchModal } from "./GlobalSearchModal";
 import { toast } from "sonner";
+import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
+import { ProjectDTO } from "@/types";
 
 interface Workspace {
   orgId: string;
@@ -62,11 +65,15 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const currentProjectId = params.projectId as string | undefined;
+  const queryClient = useQueryClient();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   const [isSubjectModalOpen, setIsSubjectModalOpen] = useState(false);
+
+  // Local state for DnD
+  const [localGroupedProjects, setLocalGroupedProjects] = useState<Map<string, any[]>>(new Map());
 
   const initials = session?.user?.name
     ?.split("")
@@ -90,6 +97,7 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
       // 1. If no orgId or "undefined" in URL
       if (!currentOrgId || currentOrgId === "undefined") {
         console.log("[DEBUG] Sidebar - No orgId in URL. Redirecting to first workspace...");
+        // Use window.location for hard redirect if needed, but router.push is better for SPA
         router.push(`/org/${workspaces[0].orgId}/projects`);
         return;
       }
@@ -140,6 +148,37 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
     enabled: !!currentOrgId && currentOrgId !== "undefined",
   });
 
+  // Reorder Subjects Mutation
+  const reorderSubjectsMutation = useMutation({
+    mutationFn: async (items: { id: string; order: number }[]) => {
+      await fetch("/api/subjects/reorder", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orgId: currentOrgId, items }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["subjects", currentOrgId] });
+      toast.success("Subject order updated");
+    },
+  });
+
+  // Reorder/Move Projects Mutation
+  const reorderProjectsMutation = useMutation({
+    mutationFn: async (items: { id: string; order: number; subjectId?: string | null }[]) => {
+      await fetch("/api/projects/reorder", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orgId: currentOrgId, items }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["projects", currentOrgId] });
+      toast.success("Project updated");
+    },
+  });
+
+
   const handleCreateSubject = async (name: string) => {
     try {
       const res = await fetch("/api/subjects", {
@@ -181,8 +220,6 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
   // Favorite projects (from enriched data)
   const favoriteProjects = enrichedProjects.filter(p => p.isFavorite);
 
-  // Debugging
-  console.log(`[DEBUG] Sidebar - currentOrgId: ${currentOrgId}`);
 
   const handleSubjectClick = (subjectId: string) => {
     setSearchQuery("");
@@ -230,302 +267,483 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
     };
   }, [enrichedProjects, subjectsData?.subjects]);
 
+  // Keep local state in sync
+  useEffect(() => {
+    setLocalGroupedProjects(sidebarGroupedProjects.grouped);
+  }, [sidebarGroupedProjects]);
+
+
+  // Handle Drag End for Sidebar
+  const onDragEnd = (result: DropResult) => {
+    const { source, destination, type } = result;
+
+    if (!destination) return;
+
+    // 1. Reordering Subjects
+    if (type === "SUBJECT") {
+      // For subjects, we might not render them all as draggable in this simplified sidebar, 
+      // but if we did, logic would go here. The text says "subjects be shown in sidebar", 
+      // which imply reordering. 
+      // However, subjectsData returns sorted array.
+      // We will implement Draggable for the subject headers in the render loop.
+      const newSubjects = Array.from(sidebarGroupedProjects.subjects);
+      const [removed] = newSubjects.splice(source.index, 1);
+      newSubjects.splice(destination.index, 0, removed);
+
+      const updates = newSubjects.map((s, index) => ({
+        id: s.id,
+        order: index,
+      }));
+      reorderSubjectsMutation.mutate(updates);
+      return;
+    }
+
+    // 2. Reordering Projects
+    if (type === "PROJECT") {
+      const sourceSubjectId = source.droppableId;
+      const destSubjectId = destination.droppableId;
+
+      const sourceList = localGroupedProjects.get(sourceSubjectId) || [];
+      const destList = localGroupedProjects.get(destSubjectId) || [];
+
+      if (sourceSubjectId === destSubjectId) {
+        const newList = Array.from(sourceList);
+        const [removed] = newList.splice(source.index, 1);
+        newList.splice(destination.index, 0, removed);
+
+        const newGrouped = new Map(localGroupedProjects);
+        newGrouped.set(sourceSubjectId, newList);
+        setLocalGroupedProjects(newGrouped);
+
+        const updates = newList.map((p, index) => ({
+          id: p.id,
+          order: index,
+          subjectId: sourceSubjectId === "unfiled" ? null : sourceSubjectId,
+        }));
+        reorderProjectsMutation.mutate(updates);
+
+      } else {
+        const newSourceList = Array.from(sourceList);
+        const [removed] = newSourceList.splice(source.index, 1);
+        const newDestList = Array.from(destList);
+        newDestList.splice(destination.index, 0, removed);
+
+        const newGrouped = new Map(localGroupedProjects);
+        newGrouped.set(sourceSubjectId, newSourceList);
+        newGrouped.set(destSubjectId, newDestList);
+        setLocalGroupedProjects(newGrouped);
+
+        const updates = newDestList.map((p, index) => ({
+          id: p.id,
+          order: index,
+          subjectId: destSubjectId === "unfiled" ? null : destSubjectId,
+        }));
+        reorderProjectsMutation.mutate(updates);
+      }
+    }
+  };
+
+
   const NavItem = ({
     href,
     icon: Icon,
     label,
-    isActive,
-    unread = false
+    active,
+    hasIndicator,
+    onClick,
   }: {
     href: string;
     icon: any;
     label: string;
-    isActive: boolean;
-    unread?: boolean;
+    active?: boolean;
+    hasIndicator?: boolean;
+    onClick?: () => void;
   }) => (
     <Link
       href={href}
+      onClick={onClick}
       className={cn(
-        "flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] font-medium transition-colors group",
-        isActive
-          ? "bg-[#2c2d31] text-white"
+        "flex items-center gap-3 px-3 py-2 rounded-md text-[14px] transition-colors relative group",
+        active
+          ? "bg-[#2c2d31] text-white font-medium"
           : "text-[#d1d2d5] hover:bg-[#2c2d31] hover:text-white"
       )}
     >
-      <Icon className={cn("h-4 w-4 shrink-0 transition-colors", isActive ? "text-white" : "text-[#7b7c7e] group-hover:text-[#d1d2d5]")} />
+      <Icon className={cn("h-4 w-4 shrink-0 opacity-70 group-hover:opacity-100", active && "opacity-100 text-white")} />
       <span className="truncate">{label}</span>
-      {unread && (
-        <div className="h-1.5 w-1.5 bg-[#eb5757] rounded-full ml-auto shrink-0 shadow-sm shadow-[#eb5757]/40" />
+      {hasIndicator && (
+        <span className="absolute right-3 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-blue-500 shadow-glow" />
       )}
     </Link>
   );
 
   return (
-    <div className="w-[240px] bg-[#1a1b1e] h-screen flex flex-col select-none border-r border-[#2c2d31]">
+    <div className="flex flex-col h-full bg-[#1a1b1e] text-[#d1d2d5] w-[260px] border-r border-[#2c2d31] flex-shrink-0">
       {/* Workspace Switcher */}
-      <div className="px-3 py-4">
+      <div className="p-3">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              className="w-full justify-between h-9 px-2 text-[#d1d2d5] hover:bg-[#2c2d31] hover:text-white border-transparent"
-            >
-              <div className="flex items-center gap-2 overflow-hidden">
-                <div className="w-5 h-5 rounded bg-[#37352f] flex items-center justify-center text-[10px] text-white font-bold shrink-0 shadow-sm border border-[#2c2d31]">
-                  {currentWorkspace?.name?.[0] || "?"}
+            <button className="flex items-center justify-between w-full px-3 py-2 text-sm font-medium text-white bg-[#2c2d31]/50 hover:bg-[#2c2d31] rounded-lg transition-colors border border-[#2c2d31] group">
+              <div className="flex items-center gap-3 overflow-hidden">
+                <div className="w-5 h-5 rounded bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shrink-0">
+                  <span className="text-[10px] font-bold text-white leading-none">
+                    {currentWorkspace?.name?.[0]?.toUpperCase() || "W"}
+                  </span>
                 </div>
-                <span className="truncate text-sm font-semibold">{currentWorkspace?.name || "Workspace"}</span>
+                <span className="truncate">{currentWorkspace?.name || "Select Workspace"}</span>
               </div>
-              <ChevronDown className="h-3.5 w-3.5 ml-1 text-[#7b7c7e] shrink-0" />
-            </Button>
+              <ChevronDown className="h-4 w-4 shrink-0 text-gray-400 group-hover:text-white transition-colors" />
+            </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-60 bg-[#1a1b1e] border-[#2c2d31] text-[#d1d2d5]" align="start">
+          <DropdownMenuContent className="w-[236px] bg-[#1a1b1e] border-[#2c2d31] text-[#d1d2d5] p-1.5" align="start" sideOffset={8}>
             <div className="px-2 py-1.5 text-[11px] font-bold text-[#7b7c7e] uppercase tracking-wider">
-              Workspaces
+              Switch Workspace
             </div>
             {workspaces?.map((workspace) => (
-              <DropdownMenuItem key={workspace.orgId} asChild className="focus:bg-[#2c2d31] focus:text-white cursor-pointer">
-                <Link
-                  href={`/org/${workspace.orgId}/projects`}
-                  className="flex items-center justify-between"
-                >
-                  <div className="flex items-center gap-2 truncate">
-                    <div className="w-4 h-4 rounded-sm bg-[#37352f] flex items-center justify-center text-[8px] text-white font-bold shrink-0">
-                      {workspace.name?.[0]}
+              <DropdownMenuItem
+                key={workspace.orgId}
+                asChild
+                className={cn(
+                  "focus:bg-[#2c2d31] focus:text-white cursor-pointer py-2 px-2 rounded-md transition-colors",
+                  workspace.orgId === currentOrgId && "bg-[#2c2d31] text-white"
+                )}
+              >
+                <Link href={`/org/${workspace.orgId}/projects`} className="flex items-center justify-between w-full">
+                  <div className="flex items-center gap-2 overflow-hidden">
+                    <div className="w-4 h-4 rounded bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shrink-0">
+                      <span className="text-[9px] font-bold text-white leading-none">
+                        {workspace.name?.[0]?.toUpperCase()}
+                      </span>
                     </div>
-                    <span className="truncate text-sm">{workspace.name}</span>
+                    <span className="truncate text-[13px]">{workspace.name}</span>
                   </div>
                   {workspace.hasUnreadInbox && (
-                    <div className="h-1.5 w-1.5 bg-[#eb5757] rounded-full shrink-0" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shadow-glow" />
                   )}
                 </Link>
               </DropdownMenuItem>
             ))}
+            <DropdownMenuSeparator className="bg-[#2c2d31] my-1" />
+            <DropdownMenuItem asChild className="focus:bg-[#2c2d31] focus:text-white cursor-pointer py-2 px-2 rounded-md transition-colors">
+              <Link href="/workspaces/new" className="flex items-center gap-2">
+                <Plus className="h-4 w-4 mr-2" />
+                New Workspace
+              </Link>
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
 
-      {/* Search Button (Triggers Modal) */}
-      <div className="px-3 py-2">
+      {/* Quick Actions / Search */}
+      <div className="px-3 pb-2">
         <button
           onClick={() => setIsSearchModalOpen(true)}
-          className="w-full flex items-center justify-between px-2.5 h-9 rounded-md bg-[#2c2d31] border border-[#3b3c40] text-[#7b7c7e] hover:text-[#d1d2d5] transition-all group shadow-inner"
+          className="flex items-center w-full px-3 py-1.5 text-[13px] text-[#7b7c7e] bg-[#000000]/20 hover:bg-[#000000]/40 border border-[#2c2d31] rounded-md transition-colors group"
         >
-          <div className="flex items-center gap-2.5">
-            <SearchIcon className="h-4 w-4 transition-colors group-hover:text-white" />
-            <span className="text-[13px] font-medium">Search...</span>
-          </div>
-          <div className="flex items-center gap-1.5 px-1.5 py-0.5 rounded bg-[#3b3c40] border border-[#4c4d52] text-[10px] font-bold text-[#d1d2d5]">
-            <span className="opacity-60">⌘</span>
-            <span>K</span>
-          </div>
+          <SearchIcon className="h-3.5 w-3.5 mr-2 group-hover:text-[#d1d2d5]" />
+          <span className="group-hover:text-[#d1d2d5]">Search...</span>
+          <kbd className="ml-auto pointer-events-none inline-flex h-4 items-center gap-1 rounded border border-[#2c2d31] bg-[#2c2d31]/50 px-1.5 font-mono text-[10px] font-medium text-[#7b7c7e] opacity-100">
+            <span className="text-xs">⌘</span>K
+          </kbd>
         </button>
       </div>
 
-      {/* Main Navigation */}
-      <div className="flex-1 overflow-y-auto px-1.5 pb-4 custom-scrollbar">
-        {currentOrgId && currentOrgId !== "undefined" ? (
-          <>
-            <div className="space-y-0.5">
-              <NavItem
-                href={`/org/${currentOrgId}/projects`}
-                icon={Home}
-                label="Home"
-                isActive={pathname === `/org/${currentOrgId}/projects`}
-              />
-              <NavItem
-                href={`/org/${currentOrgId}/inbox`}
-                icon={Inbox}
-                label="Inbox"
-                isActive={pathname.includes("/inbox")}
-                unread={currentWorkspace?.hasUnreadInbox}
-              />
-            </div>
+      <ScrollArea className="flex-1">
+        <div className="space-y-6 p-3 pt-0">
+          {/* Main Navigation */}
+          <div className="space-y-0.5">
+            <NavItem
+              href={`/org/${currentOrgId}/projects`}
+              icon={Home}
+              label="Home"
+              active={pathname === `/org/${currentOrgId}/projects`}
+            />
+            <NavItem
+              href={`/org/${currentOrgId}/inbox`}
+              icon={Inbox}
+              label="Inbox"
+              active={pathname === `/org/${currentOrgId}/inbox`}
+              hasIndicator={currentWorkspace?.hasUnreadInbox}
+            />
+          </div>
 
-            {/* Favorites Section */}
-            {favoriteProjects.length > 0 && (
-              <div className="mt-6 pt-2">
-                <div className="flex items-center justify-between px-3 mb-1 group">
-                  <div className="flex items-center gap-2 text-[11px] font-bold text-[#7b7c7e] uppercase tracking-wider">
-                    <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" /> Favorites
-                  </div>
-                </div>
-                <div className="space-y-0.5">
-                  {favoriteProjects.map((project) => (
-                    <Link
-                      key={project.id}
-                      href={`/org/${currentOrgId}/projects/${project.id}/graph`}
-                      className={cn(
-                        "flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] transition-colors group",
-                        currentProjectId === project.id
-                          ? "bg-[#2c2d31] text-white"
-                          : "text-[#d1d2d5] hover:bg-[#2c2d31] hover:text-white"
-                      )}
+          <DragDropContext onDragEnd={onDragEnd}>
+            {/* Subjects & Projects */}
+            <div className="space-y-1">
+              <div className="px-3 mb-2 flex items-center justify-between group">
+                <div className="text-[11px] font-bold text-[#7b7c7e] uppercase tracking-wider">Subjects</div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 hover:bg-[#2c2d31] rounded">
+                      <Plus className="h-3.5 w-3.5 text-[#7b7c7e]" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="w-64 bg-[#1a1b1e] border-[#2c2d31] text-[#d1d2d5] p-1.5" align="start" side="right" sideOffset={10}>
+                    <DropdownMenuItem
+                      className="focus:bg-[#2c2d31] focus:text-white cursor-pointer py-3 px-3 rounded-md transition-colors"
+                      onClick={() => setIsSubjectModalOpen(true)}
                     >
-                      <Star className={cn("h-4 w-4 shrink-0 fill-yellow-400 text-yellow-400 opacity-60", currentProjectId === project.id && "opacity-100")} />
-                      <span className="truncate">{project.name}</span>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="px-3 mb-2 flex items-center justify-between group">
-              <div className="text-[11px] font-bold text-[#7b7c7e] uppercase tracking-wider">Subjects</div>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 hover:bg-[#2c2d31] rounded">
-                    <Plus className="h-3.5 w-3.5 text-[#7b7c7e]" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-64 bg-[#1a1b1e] border-[#2c2d31] text-[#d1d2d5] p-1.5" align="start" side="right" sideOffset={10}>
-                  <DropdownMenuItem
-                    className="focus:bg-[#2c2d31] focus:text-white cursor-pointer py-3 px-3 rounded-md transition-colors"
-                    onClick={() => setIsSubjectModalOpen(true)}
-                  >
-                    <div className="flex flex-col gap-1">
-                      <div className="flex items-center gap-2">
-                        <Plus className="h-4 w-4 text-blue-400" />
-                        <span className="text-[14px] font-bold text-white">Subject</span>
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2">
+                          <Plus className="h-4 w-4 text-blue-400" />
+                          <span className="text-[14px] font-bold text-white">Subject</span>
+                        </div>
+                        <span className="text-[11px] text-[#7b7c7e] leading-tight pl-6">Create a new organizational divider</span>
                       </div>
-                      <span className="text-[11px] text-[#7b7c7e] leading-tight pl-6">Create a new organizational divider</span>
-                    </div>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator className="bg-[#2c2d31] my-1" />
-                  <DropdownMenuItem asChild className="focus:bg-[#2c2d31] focus:text-white cursor-pointer py-2.5 px-3 rounded-md transition-colors">
-                    <Link href={`/org/${currentOrgId}/projects/new`} className="flex items-center w-full">
-                      <FolderKanban className="h-4 w-4 mr-2 text-[#7b7c7e]" />
-                      <span className="text-[13px] font-medium">Project</span>
-                    </Link>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-
-            <div className="space-y-4">
-              {sidebarGroupedProjects.subjects.map((subject) => {
-                const subjectProjects = sidebarGroupedProjects.grouped.get(subject.id) || [];
-                if (subjectProjects.length === 0) return null;
-
-                return (
-                  <div key={subject.id} className="space-y-0.5">
-                    <div className="px-3 py-1 flex items-center gap-2 text-[10px] font-bold text-[#7b7c7e]/60 uppercase tracking-widest border-b border-[#2c2d31]/30 mb-1">
-                      <div className="w-1 h-1 rounded-full" style={{ backgroundColor: subject.color }} />
-                      {subject.name}
-                    </div>
-                    {subjectProjects.map((project) => (
-                      <Link
-                        key={project.id}
-                        href={`/org/${currentOrgId}/projects/${project.id}/graph`}
-                        className={cn(
-                          "flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] transition-colors group",
-                          currentProjectId === project.id
-                            ? "bg-[#2c2d31] text-white"
-                            : "text-[#d1d2d5] hover:bg-[#2c2d31] hover:text-white"
-                        )}
-                      >
-                        <FolderKanban className={cn("h-4 w-4 shrink-0 opacity-60", currentProjectId === project.id && "opacity-100")} />
-                        <span className="truncate">{project.name}</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator className="bg-[#2c2d31] my-1" />
+                    <DropdownMenuItem asChild className="focus:bg-[#2c2d31] focus:text-white cursor-pointer py-2.5 px-3 rounded-md transition-colors">
+                      <Link href={`/org/${currentOrgId}/projects/new`} className="flex items-center w-full">
+                        <FolderKanban className="h-4 w-4 mr-2 text-[#7b7c7e]" />
+                        <span className="text-[13px] font-medium">Project</span>
                       </Link>
-                    ))}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+
+              {/* Droppable Area for Subjects */}
+              <Droppable droppableId="sidebar-subjects" type="SUBJECT">
+                {(provided) => (
+                  <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-4">
+                    {sidebarGroupedProjects.subjects.map((subject, index) => {
+                      const subjectProjects = localGroupedProjects.get(subject.id) || [];
+                      if (subjectProjects.length === 0) return (
+                        <Draggable key={subject.id} draggableId={subject.id} index={index}>
+                          {(provided) =>
+                            <div
+                              ref={provided.innerRef}
+                              {...provided.draggableProps}
+                            // Drag handle on the header
+                            >
+                              <div {...provided.dragHandleProps} className="px-3 py-1 flex items-center gap-2 text-[10px] font-bold text-[#7b7c7e]/60 uppercase tracking-widest border-b border-[#2c2d31]/30 mb-1">
+                                <div className="w-1 h-1 rounded-full" style={{ backgroundColor: subject.color }} />
+                                {subject.name}
+                              </div>
+                              {/* Empty droppable for projects so we can drop into empty subject */}
+                              <Droppable droppableId={subject.id} type="PROJECT">
+                                {(provided) => (
+                                  <div ref={provided.innerRef} {...provided.droppableProps} className="min-h-[10px]">
+                                    {provided.placeholder}
+                                  </div>
+                                )}
+                              </Droppable>
+                            </div>
+                          }
+                        </Draggable>
+                      );
+
+                      return (
+                        <Draggable key={subject.id} draggableId={subject.id} index={index}>
+                          {(providedDrag) => (
+                            <div ref={providedDrag.innerRef} {...providedDrag.draggableProps}>
+                              <div
+                                {...providedDrag.dragHandleProps}
+                                className="px-3 py-1 flex items-center gap-2 text-[10px] font-bold text-[#7b7c7e]/60 uppercase tracking-widest border-b border-[#2c2d31]/30 mb-1 group-h"
+                              >
+                                <div className="w-1 h-1 rounded-full" style={{ backgroundColor: subject.color }} />
+                                {subject.name}
+                              </div>
+
+                              <Droppable droppableId={subject.id} type="PROJECT">
+                                {(providedDrop, snapshot) => (
+                                  <div
+                                    ref={providedDrop.innerRef}
+                                    {...providedDrop.droppableProps}
+                                    className={cn(snapshot.isDraggingOver && "bg-zinc-800/30 rounded")}
+                                  >
+                                    {subjectProjects.map((project: any, pIndex: number) => (
+                                      <Draggable key={project.id} draggableId={project.id} index={pIndex}>
+                                        {(providedP, snapshotP) => (
+                                          <div
+                                            ref={providedP.innerRef}
+                                            {...providedP.draggableProps}
+                                            {...providedP.dragHandleProps}
+                                            style={{ ...providedP.draggableProps.style }}
+                                          >
+                                            <Link
+                                              href={`/org/${currentOrgId}/projects/${project.id}/graph`}
+                                              className={cn(
+                                                "flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] transition-colors group",
+                                                currentProjectId === project.id
+                                                  ? "bg-[#2c2d31] text-white"
+                                                  : "text-[#d1d2d5] hover:bg-[#2c2d31] hover:text-white",
+                                                snapshotP.isDragging && "opacity-50"
+                                              )}
+                                            >
+                                              <FolderKanban className={cn("h-4 w-4 shrink-0 opacity-60", currentProjectId === project.id && "opacity-100")} />
+                                              <span className="truncate">{project.name}</span>
+                                            </Link>
+                                          </div>
+                                        )}
+                                      </Draggable>
+                                    ))}
+                                    {providedDrop.placeholder}
+                                  </div>
+                                )}
+                              </Droppable>
+                            </div>
+                          )}
+                        </Draggable>
+                      );
+                    })}
+                    {provided.placeholder}
                   </div>
-                );
-              })}
+                )}
+              </Droppable>
 
               {/* Unfiled Projects */}
-              {(sidebarGroupedProjects.grouped.get("unfiled") || []).length > 0 && (
-                <div className="space-y-0.5">
+              {(localGroupedProjects.get("unfiled") || []).length > 0 && (
+                <div className="space-y-0.5 mt-4">
                   <div className="px-3 py-1 text-[10px] font-bold text-[#7b7c7e]/60 uppercase tracking-widest border-b border-[#2c2d31]/30 mb-1">
                     Unfiled
                   </div>
-                  {(sidebarGroupedProjects.grouped.get("unfiled") || []).map((project) => (
-                    <Link
-                      key={project.id}
-                      href={`/org/${currentOrgId}/projects/${project.id}/graph`}
-                      className={cn(
-                        "flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] transition-colors group",
-                        currentProjectId === project.id
-                          ? "bg-[#2c2d31] text-white"
-                          : "text-[#d1d2d5] hover:bg-[#2c2d31] hover:text-white"
-                      )}
-                    >
-                      <FolderKanban className={cn("h-4 w-4 shrink-0 opacity-60", currentProjectId === project.id && "opacity-100")} />
-                      <span className="truncate">{project.name}</span>
-                    </Link>
-                  ))}
+                  <Droppable droppableId="unfiled" type="PROJECT">
+                    {(provided, snapshot) => (
+                      <div
+                        ref={provided.innerRef}
+                        {...provided.droppableProps}
+                        className={cn(snapshot.isDraggingOver && "bg-zinc-800/30 rounded")}
+                      >
+                        {(localGroupedProjects.get("unfiled") || []).map((project: any, index: number) => (
+                          <Draggable key={project.id} draggableId={project.id} index={index}>
+                            {(providedP) => (
+                              <div
+                                ref={providedP.innerRef}
+                                {...providedP.draggableProps}
+                                {...providedP.dragHandleProps}
+                              >
+                                <Link
+                                  href={`/org/${currentOrgId}/projects/${project.id}/graph`}
+                                  className={cn(
+                                    "flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] transition-colors group",
+                                    currentProjectId === project.id
+                                      ? "bg-[#2c2d31] text-white"
+                                      : "text-[#d1d2d5] hover:bg-[#2c2d31] hover:text-white"
+                                  )}
+                                >
+                                  <FolderKanban className={cn("h-4 w-4 shrink-0 opacity-60", currentProjectId === project.id && "opacity-100")} />
+                                  <span className="truncate">{project.name}</span>
+                                </Link>
+                              </div>
+                            )}
+                          </Draggable>
+                        ))}
+                        {provided.placeholder}
+                      </div>
+                    )}
+                  </Droppable>
                 </div>
               )}
             </div>
-          </>
-        ) : (
-          <div className="px-3 py-12 text-center">
-            <p className="text-xs text-[#7b7c7e]">Please select a workspace</p>
-          </div>
-        )}
-      </div>
+          </DragDropContext>
 
-      {/* Sidebar Footer */}
-      <div className="mt-auto p-1.5 border-t border-[#2c2d31] bg-[#1a1b1e]/50">
-        {currentOrgId && currentOrgId !== "undefined" && (
-          <NavItem
-            href={`/org/${currentOrgId}/settings`}
-            icon={Settings}
-            label="Settings"
-            isActive={pathname.includes("/settings") && !pathname.includes("/profile")}
-          />
-        )}
-        <div className="mt-1">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                className="w-full justify-start gap-2.5 h-11 px-3 text-[#d1d2d5] hover:bg-[#2c2d31] hover:text-white"
-              >
-                <Avatar className="h-5 w-5 border border-[#2c2d31]">
-                  <AvatarImage src={session?.user?.image || undefined} />
-                  <AvatarFallback className="bg-[#37352f] text-[10px] text-white font-bold">{initials}</AvatarFallback>
-                </Avatar>
-                <div className="flex-1 text-left truncate">
-                  <div className="text-[13px] font-medium truncate">{session?.user?.name || "My Account"}</div>
-                  <div className="text-[10px] text-[#7b7c7e] truncate">{session?.user?.email}</div>
-                </div>
-                <ChevronDown className="h-3 w-3 text-[#7b7c7e] shrink-0" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-56 bg-[#1a1b1e] border-[#2c2d31] text-[#d1d2d5]" align="end" side="right">
-              <DropdownMenuItem asChild className="focus:bg-[#2c2d31] focus:text-white hover:bg-[#2c2d31] hover:text-white cursor-pointer">
-                <Link href="/settings/profile" className="flex items-center w-full">
-                  <UserCircle2 className="h-3.5 w-3.5 mr-2" />
-                  <span>Profile Settings</span>
+          {/* Favorites (Read Only for now, but could be draggable too) */}
+          {favoriteProjects.length > 0 && (
+            <div className="space-y-0.5 mt-4">
+              <div className="px-3 py-1 text-[10px] font-bold text-[#7b7c7e]/60 uppercase tracking-widest border-b border-[#2c2d31]/30 mb-1">
+                Favorites
+              </div>
+              {favoriteProjects.map((project) => (
+                <Link
+                  key={`fav-${project.id}`}
+                  href={`/org/${currentOrgId}/projects/${project.id}/graph`}
+                  className={cn(
+                    "flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] transition-colors group",
+                    currentProjectId === project.id
+                      ? "bg-[#2c2d31] text-white"
+                      : "text-[#d1d2d5] hover:bg-[#2c2d31] hover:text-white"
+                  )}
+                >
+                  <Star className={cn("h-4 w-4 shrink-0 fill-yellow-400 text-yellow-400 opacity-60", currentProjectId === project.id && "opacity-100")} />
+                  <span className="truncate">{project.name}</span>
                 </Link>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator className="bg-[#2c2d31]" />
-              <DropdownMenuItem
-                onClick={() => signOut({ callbackUrl: "/login" })}
-                className="focus:bg-[#2c2d31] focus:text-white hover:bg-[#2c2d31] hover:text-white cursor-pointer text-red-400 focus:text-red-400"
-              >
-                <LogOut className="h-3.5 w-3.5 mr-2" />
-                <span>Sign out</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+              ))}
+            </div>
+          )}
         </div>
+      </ScrollArea>
+
+      {/* User / Settings Footer */}
+      <div className="p-3 border-t border-[#2c2d31] bg-[#1a1b1e]">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="flex items-center gap-3 w-full p-2 hover:bg-[#2c2d31] rounded-lg transition-colors group">
+              <Avatar className="h-8 w-8 rounded-md border border-[#2c2d31]">
+                <AvatarImage src={session?.user?.image || ""} />
+                <AvatarFallback className="bg-[#2c2d31] text-white text-xs rounded-md">
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex flex-col items-start flex-1 overflow-hidden">
+                <span className="text-[13px] font-medium text-white truncate w-full text-left">
+                  {session?.user?.name || "User"}
+                </span>
+                <span className="text-[11px] text-[#7b7c7e] truncate w-full text-left">
+                  {session?.user?.email}
+                </span>
+              </div>
+              <ChevronDown className="h-4 w-4 text-[#7b7c7e] group-hover:text-white transition-colors" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="w-56 bg-[#1a1b1e] border-[#2c2d31] text-[#d1d2d5] mb-2" align="start" side="top" sideOffset={8}>
+            <div className="px-2 py-1.5 flex items-center gap-2">
+              <Avatar className="h-8 w-8 rounded-md border border-[#2c2d31]">
+                <AvatarImage src={session?.user?.image || ""} />
+                <AvatarFallback className="bg-[#2c2d31] text-white text-xs rounded-md">
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex flex-col">
+                <span className="text-[13px] font-medium text-white">
+                  {session?.user?.name || "User"}
+                </span>
+                <span className="text-[11px] text-[#7b7c7e]">
+                  {session?.user?.email}
+                </span>
+              </div>
+            </div>
+            <DropdownMenuSeparator className="bg-[#2c2d31] my-1" />
+            <DropdownMenuItem asChild className="focus:bg-[#2c2d31] focus:text-white cursor-pointer">
+              <Link href="/settings" className="flex items-center">
+                <Settings className="h-4 w-4 mr-2" />
+                Settings
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild className="focus:bg-[#2c2d31] focus:text-white cursor-pointer">
+              <Link href={`/org/${currentOrgId}/settings/members`} className="flex items-center">
+                <Users2 className="h-4 w-4 mr-2" />
+                Members
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator className="bg-[#2c2d31] my-1" />
+            <DropdownMenuItem
+              className="focus:bg-red-900/20 focus:text-red-400 text-red-500 cursor-pointer"
+              onClick={() => signOut({ callbackUrl: "/login" })}
+            >
+              <LogOut className="h-4 w-4 mr-2" />
+              Log out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <SubjectCreationModal
         isOpen={isSubjectModalOpen}
         onClose={() => setIsSubjectModalOpen(false)}
-        onCreated={handleCreateSubject}
+        onSubmit={handleCreateSubject}
       />
 
       <GlobalSearchModal
         isOpen={isSearchModalOpen}
         onClose={() => setIsSearchModalOpen(false)}
-        orgId={currentOrgId}
-        projects={enrichedProjects}
-        subjects={mockSubjects}
         onSearch={handleSearch}
+        onSelect={(payload) => {
+          if (payload.type === 'project') {
+            router.push(`/org/${currentOrgId}/projects/${payload.id}/graph`);
+          }
+        }}
       />
-    </div >
+    </div>
   );
 }

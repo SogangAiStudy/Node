@@ -134,7 +134,7 @@ export async function GET(request: NextRequest) {
 
         const teams = await prisma.team.findMany({
             where: {
-                orgId,
+                orgId: orgMember.orgId,
             },
             include: {
                 _count: {

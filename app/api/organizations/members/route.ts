@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
         // Fetch all members of the organization
         const members = await prisma.orgMember.findMany({
             where: {
-                orgId,
+                orgId: orgMember.orgId,
             },
             include: {
                 user: {
@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
         // Fetch team memberships for these members
         const teamMemberships = await prisma.teamMember.findMany({
             where: {
-                orgId,
+                orgId: orgMember.orgId,
             },
             include: {
                 team: {

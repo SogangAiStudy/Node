@@ -11,19 +11,12 @@ import { Search, FolderKanban, Layers, Command } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 
-interface SearchResult {
-    id: string;
-    name: string;
-    type: "project" | "subject";
-}
-
 interface GlobalSearchModalProps {
     isOpen: boolean;
     onClose: () => void;
-    orgId: string;
-    projects: any[];
-    subjects: any[];
+    orgId?: string;
     onSearch: (query: string) => { projects: any[]; subjects: any[] };
+    onSelect: (item: any) => void;
 }
 
 export function GlobalSearchModal({
@@ -31,6 +24,7 @@ export function GlobalSearchModal({
     onClose,
     orgId,
     onSearch,
+    onSelect,
 }: GlobalSearchModalProps) {
     const router = useRouter();
     const [query, setQuery] = useState("");

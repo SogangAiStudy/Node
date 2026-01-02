@@ -60,7 +60,7 @@ export const mockPreviewThumbnails = [
  * Enrich project data with mock workspace metadata
  * This simulates what would come from the backend API
  */
-export function enrichProjectWithWorkspaceData<T extends { id: string; updatedAt?: string; isFavorite?: boolean; subjectId?: string }>(
+export function enrichProjectWithWorkspaceData<T extends { id: string; updatedAt?: string; isFavorite?: boolean; subjectId?: string | null }>(
     project: T,
     index: number = 0
 ): T & {
