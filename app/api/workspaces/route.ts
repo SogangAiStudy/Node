@@ -11,7 +11,9 @@ export async function GET() {
     const orgMemberships = await prisma.orgMember.findMany({
       where: {
         userId: user.id,
-        status: "ACTIVE",
+        status: {
+          in: ["ACTIVE", "PENDING_TEAM_ASSIGNMENT"],
+        },
       },
       include: {
         organization: {
