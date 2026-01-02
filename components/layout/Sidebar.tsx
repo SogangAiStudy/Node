@@ -210,6 +210,11 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
     return projects.map((p, i) => enrichProjectWithWorkspaceData(p, i));
   }, [projects]);
 
+  console.log("Sidebar Debug: OrgId", currentOrgId);
+  console.log("Sidebar Debug: Projects Raw", projects);
+  console.log("Sidebar Debug: Subjects Raw", subjectsData?.subjects);
+  console.log("Sidebar Debug: Enriched Projects", enrichedProjects);
+
   // Search functionality (for use by the modal)
   const handleSearch = useCallback((query: string) => {
     if (!query.trim()) return { projects: [], subjects: [] };
@@ -256,6 +261,12 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
         const existing = grouped.get(subjectId) || [];
         grouped.set(subjectId, [...existing, p]);
       }
+    });
+
+    console.log("Sidebar Debug: Grouped", {
+      subjectsCount: allKnownSubjects.length,
+      unfiledCount: grouped.get("unfiled")?.length,
+      keys: Array.from(grouped.keys())
     });
 
     return {
