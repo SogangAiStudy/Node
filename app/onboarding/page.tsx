@@ -30,20 +30,20 @@ export default function OnboardingPage() {
   const [isCreating, setIsCreating] = useState(false);
 
   // Check if user already has an organization and redirect
-  const { data: orgStatus } = useQuery({
-    queryKey: ["organization-status"],
+  const { data: workspaces, isLoading: isCheckingWorkspaces } = useQuery({
+    queryKey: ["workspaces"],
     queryFn: async () => {
-      const res = await fetch("/api/user/organization-status");
-      if (!res.ok) return null;
-      return res.json() as Promise<{ hasOrganization: boolean }>;
+      const res = await fetch("/api/workspaces");
+      if (!res.ok) return [];
+      return res.json() as Promise<Array<{ orgId: string; name: string; hasUnreadInbox: boolean }>>;
     },
   });
 
   useEffect(() => {
-    if (orgStatus?.hasOrganization) {
-      router.push("/");
+    if (!isCheckingWorkspaces && workspaces && workspaces.length > 0) {
+      router.push(`/org/${workspaces[0].orgId}/projects`);
     }
-  }, [orgStatus, router]);
+  }, [workspaces, isCheckingWorkspaces, router]);
 
   // Search logic
   useEffect(() => {
@@ -111,9 +111,10 @@ export default function OnboardingPage() {
         throw new Error(data.error || "Failed to create organization");
       }
 
+      const orgData = await res.json();
       toast.success("Organization created successfully!");
-      await queryClient.invalidateQueries({ queryKey: ["organization-status"] });
-      router.push("/");
+      await queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+      router.push(`/org/${orgData.id}/projects`);
       router.refresh();
     } catch (err: any) {
       toast.error(err.message);
