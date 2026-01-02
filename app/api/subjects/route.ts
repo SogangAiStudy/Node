@@ -27,7 +27,10 @@ export async function GET(request: NextRequest) {
 
         const subjects = await prisma.subject.findMany({
             where: { orgId },
-            orderBy: { name: "asc" },
+            orderBy: [
+                { order: "asc" },
+                { name: "asc" },
+            ],
         });
 
         return NextResponse.json({ subjects });

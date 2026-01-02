@@ -176,6 +176,7 @@ model Project {
   orgId         String
   primaryTeamId String?
   updatedAt     DateTime        @updatedAt
+  order         Float           @default(0)
   ownerId       String
   activityLogs  ActivityLog[]
   edges         Edge[]
@@ -411,6 +412,7 @@ model Subject {
   color       String   @default("#3b82f6")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  order       Float    @default(0)
   projects    Project[]
 
   organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
