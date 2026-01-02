@@ -170,13 +170,6 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
                 </Link>
               </DropdownMenuItem>
             ))}
-            <DropdownMenuSeparator className="bg-[#2c2d31]" />
-            <DropdownMenuItem asChild className="focus:bg-[#2c2d31] focus:text-white cursor-pointer">
-              <Link href="/onboarding" className="flex items-center gap-2">
-                <Plus className="h-3.5 w-3.5" />
-                <span className="text-sm">Create or Join</span>
-              </Link>
-            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
