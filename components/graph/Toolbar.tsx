@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { AddNodeDialog } from "./AddNodeDialog";
 import { AddEdgeDialog } from "./AddEdgeDialog";
+import { ShareButton } from "@/components/project/ShareButton";
 
 interface ToolbarProps {
   projectId: string;
@@ -105,6 +106,10 @@ export function Toolbar({
             Connect
           </Button>
         </div>
+
+        <div className="h-6 w-px bg-slate-200" />
+
+        <ShareButton projectId={projectId} orgId={orgId} />
 
         <div className="h-6 w-px bg-slate-200" />
 
