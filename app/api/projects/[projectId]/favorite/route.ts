@@ -21,7 +21,7 @@ export async function PATCH(
             where: {
                 projectId_userId: {
                     projectId,
-                    userId: session.user.id,
+                    userId: session.id,
                 },
             },
         });
@@ -38,7 +38,7 @@ export async function PATCH(
             where: {
                 projectId_userId: {
                     projectId,
-                    userId: session.user.id,
+                    userId: session.id,
                 },
             },
             data: {
