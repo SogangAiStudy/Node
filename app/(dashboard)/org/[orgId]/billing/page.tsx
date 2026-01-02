@@ -1,4 +1,4 @@
-import { auth } from "@/auth";
+import { requireAuth } from "@/lib/utils/auth";
 import { prisma } from "@/lib/db/prisma";
 import { redirect } from "next/navigation";
 import { isOrgPro } from "@/lib/subscription";
@@ -9,10 +9,7 @@ export default async function BillingPage({
 }: {
     params: Promise<{ orgId: string }>;
 }) {
-    const session = await auth();
-    if (!session?.id) {
-        redirect("/");
-    }
+    const user = await requireAuth();
 
     const { orgId } = await params;
 
@@ -21,11 +18,11 @@ export default async function BillingPage({
         where: {
             id: orgId,
             OR: [
-                { ownerId: session.id },
+                { ownerId: user.id },
                 {
                     members: {
                         some: {
-                            userId: session.id,
+                            userId: user.id,
                         },
                     },
                 },

@@ -17,7 +17,7 @@ interface BillingPageClientProps {
 export default function BillingPageClient({
     orgId,
     isOrgPro,
-    nodeCount,
+    nodeCount = 0,
     stripeCustomerId,
 }: BillingPageClientProps) {
     const [loading, setLoading] = useState(false);
