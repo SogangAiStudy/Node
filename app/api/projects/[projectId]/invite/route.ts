@@ -25,6 +25,19 @@ export async function POST(
 
         const { email, role } = InviteSchema.parse(body);
 
+        // Get project to verify organization
+        const project = await prisma.project.findUnique({
+            where: { id: projectId },
+            select: { orgId: true },
+        });
+
+        if (!project) {
+            return NextResponse.json(
+                { error: "Project not found" },
+                { status: 404 }
+            );
+        }
+
         // Find user by email
         const user = await prisma.user.findUnique({
             where: { email },
@@ -34,6 +47,23 @@ export async function POST(
             return NextResponse.json(
                 { error: "User not found. They need to sign up first." },
                 { status: 404 }
+            );
+        }
+
+        // Verify user is member of the organization
+        const orgMember = await prisma.orgMember.findUnique({
+            where: {
+                orgId_userId: {
+                    orgId: project.orgId,
+                    userId: user.id,
+                },
+            },
+        });
+
+        if (!orgMember) {
+            return NextResponse.json(
+                { error: "User is not a member of this organization" },
+                { status: 403 }
             );
         }
 
