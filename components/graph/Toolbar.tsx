@@ -1,5 +1,3 @@
-"use client";
-
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -28,8 +26,15 @@ import {
 } from "lucide-react";
 import { AddNodeDialog } from "./AddNodeDialog";
 import { AddEdgeDialog } from "./AddEdgeDialog";
+import { cn } from "@/lib/utils";
+
+interface Team {
+  id: string;
+  name: string;
+}
 
 interface ToolbarProps {
+  orgId: string;
   projectId: string;
   orgId: string;
   filterStatus: string;
@@ -38,10 +43,13 @@ interface ToolbarProps {
   onTeamFilterChange: (ids: string[]) => void;
   searchQuery: string;
   onSearchChange: (query: string) => void;
+  selectedTeamIds: string[];
+  onTeamChange: (ids: string[]) => void;
   onDataChange: () => void;
 }
 
 export function Toolbar({
+  orgId,
   projectId,
   orgId,
   filterStatus,
@@ -50,6 +58,8 @@ export function Toolbar({
   onTeamFilterChange,
   searchQuery,
   onSearchChange,
+  selectedTeamIds,
+  onTeamChange,
   onDataChange,
 }: ToolbarProps) {
   const [addNodeOpen, setAddNodeOpen] = useState(false);
@@ -213,6 +223,7 @@ export function Toolbar({
         </div>
       </div>
 
+      {/* Dialogs */}
       <AddNodeDialog
         projectId={projectId}
         orgId={orgId}

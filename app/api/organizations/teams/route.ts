@@ -97,7 +97,8 @@ export async function POST(request: NextRequest) {
 
 /**
  * GET /api/organizations/teams
- * List all teams in the user's current organization
+ * List all teams in a specific organization
+ * Query params: orgId (required)
  */
 export async function GET(request: NextRequest) {
     try {
@@ -125,10 +126,11 @@ export async function GET(request: NextRequest) {
         }
 
         if (!orgMember) {
-            return NextResponse.json({ teams: [] });
+            return NextResponse.json(
+                { error: "Access denied to this organization" },
+                { status: 403 }
+            );
         }
-
-        const orgId = orgMember.orgId;
 
         const teams = await prisma.team.findMany({
             where: {

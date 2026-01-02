@@ -212,6 +212,20 @@ export function AddNodeDialog({ projectId, orgId, open, onOpenChange, onSuccess 
                   />
                 </div>
               </div>
+            </div>
+
+            <div className="grid gap-4">
+              <div className="grid gap-2">
+                <Label className="text-sm font-medium">Owners</Label>
+                <MultiSelectSearch
+                  items={ownerItems}
+                  selectedIds={ownerIds}
+                  onSelect={(id: string) => setOwnerIds((prev: string[]) => [...prev, id])}
+                  onRemove={(id: string) => setOwnerIds((prev: string[]) => prev.filter((i: string) => i !== id))}
+                  placeholder="Select owners"
+                  searchPlaceholder="Search people..."
+                />
+              </div>
 
               <div className="grid gap-2">
                 <Label htmlFor="description" className="text-sm font-medium">Description (optional)</Label>

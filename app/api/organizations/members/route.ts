@@ -39,10 +39,11 @@ export async function GET(request: NextRequest) {
         }
 
         if (!orgMember) {
-            return NextResponse.json({ members: [] });
+            return NextResponse.json(
+                { error: "Access denied to this organization" },
+                { status: 403 }
+            );
         }
-
-        const orgId = orgMember.orgId;
 
         // Fetch all members of the organization
         const members = await prisma.orgMember.findMany({
@@ -93,13 +94,13 @@ export async function GET(request: NextRequest) {
         });
 
         const memberDTOs = members.map((om: any) => ({
-            id: om.id,
             userId: om.userId,
-            name: om.user.name,
-            email: om.user.email,
-            image: om.user.image,
+            userName: om.user.name,
+            userEmail: om.user.email,
+            userImage: om.user.image,
             role: om.role,
             status: om.status,
+            teamName: userTeams[om.userId]?.[0]?.name || null,
             teams: userTeams[om.userId] || [],
             joinedAt: om.createdAt.toISOString(),
         }));

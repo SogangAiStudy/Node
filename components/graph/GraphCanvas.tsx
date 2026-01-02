@@ -36,6 +36,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
 interface GraphCanvasProps {
+  orgId: string;
   projectId: string;
   orgId: string;
   data: GraphData;
@@ -345,6 +346,7 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
   return (
     <div className="relative h-full w-full rounded-lg border bg-white overflow-hidden shadow-inner">
       <Toolbar
+        orgId={orgId}
         projectId={projectId}
         orgId={orgId}
         filterStatus={filterStatus}
@@ -353,6 +355,8 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
         onTeamFilterChange={setSelectedTeamIds}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
+        selectedTeamIds={selectedTeamIds}
+        onTeamChange={setSelectedTeamIds}
         onDataChange={onDataChange}
       />
 
