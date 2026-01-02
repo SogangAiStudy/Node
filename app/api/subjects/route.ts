@@ -42,9 +42,11 @@ export async function POST(request: NextRequest) {
     try {
         const user = await requireAuth();
         const body = await request.json();
+        console.log(`[DEBUG] POST /api/subjects - User: ${user.id}, Body:`, JSON.stringify(body));
         const validated = CreateSubjectSchema.parse(body);
 
         if (!(await isOrgMember(validated.orgId, user.id))) {
+            console.error("POST /api/subjects error: User is not member of org", validated.orgId);
             return NextResponse.json({ error: "Not a member of this organization" }, { status: 403 });
         }
 
@@ -58,11 +60,16 @@ export async function POST(request: NextRequest) {
         });
 
         return NextResponse.json({ subject }, { status: 201 });
-    } catch (error) {
+    } catch (error: any) {
         console.error("POST /api/subjects error:", error);
+
+        if (error.code === 'P2002') {
+            return NextResponse.json({ error: "A subject with this name already exists in this organization" }, { status: 409 });
+        }
+
         if (error instanceof z.ZodError) {
             return NextResponse.json({ error: "Invalid input", details: error.flatten() }, { status: 400 });
         }
-        return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+        return NextResponse.json({ error: "Internal Server Error", message: error.message }, { status: 500 });
     }
 }

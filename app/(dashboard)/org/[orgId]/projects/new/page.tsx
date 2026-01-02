@@ -101,7 +101,7 @@ export default function NewProjectPage() {
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!name || selectedTeamIds.length === 0) return;
+        if (!name) return;
 
         createProjectMutation.mutate({
             name,
@@ -174,9 +174,9 @@ export default function NewProjectPage() {
                     <div className="flex items-center justify-between">
                         <div className="space-y-1">
                             <label className="text-sm font-semibold text-[#1a1b1e] flex items-center gap-2">
-                                <Users className="h-4 w-4" /> Assign Teams
+                                <Users className="h-4 w-4" /> Assign Teams (Optional)
                             </label>
-                            <p className="text-xs text-[#7b7c7e]">Select which teams will have access to this project.</p>
+                            <p className="text-xs text-[#7b7c7e]">Select which teams will have access to this project, or skip for now.</p>
                         </div>
                         {selectedTeamIds.length > 0 && (
                             <span className="text-[11px] font-bold bg-[#f1f1ef] text-[#37352f] px-2 py-0.5 rounded uppercase tracking-wider">
@@ -252,7 +252,7 @@ export default function NewProjectPage() {
                     </Button>
                     <Button
                         type="submit"
-                        disabled={!name || selectedTeamIds.length === 0 || createProjectMutation.isPending}
+                        disabled={!name || createProjectMutation.isPending}
                         className="h-11 px-8 rounded-xl bg-[#37352f] hover:bg-[#1a1b1e] text-white font-semibold transition-all shadow-md shadow-[#37352f]/10"
                     >
                         {createProjectMutation.isPending ? (

@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+// Prisma client re-imported after schema update
 import { Pool } from "pg";
 
 const globalForPrisma = globalThis as unknown as {

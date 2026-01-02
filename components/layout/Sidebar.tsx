@@ -136,15 +136,18 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
         body: JSON.stringify({ orgId: currentOrgId, name }),
       });
 
-      if (!res.ok) throw new Error("Failed to create subject");
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to create subject");
+      }
 
       // Refetch subjects
       refetchSubjects();
       setIsSubjectModalOpen(false);
       toast.success("Subject created");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to create subject:", error);
-      toast.error("Failed to create subject");
+      toast.error(error.message || "Failed to create subject");
     }
   };
 
@@ -162,9 +165,6 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
     return searchWorkspace(enrichedProjects, mockSubjects, query);
   }, [enrichedProjects]);
 
-  // Categorize projects
-  const privateProjects = projects.filter(p => p.teamCount <= 1);
-  const sharedProjects = projects.filter(p => p.teamCount > 1);
 
   // Favorite projects (from enriched data)
   const favoriteProjects = enrichedProjects.filter(p => p.isFavorite);
@@ -351,77 +351,50 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
               </div>
             )}
 
-            {/* Projects Grouped by Subjects */}
-            <div className="mt-6">
-              <div className="px-3 mb-2 flex items-center justify-between group">
-                <div className="text-[11px] font-bold text-[#7b7c7e] uppercase tracking-wider">Workspace</div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 hover:bg-[#2c2d31] rounded">
-                      <Plus className="h-3.5 w-3.5 text-[#7b7c7e]" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent className="w-64 bg-[#1a1b1e] border-[#2c2d31] text-[#d1d2d5] p-1.5" align="start" side="right" sideOffset={10}>
-                    <DropdownMenuItem
-                      className="focus:bg-[#2c2d31] focus:text-white cursor-pointer py-3 px-3 rounded-md transition-colors"
-                      onClick={() => setIsSubjectModalOpen(true)}
-                    >
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-center gap-2">
-                          <Plus className="h-4 w-4 text-blue-400" />
-                          <span className="text-[14px] font-bold text-white">Subject</span>
-                        </div>
-                        <span className="text-[11px] text-[#7b7c7e] leading-tight pl-6">Create a new organizational divider</span>
+            <div className="px-3 mb-2 flex items-center justify-between group">
+              <div className="text-[11px] font-bold text-[#7b7c7e] uppercase tracking-wider">Subjects</div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 hover:bg-[#2c2d31] rounded">
+                    <Plus className="h-3.5 w-3.5 text-[#7b7c7e]" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-64 bg-[#1a1b1e] border-[#2c2d31] text-[#d1d2d5] p-1.5" align="start" side="right" sideOffset={10}>
+                  <DropdownMenuItem
+                    className="focus:bg-[#2c2d31] focus:text-white cursor-pointer py-3 px-3 rounded-md transition-colors"
+                    onClick={() => setIsSubjectModalOpen(true)}
+                  >
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-2">
+                        <Plus className="h-4 w-4 text-blue-400" />
+                        <span className="text-[14px] font-bold text-white">Subject</span>
                       </div>
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator className="bg-[#2c2d31] my-1" />
-                    <DropdownMenuItem asChild className="focus:bg-[#2c2d31] focus:text-white cursor-pointer py-2.5 px-3 rounded-md transition-colors">
-                      <Link href={`/org/${currentOrgId}/projects/new`} className="flex items-center w-full">
-                        <FolderKanban className="h-4 w-4 mr-2 text-[#7b7c7e]" />
-                        <span className="text-[13px] font-medium">Project</span>
-                      </Link>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-
-              <div className="space-y-4">
-                {sidebarGroupedProjects.subjects.map((subject) => {
-                  const subjectProjects = sidebarGroupedProjects.grouped.get(subject.id) || [];
-                  if (subjectProjects.length === 0) return null;
-
-                  return (
-                    <div key={subject.id} className="space-y-0.5">
-                      <div className="px-3 py-1 flex items-center gap-2 text-[10px] font-bold text-[#7b7c7e]/60 uppercase tracking-widest border-b border-[#2c2d31]/30 mb-1">
-                        <div className="w-1 h-1 rounded-full" style={{ backgroundColor: subject.color }} />
-                        {subject.name}
-                      </div>
-                      {subjectProjects.map((project) => (
-                        <Link
-                          key={project.id}
-                          href={`/org/${currentOrgId}/projects/${project.id}/graph`}
-                          className={cn(
-                            "flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] transition-colors group",
-                            currentProjectId === project.id
-                              ? "bg-[#2c2d31] text-white"
-                              : "text-[#d1d2d5] hover:bg-[#2c2d31] hover:text-white"
-                          )}
-                        >
-                          <FolderKanban className={cn("h-4 w-4 shrink-0 opacity-60", currentProjectId === project.id && "opacity-100")} />
-                          <span className="truncate">{project.name}</span>
-                        </Link>
-                      ))}
+                      <span className="text-[11px] text-[#7b7c7e] leading-tight pl-6">Create a new organizational divider</span>
                     </div>
-                  );
-                })}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator className="bg-[#2c2d31] my-1" />
+                  <DropdownMenuItem asChild className="focus:bg-[#2c2d31] focus:text-white cursor-pointer py-2.5 px-3 rounded-md transition-colors">
+                    <Link href={`/org/${currentOrgId}/projects/new`} className="flex items-center w-full">
+                      <FolderKanban className="h-4 w-4 mr-2 text-[#7b7c7e]" />
+                      <span className="text-[13px] font-medium">Project</span>
+                    </Link>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
 
-                {/* Unfiled Projects */}
-                {(sidebarGroupedProjects.grouped.get("unfiled") || []).length > 0 && (
-                  <div className="space-y-0.5">
-                    <div className="px-3 py-1 text-[10px] font-bold text-[#7b7c7e]/60 uppercase tracking-widest border-b border-[#2c2d31]/30 mb-1">
-                      Unfiled
+            <div className="space-y-4">
+              {sidebarGroupedProjects.subjects.map((subject) => {
+                const subjectProjects = sidebarGroupedProjects.grouped.get(subject.id) || [];
+                if (subjectProjects.length === 0) return null;
+
+                return (
+                  <div key={subject.id} className="space-y-0.5">
+                    <div className="px-3 py-1 flex items-center gap-2 text-[10px] font-bold text-[#7b7c7e]/60 uppercase tracking-widest border-b border-[#2c2d31]/30 mb-1">
+                      <div className="w-1 h-1 rounded-full" style={{ backgroundColor: subject.color }} />
+                      {subject.name}
                     </div>
-                    {(sidebarGroupedProjects.grouped.get("unfiled") || []).map((project) => (
+                    {subjectProjects.map((project) => (
                       <Link
                         key={project.id}
                         href={`/org/${currentOrgId}/projects/${project.id}/graph`}
@@ -437,8 +410,32 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
                       </Link>
                     ))}
                   </div>
-                )}
-              </div>
+                );
+              })}
+
+              {/* Unfiled Projects */}
+              {(sidebarGroupedProjects.grouped.get("unfiled") || []).length > 0 && (
+                <div className="space-y-0.5">
+                  <div className="px-3 py-1 text-[10px] font-bold text-[#7b7c7e]/60 uppercase tracking-widest border-b border-[#2c2d31]/30 mb-1">
+                    Unfiled
+                  </div>
+                  {(sidebarGroupedProjects.grouped.get("unfiled") || []).map((project) => (
+                    <Link
+                      key={project.id}
+                      href={`/org/${currentOrgId}/projects/${project.id}/graph`}
+                      className={cn(
+                        "flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] transition-colors group",
+                        currentProjectId === project.id
+                          ? "bg-[#2c2d31] text-white"
+                          : "text-[#d1d2d5] hover:bg-[#2c2d31] hover:text-white"
+                      )}
+                    >
+                      <FolderKanban className={cn("h-4 w-4 shrink-0 opacity-60", currentProjectId === project.id && "opacity-100")} />
+                      <span className="truncate">{project.name}</span>
+                    </Link>
+                  ))}
+                </div>
+              )}
             </div>
           </>
         ) : (
@@ -510,6 +507,6 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
         subjects={mockSubjects}
         onSearch={handleSearch}
       />
-    </div>
+    </div >
   );
 }

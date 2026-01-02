@@ -49,11 +49,6 @@ export function ProjectCard({ project, orgId }: ProjectCardProps) {
                             <Clock className="h-3 w-3" />
                             <span>{project.lastUpdated || "Recently updated"}</span>
                         </div>
-                        {project.primaryTeamName && (
-                            <span className="truncate max-w-[120px]" title={project.primaryTeamName}>
-                                {project.primaryTeamName}
-                            </span>
-                        )}
                     </div>
                 </CardContent>
             </Card>

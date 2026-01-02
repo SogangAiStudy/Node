@@ -13,7 +13,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { ShareDialog } from "./ShareDialog";
+import { SharePopover } from "@/components/project/SharePopover";
 
 interface Collaborator {
     id: string;
@@ -101,17 +101,21 @@ export function ProjectHeader({
                     )}
                 </div>
 
-                {/* Share Button */}
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 px-3 hover:bg-accent"
-                    onClick={handleShareClick}
-                    title="Share project"
+                {/* Share Button with Popover */}
+                <SharePopover
+                    projectId={projectId}
+                    orgId={orgId}
                 >
-                    <Share2 className="h-4 w-4 mr-1.5" />
-                    <span className="text-sm font-medium">Share</span>
-                </Button>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 px-3 hover:bg-accent"
+                        title="Share project"
+                    >
+                        <Share2 className="h-4 w-4 mr-1.5" />
+                        <span className="text-sm font-medium">Share</span>
+                    </Button>
+                </SharePopover>
 
                 {/* Favorite Toggle */}
                 <Button
@@ -167,13 +171,6 @@ export function ProjectHeader({
                 </DropdownMenu>
             </div>
 
-            {/* Simple Share Dialog for quick invites */}
-            <ShareDialog
-                open={shareOpen}
-                onOpenChange={setShareOpen}
-                projectId={projectId}
-                orgId={orgId}
-            />
         </>
     );
 }
