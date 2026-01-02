@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth, requireProjectMembership } from "@/lib/utils/auth";
 import { createActivityLog } from "@/lib/utils/activity-log";
+import { assertWithinNodeLimit } from "@/lib/subscription";
 import { z } from "zod";
 import { NodeType, ManualStatus } from "@/types";
 
@@ -51,6 +52,20 @@ export async function POST(
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
 
+    // Check if organization has reached node limit
+    try {
+      await assertWithinNodeLimit(project.orgId);
+    } catch (error) {
+      return NextResponse.json(
+        {
+          error: "LIMIT_REACHED",
+          message: error instanceof Error ? error.message : "Node limit reached",
+          limit: 20,
+        },
+        { status: 403 }
+      );
+    }
+
     const ownerId = (validated.ownerId && validated.ownerId !== "unassigned") ? validated.ownerId : null;
     const teamId = (validated.team && validated.team !== "none") ? validated.team : null;
 
@@ -59,33 +74,44 @@ export async function POST(
     const initialX = Math.random() * 800;
     const initialY = Math.random() * 600;
 
-    const node = await prisma.node.create({
-      data: {
-        orgId: project.orgId,
-        projectId,
-        title: validated.title,
-        description: validated.description,
-        type: validated.type,
-        manualStatus: validated.manualStatus,
-        ownerId,
-        teamId,
-        priority: validated.priority,
-        dueAt: validated.dueAt ? new Date(validated.dueAt) : null,
-        positionX: initialX,
-        positionY: initialY,
-        nodeTeams: {
-          create: (validated.teamIds || (teamId ? [teamId] : [])).map(tid => ({ teamId: tid }))
+    // Use transaction to create node and increment nodeCount atomically
+    const node = await prisma.$transaction(async (tx) => {
+      const newNode = await tx.node.create({
+        data: {
+          orgId: project.orgId,
+          projectId,
+          title: validated.title,
+          description: validated.description,
+          type: validated.type,
+          manualStatus: validated.manualStatus,
+          ownerId,
+          teamId,
+          priority: validated.priority,
+          dueAt: validated.dueAt ? new Date(validated.dueAt) : null,
+          positionX: initialX,
+          positionY: initialY,
+          nodeTeams: {
+            create: (validated.teamIds || (teamId ? [teamId] : [])).map(tid => ({ teamId: tid }))
+          },
+          nodeOwners: {
+            create: (validated.ownerIds || (ownerId ? [ownerId] : [])).map(oid => ({ userId: oid }))
+          }
         },
-        nodeOwners: {
-          create: (validated.ownerIds || (ownerId ? [ownerId] : [])).map(oid => ({ userId: oid }))
-        }
-      },
-      include: {
-        owner: { select: { name: true } },
-        team: { select: { name: true } },
-        nodeTeams: { include: { team: { select: { id: true, name: true } } } },
-        nodeOwners: { include: { user: { select: { id: true, name: true } } } },
-      },
+        include: {
+          owner: { select: { name: true } },
+          team: { select: { name: true } },
+          nodeTeams: { include: { team: { select: { id: true, name: true } } } },
+          nodeOwners: { include: { user: { select: { id: true, name: true } } } },
+        },
+      });
+
+      // Increment organization nodeCount
+      await tx.organization.update({
+        where: { id: project.orgId },
+        data: { nodeCount: { increment: 1 } },
+      });
+
+      return newNode;
     });
 
     // Log activity

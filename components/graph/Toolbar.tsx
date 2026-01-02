@@ -208,6 +208,7 @@ export function Toolbar({
 
       <AddNodeDialog
         projectId={projectId}
+        orgId={orgId}
         open={addNodeOpen}
         onOpenChange={setAddNodeOpen}
         onSuccess={() => {
