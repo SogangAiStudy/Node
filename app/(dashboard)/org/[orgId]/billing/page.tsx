@@ -10,7 +10,7 @@ export default async function BillingPage({
     params: Promise<{ orgId: string }>;
 }) {
     const session = await auth();
-    if (!session?.user?.id) {
+    if (!session?.id) {
         redirect("/");
     }
 
@@ -21,11 +21,11 @@ export default async function BillingPage({
         where: {
             id: orgId,
             OR: [
-                { ownerId: session.user.id },
+                { ownerId: session.id },
                 {
                     members: {
                         some: {
-                            userId: session.user.id,
+                            userId: session.id,
                         },
                     },
                 },
