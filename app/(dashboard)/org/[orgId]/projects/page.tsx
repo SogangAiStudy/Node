@@ -220,7 +220,7 @@ export default function OrgSubjectsPage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Subjects</h1>
+        <h1 className="text-3xl font-bold">Projects</h1>
         <Button asChild>
           <Link href={`/org/${orgId}/projects/new`}>
             <Plus className="h-4 w-4 mr-2" />

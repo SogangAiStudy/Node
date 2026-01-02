@@ -468,7 +468,7 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
             {/* Subjects & Projects */}
             <div className="space-y-1">
               <div className="px-3 mb-2 flex items-center justify-between group">
-                <div className="text-[11px] font-bold text-[#7b7c7e] uppercase tracking-wider">Subjects</div>
+                <div className="text-[11px] font-bold text-[#7b7c7e] uppercase tracking-wider">Folders</div>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 hover:bg-[#2c2d31] rounded">
@@ -483,9 +483,9 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
                       <div className="flex flex-col gap-1">
                         <div className="flex items-center gap-2">
                           <Plus className="h-4 w-4 text-blue-400" />
-                          <span className="text-[14px] font-bold text-white">Subject</span>
+                          <span className="text-[14px] font-bold text-white">Folder</span>
                         </div>
-                        <span className="text-[11px] text-[#7b7c7e] leading-tight pl-6">Create a new organizational divider</span>
+                        <span className="text-[11px] text-[#7b7c7e] leading-tight pl-6">Create a new folder to organize projects</span>
                       </div>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator className="bg-[#2c2d31] my-1" />

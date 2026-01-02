@@ -56,7 +56,7 @@ export function SubjectSection({ subject, projects, orgId, onExpandToggle, isDro
             ))}
             {projects.length === 0 && (
                 <div className="col-span-full text-center py-8 text-sm text-muted-foreground italic">
-                    No projects in this subject
+                    No projects in this folder
                 </div>
             )}
         </div>

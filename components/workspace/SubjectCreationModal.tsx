@@ -40,13 +40,13 @@ export function SubjectCreationModal({
                 <DialogHeader>
                     <DialogTitle className="text-xl font-bold text-white flex items-center gap-2">
                         <Layers className="h-5 w-5 text-blue-400" />
-                        Create New Subject
+                        Create New Folder
                     </DialogTitle>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                     <div className="grid gap-2">
                         <Label htmlFor="name" className="text-sm font-medium text-[#7b7c7e]">
-                            Subject Name
+                            Folder Name
                         </Label>
                         <Input
                             id="name"
@@ -57,7 +57,7 @@ export function SubjectCreationModal({
                             autoFocus
                         />
                         <p className="text-[11px] text-[#7b7c7e]">
-                            Subjects act as visual dividers in your workspace to help organize projects.
+                            Folders act as visual dividers in your workspace to help organize projects.
                         </p>
                     </div>
                 </div>
@@ -74,7 +74,7 @@ export function SubjectCreationModal({
                         disabled={!name.trim()}
                         className="bg-blue-600 hover:bg-blue-700 text-white"
                     >
-                        Create Subject
+                        Create Folder
                     </Button>
                 </DialogFooter>
             </DialogContent>
