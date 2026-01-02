@@ -20,7 +20,8 @@ import {
 } from "@/components/ui/select";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { toast } from "sonner";
-import { User, Users2 } from "lucide-react";
+import { useCompletion } from "@ai-sdk/react";
+import { Loader2, Sparkles, User, Users2 } from "lucide-react";
 
 interface CreateRequestDialogProps {
   projectId: string;
@@ -60,6 +61,19 @@ export function CreateRequestDialog({
   const [toTeam, setToTeam] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
+  // AI Streaming Hook
+  const { complete, completion, isLoading: isDrafting, setCompletion } = useCompletion({
+    api: "/api/ai/draft-request",
+    onFinish: (_, result) => {
+      setQuestion(result);
+      toast.success("Draft generated!");
+    },
+    onError: (err) => {
+      toast.error("Failed to generate draft: " + err.message);
+    }
+  });
+
+  // Data fetching state
   const [members, setMembers] = useState<Member[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [nodeData, setNodeData] = useState<NodeData | null>(null);
@@ -94,6 +108,28 @@ export function CreateRequestDialog({
 
     fetchData();
   }, [open, projectId, linkedNodeId]);
+
+  const handleAutoDraft = async () => {
+    if (!linkedNodeId) return;
+    try {
+      await complete("", {
+        body: {
+          nodeId: linkedNodeId,
+          recipientId: targetType === 'user' ? toUserId : undefined,
+          context: question // Send current text as context 
+        }
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Effect to update the textarea as stream comes in
+  if (isDrafting && completion) {
+    if (question !== completion) {
+      setQuestion(completion);
+    }
+  }
 
   // Get suggested users (node owners first, then other team members)
   const suggestedUsers = members
@@ -130,7 +166,6 @@ export function CreateRequestDialog({
       .toUpperCase()
       .slice(0, 2);
   };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -181,7 +216,32 @@ export function CreateRequestDialog({
           </DialogHeader>
           <div className="space-y-4 my-4">
             <div>
-              <Label htmlFor="question">Question</Label>
+              <div className="flex items-center justify-between mb-2">
+                <Label htmlFor="question">Question</Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-xs text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+                  onClick={handleAutoDraft}
+                  disabled={isDrafting}
+                >
+                  {isDrafting ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Sparkles className="h-3 w-3 mr-1" />}
+                  {isDrafting ? "Drafting..." : "Auto-Draft"}
+                </Button>
+              </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-xs text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+                  onClick={handleAutoDraft}
+                  disabled={isDrafting}
+                >
+                  {isDrafting ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Sparkles className="h-3 w-3 mr-1" />}
+                  {isDrafting ? "Drafting..." : "Auto-Draft"}
+                </Button>
+              </div>
               <Textarea
                 id="question"
                 value={question}
@@ -250,7 +310,7 @@ export function CreateRequestDialog({
                           </div>
                         </div>
                       </SelectItem>
-                    ))}
+                    ))}}
                     {suggestedUsers.length === 0 && (
                       <div className="px-2 py-4 text-sm text-muted-foreground text-center">
                         No users available
