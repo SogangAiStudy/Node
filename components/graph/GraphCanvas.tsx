@@ -37,6 +37,7 @@ import { toast } from "sonner";
 
 interface GraphCanvasProps {
   projectId: string;
+  orgId: string;
   data: GraphData;
   onDataChange: () => void;
   focusNodeId?: string | null;
@@ -82,9 +83,10 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = "LR") => 
   return { nodes, edges };
 };
 
-export function GraphCanvas({ projectId, data, onDataChange, focusNodeId }: GraphCanvasProps) {
+export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId }: GraphCanvasProps) {
   const [filterStatus, setFilterStatus] = useState<string>("ALL");
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([]);
   const [pendingConnection, setPendingConnection] = useState<Connection | null>(null);
   const [editingEdge, setEditingEdge] = useState<Edge | null>(null);
   const [relation, setRelation] = useState<string>("DEPENDS_ON");
@@ -96,6 +98,13 @@ export function GraphCanvas({ projectId, data, onDataChange, focusNodeId }: Grap
         if (filterStatus !== "ALL" && node.computedStatus !== filterStatus) return false;
         if (searchQuery && !node.title.toLowerCase().includes(searchQuery.toLowerCase()))
           return false;
+
+        if (selectedTeamIds.length > 0) {
+          const nodeTeamIds = node.teams.map((t) => t.id);
+          const hasMatch = selectedTeamIds.some((id) => nodeTeamIds.includes(id));
+          if (!hasMatch) return false;
+        }
+
         return true;
       })
       .map((node) => {
@@ -109,7 +118,7 @@ export function GraphCanvas({ projectId, data, onDataChange, focusNodeId }: Grap
           data: { node },
         };
       });
-
+    // ... (rest of the mapping logic remains same)
     const visibleNodeIds = new Set(initialNodes.map((n) => n.id));
     const initialEdges: Edge[] = data.edges
       .filter((edge) => visibleNodeIds.has(edge.fromNodeId) && visibleNodeIds.has(edge.toNodeId))
@@ -197,6 +206,7 @@ export function GraphCanvas({ projectId, data, onDataChange, focusNodeId }: Grap
           ...node.data,
           node: data.nodes.find((n) => n.id === node.id),
           projectId,
+          orgId,
           onDataChange,
           blockedBy: blockedByTitles,
           blocking: blockingTitles,
@@ -205,7 +215,7 @@ export function GraphCanvas({ projectId, data, onDataChange, focusNodeId }: Grap
     });
 
     return { layoutedNodes: nodesWithExtraData, layoutedEdges: edges };
-  }, [data.nodes, data.edges, filterStatus, searchQuery, projectId, onDataChange]);
+  }, [data.nodes, data.edges, filterStatus, searchQuery, selectedTeamIds, projectId, orgId, onDataChange]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(layoutedNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(layoutedEdges);
@@ -336,8 +346,11 @@ export function GraphCanvas({ projectId, data, onDataChange, focusNodeId }: Grap
     <div className="relative h-full w-full rounded-lg border bg-white overflow-hidden shadow-inner">
       <Toolbar
         projectId={projectId}
+        orgId={orgId}
         filterStatus={filterStatus}
         onFilterChange={setFilterStatus}
+        selectedTeamIds={selectedTeamIds}
+        onTeamFilterChange={setSelectedTeamIds}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         onDataChange={onDataChange}
