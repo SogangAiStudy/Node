@@ -24,21 +24,30 @@ export default function DashboardPage() {
 
   // Redirect to first workspace or onboarding
   useEffect(() => {
-    if (isLoading) return;
+    if (isLoading || isError) return;
 
     if (workspaces && workspaces.length > 0) {
       router.push(`/org/${workspaces[0].orgId}/projects`);
-    } else {
-      // No workspaces or error - redirect to onboarding
+    } else if (workspaces && workspaces.length === 0) {
+      // ONLY redirect to onboarding if we explicitly have zero workspaces
       router.push("/onboarding");
     }
-  }, [workspaces, isLoading, router]);
+  }, [workspaces, isLoading, isError, router]);
 
   // Show error state if API failed
   if (isError) {
     return (
       <div className="container mx-auto px-4 py-8">
-        <div className="text-center text-muted-foreground">Redirecting to onboarding...</div>
+        <div className="text-center py-12">
+          <h2 className="text-lg font-semibold text-red-600 mb-2">Failed to load workspaces</h2>
+          <p className="text-muted-foreground mb-4">There was an error connecting to the server.</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="text-sm font-medium text-blue-600 hover:underline"
+          >
+            Try refreshing the page
+          </button>
+        </div>
       </div>
     );
   }

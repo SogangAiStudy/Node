@@ -6,6 +6,7 @@ import { requireAuth } from "@/lib/utils/auth";
 export async function GET() {
   try {
     const user = await requireAuth();
+    console.log(`[DEBUG] GET /api/workspaces - User: ${user.email} (${user.id})`);
 
     // Get all organizations where user is a member
     const orgMemberships = await prisma.orgMember.findMany({
@@ -25,9 +26,11 @@ export async function GET() {
       },
     });
 
+    console.log(`[DEBUG] GET /api/workspaces - Found ${orgMemberships.length} memberships`);
+
     // For each org, check if there are unread inbox items
     const workspaces = await Promise.all(
-      orgMemberships.map(async (membership) => {
+      orgMemberships.map(async (membership: { orgId: string; organization: { id: string; name: string } }) => {
         const orgId = membership.orgId;
 
         // Get user's inbox state for this org
@@ -57,13 +60,9 @@ export async function GET() {
           },
         });
 
-        const teamNames = userTeams.map((tm) => tm.team.name);
+        const teamNames = userTeams.map((tm: { team: { name: string } }) => tm.team.name);
 
         // Check for unread requests
-        // A request is unread if:
-        // - assigned to user OR assigned to user's team
-        // - AND status != CLOSED
-        // - AND (no lastSeenAt OR updatedAt > lastSeenAt)
         const unreadCount = await prisma.request.findMany({
           where: {
             orgId,
@@ -93,6 +92,7 @@ export async function GET() {
       })
     );
 
+    console.log(`[DEBUG] GET /api/workspaces - Returning ${workspaces.length} workspaces:`, JSON.stringify(workspaces));
     return NextResponse.json(workspaces);
   } catch (error) {
     console.error("GET /api/workspaces error:", error);
