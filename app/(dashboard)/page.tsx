@@ -24,22 +24,29 @@ export default function DashboardPage() {
 
   // Redirect to first workspace or onboarding
   useEffect(() => {
-    if (isLoading || isError) return;
+    if (isLoading || isError) {
+      console.log(`[DEBUG] Dashboard - Loading: ${isLoading}, Error: ${isError}`);
+      return;
+    }
+
+    console.log(`[DEBUG] Dashboard - Workspaces: ${workspaces?.length || 0}`);
 
     if (workspaces && workspaces.length > 0) {
-      // Find first active-ish workspace
       const activeWorkspace = workspaces.find(w =>
         ["ACTIVE", "PENDING_TEAM_ASSIGNMENT"].includes(w.status)
       );
 
       if (activeWorkspace) {
+        console.log(`[DEBUG] Dashboard - Redirecting to active: ${activeWorkspace.orgId}`);
         router.push(`/org/${activeWorkspace.orgId}/projects`);
       } else {
-        // User has organizations but NONE are active (e.g. all PENDING_APPROVAL)
+        const pending = workspaces.find(w => w.status === "PENDING_APPROVAL");
+        console.log(`[DEBUG] Dashboard - No active. Pending found: ${!!pending}. Redirecting to /onboarding`);
         router.push("/onboarding");
       }
-    } else if (workspaces && workspaces.length === 0) {
-      // ONLY redirect to onboarding if we explicitly have zero workspaces
+    } else if (workspaces) {
+      // Explicitly zero workspaces
+      console.log(`[DEBUG] Dashboard - Zero workspaces. Redirecting to /onboarding`);
       router.push("/onboarding");
     }
   }, [workspaces, isLoading, isError, router]);

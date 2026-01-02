@@ -52,17 +52,16 @@ export default function OnboardingPage() {
   });
 
   const pendingOrg = workspaces?.find(w => w.status === "PENDING_APPROVAL");
+  const activeOrg = workspaces?.find(w =>
+    ["ACTIVE", "PENDING_TEAM_ASSIGNMENT"].includes(w.status)
+  );
 
-  useEffect(() => {
-    if (!isCheckingWorkspaces && workspaces && workspaces.length > 0) {
-      const activeOrg = workspaces.find(w =>
-        ["ACTIVE", "PENDING_TEAM_ASSIGNMENT"].includes(w.status)
-      );
-      if (activeOrg) {
-        router.push(`/org/${activeOrg.orgId}/projects`);
-      }
-    }
-  }, [workspaces, isCheckingWorkspaces, router]);
+  // Show "Pending Approval" screen ONLY if the user has no active workspace to fallback to
+  const showPendingScreen = !!pendingOrg && !activeOrg;
+
+  // We REMOVED the automatic redirect useEffect here.
+  // This allows users to manually visit /onboarding to join more organizations
+  // while already having a personal workspace.
 
   // Search logic
   useEffect(() => {
@@ -168,7 +167,7 @@ export default function OnboardingPage() {
 
         <Card className="bg-[#2c2d31] border-[#37383d] shadow-2xl">
           <CardContent className="pt-6">
-            {pendingOrg ? (
+            {showPendingScreen ? (
               <div className="py-6 text-center space-y-6">
                 <div className="bg-[#37383d] w-16 h-16 rounded-full flex items-center justify-center mx-auto border border-[#4a4b52]">
                   {isRefreshing ? (

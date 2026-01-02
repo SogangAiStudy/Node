@@ -68,7 +68,7 @@ export async function isOrgMember(orgId: string, userId: string): Promise<boolea
       status: true,
     },
   });
-  return !!orgMember && orgMember.status === "ACTIVE";
+  return !!orgMember && ["ACTIVE", "PENDING_TEAM_ASSIGNMENT"].includes(orgMember.status);
 }
 
 /**
