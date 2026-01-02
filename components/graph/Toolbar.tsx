@@ -56,14 +56,14 @@ export function Toolbar({
   const [addEdgeOpen, setAddEdgeOpen] = useState(false);
 
   const { data: teamsData } = useQuery({
-    queryKey: ["org-teams", orgId],
+    queryKey: ["project-teams", projectId],
     queryFn: async () => {
-      const res = await fetch(`/api/organizations/teams?orgId=${orgId}`);
-      if (!res.ok) throw new Error("Failed to fetch teams");
+      const res = await fetch(`/api/projects/${projectId}/teams`);
+      if (!res.ok) throw new Error("Failed to fetch project teams");
       const data = await res.json();
       return data.teams as TeamDTO[];
     },
-    enabled: !!orgId,
+    enabled: !!projectId,
   });
 
   const teams = teamsData || [];
