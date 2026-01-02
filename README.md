@@ -111,6 +111,69 @@ Access the app at [http://localhost:3000](http://localhost:3000).
 
 ---
 
+## 💳 Stripe Payment Setup (Optional)
+
+The app includes a **Pro subscription system** that enforces a 20-node limit for free users. To enable payment features:
+
+### 1. Create a Stripe Account
+Sign up at [Stripe Dashboard](https://dashboard.stripe.com/register) and switch to **Test Mode**.
+
+### 2. Get API Keys
+1. Go to [API Keys](https://dashboard.stripe.com/test/apikeys)
+2. Copy your **Secret key** (`sk_test_...`) and **Publishable key** (`pk_test_...`)
+3. Add them to `.env.local`:
+   ```env
+   STRIPE_SECRET_KEY="sk_test_..."
+   NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY="pk_test_..."
+   ```
+
+### 3. Create a Product with Recurring Price
+1. Go to [Products](https://dashboard.stripe.com/test/products)
+2. Click **"+ Add product"**
+3. Fill in:
+   - **Name**: `Pro Plan`
+   - **Description**: `Unlimited nodes`
+4. Under **Pricing**:
+   - **Pricing model**: `Standard pricing`
+   - **Price**: `10` USD (or your choice)
+   - ⚠️ **IMPORTANT**: Select **"Recurring"** (NOT "One time")
+   - **Billing period**: `Monthly`
+5. Click **"Save product"**
+6. Copy the **Price ID** (starts with `price_...`)
+7. Add to `.env.local`:
+   ```env
+   STRIPE_PRICE_ID="price_..."
+   ```
+
+### 4. Setup Webhooks for Local Development
+Install [Stripe CLI](https://stripe.com/docs/stripe-cli) and run:
+```bash
+# Login to Stripe
+stripe login
+
+# Forward webhooks to your local server
+stripe listen --forward-to localhost:3000/api/webhooks/stripe
+```
+
+Copy the webhook signing secret (`whsec_...`) and add to `.env.local`:
+```env
+STRIPE_WEBHOOK_SECRET="whsec_..."
+```
+
+### 5. Restart the Server
+```bash
+npm run dev:local
+```
+
+Now you can test the upgrade flow:
+- Create 20 nodes → Hit limit
+- Click "Upgrade to Pro" → Stripe checkout
+- Use test card: `4242 4242 4242 4242`
+
+For detailed Stripe setup, see [docs/STRIPE_QUICK_SETUP.md](./docs/STRIPE_QUICK_SETUP.md).
+
+---
+
 ## 🛠️ Database Management
 
 We use `dotenv-cli` for explicit environment targeting. **Never accidentally write to production again.**
