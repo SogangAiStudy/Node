@@ -154,9 +154,16 @@ export async function DELETE(
 
     await requireProjectMembership(existingNode.projectId, user.id);
 
-    // Delete node (cascade will handle edges and requests)
-    await prisma.node.delete({
-      where: { id: nodeId },
+    // Delete node and decrement organization nodeCount in a transaction
+    await prisma.$transaction(async (tx) => {
+      await tx.node.delete({
+        where: { id: nodeId },
+      });
+
+      await tx.organization.update({
+        where: { id: existingNode.orgId },
+        data: { nodeCount: { decrement: 1 } },
+      });
     });
 
     // Log activity

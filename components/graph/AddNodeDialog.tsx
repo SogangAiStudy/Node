@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
+import { LimitReachedDialog } from "@/components/dialogs/LimitReachedDialog";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -25,6 +26,7 @@ import { MultiSelectSearch, SelectItem as MultiSelectItem } from "@/components/u
 
 interface AddNodeDialogProps {
   projectId: string;
+  orgId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
@@ -42,7 +44,7 @@ interface Team {
   name: string;
 }
 
-export function AddNodeDialog({ projectId, open, onOpenChange, onSuccess }: AddNodeDialogProps) {
+export function AddNodeDialog({ projectId, orgId, open, onOpenChange, onSuccess }: AddNodeDialogProps) {
   const { data: session } = useSession();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -52,6 +54,7 @@ export function AddNodeDialog({ projectId, open, onOpenChange, onSuccess }: AddN
   const [members, setMembers] = useState<Member[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [showLimitDialog, setShowLimitDialog] = useState(false);
 
   const fetchMembersAndTeams = useCallback(async () => {
     try {
@@ -104,7 +107,15 @@ export function AddNodeDialog({ projectId, open, onOpenChange, onSuccess }: AddN
 
       if (!res.ok) {
         const error = await res.json();
-        throw new Error(error.error || "Failed to create node");
+
+        // Check if it's a limit error
+        if (error.error === "LIMIT_REACHED") {
+          setShowLimitDialog(true);
+          onOpenChange(false); // Close the add node dialog
+          return;
+        }
+
+        throw new Error(error.message || "Failed to create node");
       }
 
       toast.success("Node created successfully");
@@ -139,89 +150,97 @@ export function AddNodeDialog({ projectId, open, onOpenChange, onSuccess }: AddN
   }));
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
-        <form onSubmit={handleSubmit}>
-          <DialogHeader>
-            <DialogTitle>Add Node</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-6 my-4">
-            <div className="grid gap-2">
-              <Label htmlFor="title" className="text-sm font-medium">Title</Label>
-              <Input
-                id="title"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="What needs to be done?"
-                required
-                className="text-base py-5"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-[500px]">
+          <form onSubmit={handleSubmit}>
+            <DialogHeader>
+              <DialogTitle>Add Node</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-6 my-4">
               <div className="grid gap-2">
-                <Label htmlFor="type" className="text-sm font-medium">Type</Label>
-                <Select value={type} onValueChange={setType}>
-                  <SelectTrigger id="type">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="TASK">Task</SelectItem>
-                    <SelectItem value="DECISION">Decision</SelectItem>
-                    <SelectItem value="BLOCKER">Blocker</SelectItem>
-                    <SelectItem value="INFOREQ">Info Request</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="grid gap-4">
-              <div className="grid gap-2">
-                <Label className="text-sm font-medium">Owners</Label>
-                <MultiSelectSearch
-                  items={ownerItems}
-                  selectedIds={ownerIds}
-                  onSelect={(id: string) => setOwnerIds((prev: string[]) => [...prev, id])}
-                  onRemove={(id: string) => setOwnerIds((prev: string[]) => prev.filter((i: string) => i !== id))}
-                  placeholder="Select owners"
-                  searchPlaceholder="Search people..."
+                <Label htmlFor="title" className="text-sm font-medium">Title</Label>
+                <Input
+                  id="title"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="What needs to be done?"
+                  required
+                  className="text-base py-5"
                 />
               </div>
 
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="type" className="text-sm font-medium">Type</Label>
+                  <Select value={type} onValueChange={setType}>
+                    <SelectTrigger id="type">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="TASK">Task</SelectItem>
+                      <SelectItem value="DECISION">Decision</SelectItem>
+                      <SelectItem value="BLOCKER">Blocker</SelectItem>
+                      <SelectItem value="INFOREQ">Info Request</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid gap-4">
+                <div className="grid gap-2">
+                  <Label className="text-sm font-medium">Owners</Label>
+                  <MultiSelectSearch
+                    items={ownerItems}
+                    selectedIds={ownerIds}
+                    onSelect={(id: string) => setOwnerIds((prev: string[]) => [...prev, id])}
+                    onRemove={(id: string) => setOwnerIds((prev: string[]) => prev.filter((i: string) => i !== id))}
+                    placeholder="Select owners"
+                    searchPlaceholder="Search people..."
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label className="text-sm font-medium">Assigned Teams</Label>
+                  <MultiSelectSearch
+                    items={teamItems}
+                    selectedIds={teamIds}
+                    onSelect={(id: string) => setTeamIds((prev: string[]) => [...prev, id])}
+                    onRemove={(id: string) => setTeamIds((prev: string[]) => prev.filter((i: string) => i !== id))}
+                    placeholder="Select teams"
+                    searchPlaceholder="Search teams..."
+                  />
+                </div>
+              </div>
+
               <div className="grid gap-2">
-                <Label className="text-sm font-medium">Assigned Teams</Label>
-                <MultiSelectSearch
-                  items={teamItems}
-                  selectedIds={teamIds}
-                  onSelect={(id: string) => setTeamIds((prev: string[]) => [...prev, id])}
-                  onRemove={(id: string) => setTeamIds((prev: string[]) => prev.filter((i: string) => i !== id))}
-                  placeholder="Select teams"
-                  searchPlaceholder="Search teams..."
+                <Label htmlFor="description" className="text-sm font-medium">Description (optional)</Label>
+                <Textarea
+                  id="description"
+                  value={description}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setDescription(e.target.value)}
+                  placeholder="Add more context..."
+                  className="h-24 resize-none"
                 />
               </div>
             </div>
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="flex-1 sm:flex-none">
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isLoading} className="flex-1 sm:flex-none">
+                {isLoading ? "Creating..." : "Create Node"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
-            <div className="grid gap-2">
-              <Label htmlFor="description" className="text-sm font-medium">Description (optional)</Label>
-              <Textarea
-                id="description"
-                value={description}
-                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setDescription(e.target.value)}
-                placeholder="Add more context..."
-                className="h-24 resize-none"
-              />
-            </div>
-          </div>
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="flex-1 sm:flex-none">
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isLoading} className="flex-1 sm:flex-none">
-              {isLoading ? "Creating..." : "Create Node"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+      <LimitReachedDialog
+        open={showLimitDialog}
+        onOpenChange={setShowLimitDialog}
+        orgId={orgId}
+      />
+    </>
   );
 }
