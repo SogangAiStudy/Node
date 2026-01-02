@@ -214,29 +214,16 @@ export function AddNodeDialog({ projectId, orgId, open, onOpenChange, onSuccess 
               </div>
             </div>
 
-            <div className="grid gap-4">
-              <div className="grid gap-2">
-                <Label className="text-sm font-medium">Owners</Label>
-                <MultiSelectSearch
-                  items={ownerItems}
-                  selectedIds={ownerIds}
-                  onSelect={(id: string) => setOwnerIds((prev: string[]) => [...prev, id])}
-                  onRemove={(id: string) => setOwnerIds((prev: string[]) => prev.filter((i: string) => i !== id))}
-                  placeholder="Select owners"
-                  searchPlaceholder="Search people..."
-                />
-              </div>
 
-              <div className="grid gap-2">
-                <Label htmlFor="description" className="text-sm font-medium">Description (optional)</Label>
-                <Textarea
-                  id="description"
-                  value={description}
-                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setDescription(e.target.value)}
-                  placeholder="Add more context..."
-                  className="h-24 resize-none"
-                />
-              </div>
+            <div className="grid gap-2">
+              <Label htmlFor="description" className="text-sm font-medium">Description (optional)</Label>
+              <Textarea
+                id="description"
+                value={description}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setDescription(e.target.value)}
+                placeholder="Add more context..."
+                className="h-24 resize-none"
+              />
             </div>
             <DialogFooter className="gap-2 sm:gap-0">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="flex-1 sm:flex-none">
@@ -248,7 +235,7 @@ export function AddNodeDialog({ projectId, orgId, open, onOpenChange, onSuccess 
             </DialogFooter>
           </form>
         </DialogContent>
-      </Dialog>
+      </Dialog >
 
       <LimitReachedDialog
         open={showLimitDialog}

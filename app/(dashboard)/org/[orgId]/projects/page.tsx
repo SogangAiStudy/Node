@@ -24,6 +24,7 @@ interface Project {
   primaryTeamName: string | null;
   createdAt: string;
   updatedAt: string;
+  subjectId?: string | null;
 }
 
 export default function OrgProjectsPage() {
@@ -40,6 +41,15 @@ export default function OrgProjectsPage() {
     },
   });
 
+  const { data: subjectsData, isLoading: isSubjectsLoading } = useQuery({
+    queryKey: ["subjects", orgId],
+    queryFn: async () => {
+      const res = await fetch(`/api/subjects?orgId=${orgId}`);
+      if (!res.ok) throw new Error("Failed to fetch subjects");
+      return res.json() as Promise<{ subjects: any[] }>;
+    },
+  });
+
   // Enrich projects with workspace metadata
   const enrichedProjects = useMemo(() => {
     if (!data?.projects) return [];
@@ -48,6 +58,12 @@ export default function OrgProjectsPage() {
     );
   }, [data?.projects]);
 
+  const allSubjects = useMemo(() => {
+    const realSubjects = subjectsData?.subjects || [];
+    // Only use mock subjects if no real ones exist yet (optional fallback)
+    return realSubjects.length > 0 ? realSubjects : mockSubjects;
+  }, [subjectsData?.subjects]);
+
   // Filter projects by active tab
   const filteredProjects = useMemo(() => {
     return filterProjectsByTab(enrichedProjects, activeTab);
@@ -55,8 +71,20 @@ export default function OrgProjectsPage() {
 
   // Group projects by subject
   const groupedProjects = useMemo(() => {
-    return groupProjectsBySubject(filteredProjects);
-  }, [filteredProjects]);
+    const grouped = new Map<string, ProjectDTO[]>();
+
+    // Initialize groups
+    allSubjects.forEach(s => grouped.set(s.id, []));
+    grouped.set("unfiled", []);
+
+    filteredProjects.forEach(p => {
+      const subjectId = p.subjectId || "unfiled";
+      const existing = grouped.get(subjectId) || [];
+      grouped.set(subjectId, [...existing, p as ProjectDTO]);
+    });
+
+    return grouped;
+  }, [filteredProjects, allSubjects]);
 
   // Calculate tab counts
   const tabCounts = useMemo(() => {
@@ -101,7 +129,7 @@ export default function OrgProjectsPage() {
       ) : (
         <div className="space-y-8">
           {/* Show subjects with projects */}
-          {mockSubjects.map((subject) => {
+          {allSubjects.map((subject) => {
             const subjectProjects = groupedProjects.get(subject.id) || [];
             if (subjectProjects.length === 0 && activeTab !== "all") return null;
 
@@ -109,7 +137,7 @@ export default function OrgProjectsPage() {
               <SubjectSection
                 key={subject.id}
                 subject={subject}
-                projects={subjectProjects as ProjectDTO[]}
+                projects={subjectProjects}
                 orgId={orgId}
               />
             );

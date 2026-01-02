@@ -95,6 +95,7 @@ model Organization {
   projects     Project[]
   requests     Request[]
   teams        Team[]
+  subjects     Subject[]
   inboxStates  OrgInboxState[]
 
   @@index([ownerId])
@@ -185,6 +186,8 @@ model Project {
   owner         User            @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   primaryTeam   Team?           @relation("PrimaryTeam", fields: [primaryTeamId], references: [id])
   requests      Request[]
+  subjectId     String?
+  subject       Subject?        @relation(fields: [subjectId], references: [id], onDelete: SetNull)
 
   @@index([orgId])
   @@index([ownerId])
@@ -398,4 +401,20 @@ enum RequestStatus {
   RESPONDED
   APPROVED
   CLOSED
+}
+
+model Subject {
+  id          String   @id @default(cuid())
+  orgId       String
+  name        String
+  description String?
+  color       String   @default("#3b82f6")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  projects    Project[]
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, name])
+  @@map("subjects")
 }

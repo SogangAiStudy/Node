@@ -1,22 +1,28 @@
 "use client";
 
 import { useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
     Plus,
     Users,
     ArrowLeft,
     Check,
-    ChevronRight,
-    Loader2
+    Loader2,
+    Layers
 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 
 interface Team {
     id: string;
@@ -27,8 +33,11 @@ interface Team {
 export default function NewProjectPage() {
     const params = useParams();
     const router = useRouter();
+    const searchParams = useSearchParams();
     const queryClient = useQueryClient();
     const orgId = params.orgId as string;
+
+    const initialSubjectId = searchParams.get("subjectId") || "";
 
     // Redirect if orgId is literally "undefined"
     if (orgId === "undefined") {
@@ -37,6 +46,7 @@ export default function NewProjectPage() {
 
     const [name, setName] = useState("");
     const [description, setDescription] = useState("");
+    const [subjectId, setSubjectId] = useState(initialSubjectId);
     const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([]);
 
     // Fetch teams for the workspace
@@ -49,10 +59,21 @@ export default function NewProjectPage() {
         },
     });
 
+    // Fetch subjects
+    const { data: subjectsData } = useQuery({
+        queryKey: ["subjects", orgId],
+        queryFn: async () => {
+            const res = await fetch(`/api/subjects?orgId=${orgId}`);
+            if (!res.ok) throw new Error("Failed to fetch subjects");
+            return res.json() as Promise<{ subjects: any[] }>;
+        },
+    });
+
     const teams = teamsData?.teams || [];
+    const subjects = subjectsData?.subjects || [];
 
     const createProjectMutation = useMutation({
-        mutationFn: async (data: { name: string; description: string; teamIds: string[] }) => {
+        mutationFn: async (data: { name: string; description: string; teamIds: string[]; subjectId?: string }) => {
             const res = await fetch("/api/projects", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -86,6 +107,7 @@ export default function NewProjectPage() {
             name,
             description,
             teamIds: selectedTeamIds,
+            subjectId: subjectId && subjectId !== "none" ? subjectId : undefined,
         });
     };
 
@@ -125,6 +147,26 @@ export default function NewProjectPage() {
                             onChange={(e) => setDescription(e.target.value)}
                             className="min-h-[100px] border-[#e9e9e9] focus:border-[#37352f] focus:ring-1 focus:ring-[#37352f]/10"
                         />
+                    </div>
+
+                    <div className="space-y-2">
+                        <label className="text-sm font-semibold text-[#1a1b1e]">Subject (Optional)</label>
+                        <Select value={subjectId} onValueChange={setSubjectId}>
+                            <SelectTrigger className="h-11 border-[#e9e9e9] focus:border-[#37352f] focus:ring-1 focus:ring-[#37352f]/10">
+                                <SelectValue placeholder="Select a subject to organize this project" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="none">No Subject</SelectItem>
+                                {subjects.map((s: any) => (
+                                    <SelectItem key={s.id} value={s.id}>
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: s.color }} />
+                                            {s.name}
+                                        </div>
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
                 </div>
 

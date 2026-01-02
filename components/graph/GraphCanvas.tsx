@@ -38,7 +38,6 @@ import { toast } from "sonner";
 interface GraphCanvasProps {
   orgId: string;
   projectId: string;
-  orgId: string;
   data: GraphData;
   onDataChange: () => void;
   focusNodeId?: string | null;
@@ -348,15 +347,12 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
       <Toolbar
         orgId={orgId}
         projectId={projectId}
-        orgId={orgId}
         filterStatus={filterStatus}
         onFilterChange={setFilterStatus}
         selectedTeamIds={selectedTeamIds}
         onTeamFilterChange={setSelectedTeamIds}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
-        selectedTeamIds={selectedTeamIds}
-        onTeamChange={setSelectedTeamIds}
         onDataChange={onDataChange}
       />
 

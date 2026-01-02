@@ -8,6 +8,7 @@ const CreateProjectSchema = z.object({
   name: z.string().min(1).max(100),
   description: z.string().optional(),
   primaryTeamId: z.string().optional(),
+  subjectId: z.string().optional(),
   teamIds: z.array(z.string()).min(1, "Select at least one team"),
 });
 
@@ -123,6 +124,7 @@ export async function GET(request: NextRequest) {
       primaryTeamName: project.primaryTeam?.name || null,
       createdAt: project.createdAt.toISOString(),
       updatedAt: project.updatedAt.toISOString(),
+      subjectId: project.subjectId,
       teamCount: project._count.projectTeams,
       memberCount: project._count.projectTeams, // For UI compatibility
     }));
@@ -198,6 +200,7 @@ export async function POST(request: NextRequest) {
           name: validated.name,
           description: validated.description || null,
           primaryTeamId: primaryTeamId,
+          subjectId: validated.subjectId || null,
           updatedAt: new Date(),
         },
       });

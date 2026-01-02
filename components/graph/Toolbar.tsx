@@ -26,7 +26,6 @@ import {
 } from "lucide-react";
 import { AddNodeDialog } from "./AddNodeDialog";
 import { AddEdgeDialog } from "./AddEdgeDialog";
-import { cn } from "@/lib/utils";
 
 interface Team {
   id: string;
@@ -36,30 +35,24 @@ interface Team {
 interface ToolbarProps {
   orgId: string;
   projectId: string;
-  orgId: string;
   filterStatus: string;
   onFilterChange: (status: string) => void;
   selectedTeamIds: string[];
   onTeamFilterChange: (ids: string[]) => void;
   searchQuery: string;
   onSearchChange: (query: string) => void;
-  selectedTeamIds: string[];
-  onTeamChange: (ids: string[]) => void;
   onDataChange: () => void;
 }
 
 export function Toolbar({
   orgId,
   projectId,
-  orgId,
   filterStatus,
   onFilterChange,
   selectedTeamIds,
   onTeamFilterChange,
   searchQuery,
   onSearchChange,
-  selectedTeamIds,
-  onTeamChange,
   onDataChange,
 }: ToolbarProps) {
   const [addNodeOpen, setAddNodeOpen] = useState(false);

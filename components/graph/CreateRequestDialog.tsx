@@ -268,7 +268,7 @@ export function CreateRequestDialog({
                   </SelectTrigger>
                   <SelectContent>
                     {suggestedTeams.map((team) => (
-                      <SelectItem key={team.id} value={team.id}>
+                      <SelectItem key={team.id} value={team.name}>
                         <div className="flex items-center gap-2">
                           <Users2 className="h-4 w-4 text-muted-foreground" />
                           <span>

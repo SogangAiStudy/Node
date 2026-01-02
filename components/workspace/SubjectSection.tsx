@@ -53,17 +53,14 @@ export function SubjectSection({ subject, projects, orgId, onExpandToggle }: Sub
                 </div>
 
                 {/* Add Subject Button (TODO: implement functionality) */}
-                <button
+                <Link
+                    href={`/org/${orgId}/projects/new?subjectId=${subject.id}`}
                     className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-accent rounded"
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        // TODO: Show create subject dialog
-                        console.log("Create new project in subject:", subject.id);
-                    }}
+                    onClick={(e) => e.stopPropagation()}
                     title="Add project to this subject"
                 >
                     <Plus className="h-4 w-4 text-muted-foreground" />
-                </button>
+                </Link>
             </div>
 
             {/* Projects List */}

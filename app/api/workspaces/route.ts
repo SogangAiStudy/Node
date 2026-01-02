@@ -140,11 +140,18 @@ export async function GET() {
     const workspaces = await Promise.all(
       orgMemberships.map(async (membership: { orgId: string; status: string; organization: { id: string; name: string } }) => {
         const orgId = membership.orgId;
+        // For each org, check if there are unread inbox items
+        const inboxState = await prisma.orgInboxState.findUnique({
+          where: {
+            orgId_userId: {
+              orgId,
+              userId: user.id,
+            },
+          },
+        });
 
-        // Only check for unread requests for active-ish members
-        // Inbox state feature disabled for now
         let hasUnreadInbox = false;
-        const lastSeenAt = null;
+        const lastSeenAt = inboxState?.lastSeenAt || new Date(0);
 
         if (["ACTIVE", "PENDING_TEAM_ASSIGNMENT"].includes(membership.status)) {
 
@@ -175,6 +182,9 @@ export async function GET() {
               ],
               status: {
                 not: "CLOSED",
+              },
+              createdAt: {
+                gt: lastSeenAt,
               },
             },
             select: {

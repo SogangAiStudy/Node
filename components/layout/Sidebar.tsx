@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams, usePathname, useRouter } from "next/navigation";
@@ -34,6 +34,9 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { mockSubjects, searchWorkspace, enrichProjectWithWorkspaceData } from "@/lib/mock-workspace-data";
+import { SubjectCreationModal } from "@/components/workspace/SubjectCreationModal";
+import { GlobalSearchModal } from "./GlobalSearchModal";
+import { toast } from "sonner";
 
 interface Workspace {
   orgId: string;
@@ -62,6 +65,8 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearchResults, setShowSearchResults] = useState(false);
+  const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
+  const [isSubjectModalOpen, setIsSubjectModalOpen] = useState(false);
 
   const initials = session?.user?.name
     ?.split("")
@@ -86,6 +91,19 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
     }
   }, [currentOrgId, workspaces, router]);
 
+  // Keyboard shortcut for search
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setIsSearchModalOpen((open) => !open);
+      }
+    };
+
+    document.addEventListener("keydown", down);
+    return () => document.removeEventListener("keydown", down);
+  }, []);
+
   // Fetch projects for current workspace
   const { data: projectsData } = useQuery({
     queryKey: ["projects", currentOrgId],
@@ -98,6 +116,38 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
     enabled: !!currentOrgId && currentOrgId !== "undefined",
   });
 
+  // Fetch subjects for current workspace
+  const { data: subjectsData, refetch: refetchSubjects } = useQuery({
+    queryKey: ["subjects", currentOrgId],
+    queryFn: async () => {
+      if (!currentOrgId || currentOrgId === "undefined") return { subjects: [] };
+      const res = await fetch(`/api/subjects?orgId=${currentOrgId}`);
+      if (!res.ok) throw new Error("Failed to fetch subjects");
+      return res.json() as Promise<{ subjects: any[] }>;
+    },
+    enabled: !!currentOrgId && currentOrgId !== "undefined",
+  });
+
+  const handleCreateSubject = async (name: string) => {
+    try {
+      const res = await fetch("/api/subjects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orgId: currentOrgId, name }),
+      });
+
+      if (!res.ok) throw new Error("Failed to create subject");
+
+      // Refetch subjects
+      refetchSubjects();
+      setIsSubjectModalOpen(false);
+      toast.success("Subject created");
+    } catch (error) {
+      console.error("Failed to create subject:", error);
+      toast.error("Failed to create subject");
+    }
+  };
+
   const currentWorkspace = workspaces?.find((w) => w.orgId === currentOrgId);
   const projects = projectsData?.projects || [];
 
@@ -106,11 +156,11 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
     return projects.map((p, i) => enrichProjectWithWorkspaceData(p, i));
   }, [projects]);
 
-  // Search functionality
-  const searchResults = useMemo(() => {
-    if (!searchQuery.trim()) return { projects: [], subjects: [] };
-    return searchWorkspace(enrichedProjects, mockSubjects, searchQuery);
-  }, [enrichedProjects, searchQuery]);
+  // Search functionality (for use by the modal)
+  const handleSearch = useCallback((query: string) => {
+    if (!query.trim()) return { projects: [], subjects: [] };
+    return searchWorkspace(enrichedProjects, mockSubjects, query);
+  }, [enrichedProjects]);
 
   // Categorize projects
   const privateProjects = projects.filter(p => p.teamCount <= 1);
@@ -122,20 +172,44 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
   // Debugging
   console.log(`[DEBUG] Sidebar - currentOrgId: ${currentOrgId}`);
 
-  // Handle search result click
   const handleSubjectClick = (subjectId: string) => {
     setSearchQuery("");
     setShowSearchResults(false);
     // Navigate to projects page and scroll to subject
     router.push(`/org/${currentOrgId}/projects#subject-${subjectId}`);
-    // TODO: Trigger subject expansion
   };
 
   const handleProjectClick = (projectId: string) => {
     setSearchQuery("");
     setShowSearchResults(false);
-    router.push(`/org/${currentOrgId}/projects/${projectId}/graph`);
+    const proj = projects.find(p => p.id === projectId);
+    if (proj) {
+      router.push(`/org/${currentOrgId}/projects/${projectId}/graph`);
+    }
   };
+
+  // Group enriched projects by subject for sidebar display
+  const sidebarGroupedProjects = useMemo(() => {
+    const grouped = new Map<string, any[]>();
+    const allKnownSubjects = [
+      ...(subjectsData?.subjects || []),
+      ...mockSubjects.filter(ms => !subjectsData?.subjects?.some((s: any) => s.id === ms.id))
+    ];
+
+    allKnownSubjects.forEach(s => grouped.set(s.id, []));
+    grouped.set("unfiled", []);
+
+    enrichedProjects.forEach(p => {
+      const subjectId = p.subjectId || "unfiled";
+      const existing = grouped.get(subjectId) || [];
+      grouped.set(subjectId, [...existing, p]);
+    });
+
+    return {
+      subjects: allKnownSubjects,
+      grouped
+    };
+  }, [enrichedProjects, subjectsData?.subjects]);
 
   const NavItem = ({
     href,
@@ -212,80 +286,21 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
         </DropdownMenu>
       </div>
 
-      {/* Search Input */}
-      <div className="px-3 py-2 relative">
-        <div className="relative">
-          <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#7b7c7e]" />
-          <Input
-            type="text"
-            placeholder="Search..."
-            value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
-              setShowSearchResults(e.target.value.trim().length > 0);
-            }}
-            onFocus={() => searchQuery.trim() && setShowSearchResults(true)}
-            className="pl-8 pr-8 h-8 bg-[#2c2d31] border-[#2c2d31] text-[#d1d2d5] placeholder:text-[#7b7c7e] focus:border-[#3b3c40]"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => {
-                setSearchQuery("");
-                setShowSearchResults(false);
-              }}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 hover:bg-[#3b3c40] rounded"
-            >
-              <X className="h-3.5 w-3.5 text-[#7b7c7e]" />
-            </button>
-          )}
-        </div>
-
-        {/* Search Results Dropdown */}
-        {showSearchResults && (searchResults.subjects.length > 0 || searchResults.projects.length > 0) && (
-          <div className="absolute left-3 right-3 top-full mt-1 bg-[#2c2d31] border border-[#3b3c40] rounded-md shadow-lg z-50 max-h-[300px] overflow-hidden">
-            <ScrollArea className="max-h-[300px]">
-              <div className="p-1">
-                {/* Subject Results */}
-                {searchResults.subjects.length > 0 && (
-                  <div className="mb-2">
-                    <div className="px-2 py-1 text-[10px] font-bold text-[#7b7c7e] uppercase tracking-wider">
-                      Subjects
-                    </div>
-                    {searchResults.subjects.map((subject) => (
-                      <button
-                        key={subject.id}
-                        onClick={() => handleSubjectClick(subject.id)}
-                        className="w-full flex items-center gap-2 px-2 py-1.5 text-sm text-[#d1d2d5] hover:bg-[#3b3c40] rounded transition-colors"
-                      >
-                        <Layers className="h-3.5 w-3.5 text-[#7b7c7e]" />
-                        <span className="truncate">{subject.name}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {/* Project Results */}
-                {searchResults.projects.length > 0 && (
-                  <div>
-                    <div className="px-2 py-1 text-[10px] font-bold text-[#7b7c7e] uppercase tracking-wider">
-                      Projects
-                    </div>
-                    {searchResults.projects.map((project) => (
-                      <button
-                        key={project.id}
-                        onClick={() => handleProjectClick(project.id)}
-                        className="w-full flex items-center gap-2 px-2 py-1.5 text-sm text-[#d1d2d5] hover:bg-[#3b3c40] rounded transition-colors"
-                      >
-                        <FolderKanban className="h-3.5 w-3.5 text-[#7b7c7e]" />
-                        <span className="truncate">{project.name}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </ScrollArea>
+      {/* Search Button (Triggers Modal) */}
+      <div className="px-3 py-2">
+        <button
+          onClick={() => setIsSearchModalOpen(true)}
+          className="w-full flex items-center justify-between px-2.5 h-9 rounded-md bg-[#2c2d31] border border-[#3b3c40] text-[#7b7c7e] hover:text-[#d1d2d5] transition-all group shadow-inner"
+        >
+          <div className="flex items-center gap-2.5">
+            <SearchIcon className="h-4 w-4 transition-colors group-hover:text-white" />
+            <span className="text-[13px] font-medium">Search...</span>
           </div>
-        )}
+          <div className="flex items-center gap-1.5 px-1.5 py-0.5 rounded bg-[#3b3c40] border border-[#4c4d52] text-[10px] font-bold text-[#d1d2d5]">
+            <span className="opacity-60">⌘</span>
+            <span>K</span>
+          </div>
+        </button>
       </div>
 
       {/* Main Navigation */}
@@ -293,12 +308,6 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
         {currentOrgId && currentOrgId !== "undefined" ? (
           <>
             <div className="space-y-0.5">
-              <NavItem
-                href={`/org/${currentOrgId}/search`}
-                icon={SearchIcon}
-                label="Search"
-                isActive={pathname.includes("/search")}
-              />
               <NavItem
                 href={`/org/${currentOrgId}/projects`}
                 icon={Home}
@@ -342,66 +351,92 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
               </div>
             )}
 
-            {/* Private Section */}
-            <div className="mt-6 pt-2">
-              <div className="flex items-center justify-between px-3 mb-1 group">
-                <div className="flex items-center gap-2 text-[11px] font-bold text-[#7b7c7e] uppercase tracking-wider">
-                  <Lock className="h-3 w-3" /> Private
-                </div>
-                <Link
-                  href={`/org/${currentOrgId}/projects/new`}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 hover:bg-[#2c2d31] rounded"
-                >
-                  <Plus className="h-3.5 w-3.5 text-[#7b7c7e]" />
-                </Link>
-              </div>
-              <div className="space-y-0.5">
-                {privateProjects.map((project) => (
-                  <Link
-                    key={project.id}
-                    href={`/org/${currentOrgId}/projects/${project.id}/graph`}
-                    className={cn(
-                      "flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] transition-colors group",
-                      currentProjectId === project.id
-                        ? "bg-[#2c2d31] text-white"
-                        : "text-[#d1d2d5] hover:bg-[#2c2d31] hover:text-white"
-                    )}
-                  >
-                    <FolderKanban className={cn("h-4 w-4 shrink-0 opacity-60", currentProjectId === project.id && "opacity-100")} />
-                    <span className="truncate">{project.name}</span>
-                  </Link>
-                ))}
-                {privateProjects.length === 0 && (
-                  <div className="px-3 py-1.5 text-[12px] text-[#7b7c7e] italic">No private projects</div>
-                )}
-              </div>
-            </div>
-
-            {/* Shared Section */}
+            {/* Projects Grouped by Subjects */}
             <div className="mt-6">
-              <div className="flex items-center justify-between px-3 mb-1 group">
-                <div className="flex items-center gap-2 text-[11px] font-bold text-[#7b7c7e] uppercase tracking-wider">
-                  <Users2 className="h-3 w-3" /> Shared
-                </div>
+              <div className="px-3 mb-2 flex items-center justify-between group">
+                <div className="text-[11px] font-bold text-[#7b7c7e] uppercase tracking-wider">Workspace</div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 hover:bg-[#2c2d31] rounded">
+                      <Plus className="h-3.5 w-3.5 text-[#7b7c7e]" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="w-64 bg-[#1a1b1e] border-[#2c2d31] text-[#d1d2d5] p-1.5" align="start" side="right" sideOffset={10}>
+                    <DropdownMenuItem
+                      className="focus:bg-[#2c2d31] focus:text-white cursor-pointer py-3 px-3 rounded-md transition-colors"
+                      onClick={() => setIsSubjectModalOpen(true)}
+                    >
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2">
+                          <Plus className="h-4 w-4 text-blue-400" />
+                          <span className="text-[14px] font-bold text-white">Subject</span>
+                        </div>
+                        <span className="text-[11px] text-[#7b7c7e] leading-tight pl-6">Create a new organizational divider</span>
+                      </div>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator className="bg-[#2c2d31] my-1" />
+                    <DropdownMenuItem asChild className="focus:bg-[#2c2d31] focus:text-white cursor-pointer py-2.5 px-3 rounded-md transition-colors">
+                      <Link href={`/org/${currentOrgId}/projects/new`} className="flex items-center w-full">
+                        <FolderKanban className="h-4 w-4 mr-2 text-[#7b7c7e]" />
+                        <span className="text-[13px] font-medium">Project</span>
+                      </Link>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
-              <div className="space-y-0.5">
-                {sharedProjects.map((project) => (
-                  <Link
-                    key={project.id}
-                    href={`/org/${currentOrgId}/projects/${project.id}/graph`}
-                    className={cn(
-                      "flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] transition-colors group",
-                      currentProjectId === project.id
-                        ? "bg-[#2c2d31] text-white"
-                        : "text-[#d1d2d5] hover:bg-[#2c2d31] hover:text-white"
-                    )}
-                  >
-                    <FolderKanban className={cn("h-4 w-4 shrink-0 opacity-60", currentProjectId === project.id && "opacity-100")} />
-                    <span className="truncate">{project.name}</span>
-                  </Link>
-                ))}
-                {sharedProjects.length === 0 && (
-                  <div className="px-3 py-1.5 text-[12px] text-[#7b7c7e] italic">No shared projects</div>
+
+              <div className="space-y-4">
+                {sidebarGroupedProjects.subjects.map((subject) => {
+                  const subjectProjects = sidebarGroupedProjects.grouped.get(subject.id) || [];
+                  if (subjectProjects.length === 0) return null;
+
+                  return (
+                    <div key={subject.id} className="space-y-0.5">
+                      <div className="px-3 py-1 flex items-center gap-2 text-[10px] font-bold text-[#7b7c7e]/60 uppercase tracking-widest border-b border-[#2c2d31]/30 mb-1">
+                        <div className="w-1 h-1 rounded-full" style={{ backgroundColor: subject.color }} />
+                        {subject.name}
+                      </div>
+                      {subjectProjects.map((project) => (
+                        <Link
+                          key={project.id}
+                          href={`/org/${currentOrgId}/projects/${project.id}/graph`}
+                          className={cn(
+                            "flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] transition-colors group",
+                            currentProjectId === project.id
+                              ? "bg-[#2c2d31] text-white"
+                              : "text-[#d1d2d5] hover:bg-[#2c2d31] hover:text-white"
+                          )}
+                        >
+                          <FolderKanban className={cn("h-4 w-4 shrink-0 opacity-60", currentProjectId === project.id && "opacity-100")} />
+                          <span className="truncate">{project.name}</span>
+                        </Link>
+                      ))}
+                    </div>
+                  );
+                })}
+
+                {/* Unfiled Projects */}
+                {(sidebarGroupedProjects.grouped.get("unfiled") || []).length > 0 && (
+                  <div className="space-y-0.5">
+                    <div className="px-3 py-1 text-[10px] font-bold text-[#7b7c7e]/60 uppercase tracking-widest border-b border-[#2c2d31]/30 mb-1">
+                      Unfiled
+                    </div>
+                    {(sidebarGroupedProjects.grouped.get("unfiled") || []).map((project) => (
+                      <Link
+                        key={project.id}
+                        href={`/org/${currentOrgId}/projects/${project.id}/graph`}
+                        className={cn(
+                          "flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] transition-colors group",
+                          currentProjectId === project.id
+                            ? "bg-[#2c2d31] text-white"
+                            : "text-[#d1d2d5] hover:bg-[#2c2d31] hover:text-white"
+                        )}
+                      >
+                        <FolderKanban className={cn("h-4 w-4 shrink-0 opacity-60", currentProjectId === project.id && "opacity-100")} />
+                        <span className="truncate">{project.name}</span>
+                      </Link>
+                    ))}
+                  </div>
                 )}
               </div>
             </div>
@@ -460,6 +495,21 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
           </DropdownMenu>
         </div>
       </div>
+
+      <SubjectCreationModal
+        isOpen={isSubjectModalOpen}
+        onClose={() => setIsSubjectModalOpen(false)}
+        onCreated={handleCreateSubject}
+      />
+
+      <GlobalSearchModal
+        isOpen={isSearchModalOpen}
+        onClose={() => setIsSearchModalOpen(false)}
+        orgId={currentOrgId}
+        projects={enrichedProjects}
+        subjects={mockSubjects}
+        onSearch={handleSearch}
+      />
     </div>
   );
 }

@@ -5,12 +5,21 @@ import { Button } from "@/components/ui/button";
 import { NodeDTO, ComputedStatus, ManualStatus } from "@/types";
 import { CreateRequestDialog } from "./CreateRequestDialog";
 import { cn } from "@/lib/utils";
-import { Loader2, User, Pencil, Crown, AlertCircle, Clock, Calendar, ChevronDown } from "lucide-react";
+import {
+  Loader2,
+  User,
+  Pencil,
+  Crown,
+  AlertCircle,
+  Clock,
+  Calendar,
+  ChevronDown,
+  Plus,
+} from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
