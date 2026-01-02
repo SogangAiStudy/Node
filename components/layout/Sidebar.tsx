@@ -1,29 +1,45 @@
 "use client";
 
-import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { signOut, useSession } from "next-auth/react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, Inbox, FolderKanban } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  ChevronDown,
+  Inbox,
+  FolderKanban,
+  Search,
+  Home,
+  Plus,
+  Settings,
+  Lock,
+  Users2,
+  LogOut,
+  UserCircle2
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Workspace {
   orgId: string;
   name: string;
   hasUnreadInbox: boolean;
+  status?: string;
 }
 
 interface Project {
   id: string;
   name: string;
   description: string | null;
+  teamCount: number;
 }
 
 interface SidebarProps {
@@ -31,9 +47,16 @@ interface SidebarProps {
 }
 
 export function Sidebar({ currentOrgId }: SidebarProps) {
+  const { data: session } = useSession();
   const params = useParams();
   const pathname = usePathname();
   const currentProjectId = params.projectId as string | undefined;
+
+  const initials = session?.user?.name
+    ?.split("")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase() || "U";
 
   // Fetch workspaces with unread indicators
   const { data: workspaces } = useQuery({
@@ -46,7 +69,7 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
   });
 
   // Fetch projects for current workspace
-  const { data: projects } = useQuery({
+  const { data: projectsData } = useQuery({
     queryKey: ["projects", currentOrgId],
     queryFn: async () => {
       const res = await fetch(`/api/projects?orgId=${currentOrgId}`);
@@ -57,86 +80,221 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
   });
 
   const currentWorkspace = workspaces?.find((w) => w.orgId === currentOrgId);
-  const isInboxActive = pathname.includes("/inbox") && !currentProjectId;
+  const projects = projectsData?.projects || [];
+
+  // Categorize projects
+  const privateProjects = projects.filter(p => p.teamCount <= 1);
+  const sharedProjects = projects.filter(p => p.teamCount > 1);
+
+  const NavItem = ({
+    href,
+    icon: Icon,
+    label,
+    isActive,
+    unread = false
+  }: {
+    href: string;
+    icon: any;
+    label: string;
+    isActive: boolean;
+    unread?: boolean;
+  }) => (
+    <Link
+      href={href}
+      className={cn(
+        "flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] font-medium transition-colors group",
+        isActive
+          ? "bg-[#2c2d31] text-white"
+          : "text-[#d1d2d5] hover:bg-[#2c2d31] hover:text-white"
+      )}
+    >
+      <Icon className={cn("h-4 w-4 shrink-0 transition-colors", isActive ? "text-white" : "text-[#7b7c7e] group-hover:text-[#d1d2d5]")} />
+      <span className="truncate">{label}</span>
+      {unread && (
+        <div className="h-1.5 w-1.5 bg-[#eb5757] rounded-full ml-auto shrink-0 shadow-sm shadow-[#eb5757]/40" />
+      )}
+    </Link>
+  );
 
   return (
-    <div className="w-64 bg-white border-r border-gray-200 h-screen flex flex-col">
+    <div className="w-[240px] bg-[#1a1b1e] h-screen flex flex-col select-none border-r border-[#2c2d31]">
       {/* Workspace Switcher */}
-      <div className="p-4 border-b border-gray-200">
+      <div className="px-3 py-4">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
-              variant="outline"
-              className="w-full justify-between font-medium text-left"
+              variant="ghost"
+              className="w-full justify-between h-9 px-2 text-[#d1d2d5] hover:bg-[#2c2d31] hover:text-white border-transparent"
             >
-              <span className="truncate">{currentWorkspace?.name || "Select workspace"}</span>
-              <ChevronDown className="h-4 w-4 ml-2 shrink-0" />
+              <div className="flex items-center gap-2 overflow-hidden">
+                <div className="w-5 h-5 rounded bg-[#37352f] flex items-center justify-center text-[10px] text-white font-bold shrink-0 shadow-sm border border-[#2c2d31]">
+                  {currentWorkspace?.name?.[0] || "?"}
+                </div>
+                <span className="truncate text-sm font-semibold">{currentWorkspace?.name || "Workspace"}</span>
+              </div>
+              <ChevronDown className="h-3.5 w-3.5 ml-1 text-[#7b7c7e] shrink-0" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-56" align="start">
+          <DropdownMenuContent className="w-60 bg-[#1a1b1e] border-[#2c2d31] text-[#d1d2d5]" align="start">
+            <div className="px-2 py-1.5 text-[11px] font-bold text-[#7b7c7e] uppercase tracking-wider">
+              Workspaces
+            </div>
             {workspaces?.map((workspace) => (
-              <DropdownMenuItem key={workspace.orgId} asChild>
+              <DropdownMenuItem key={workspace.orgId} asChild className="focus:bg-[#2c2d31] focus:text-white cursor-pointer">
                 <Link
                   href={`/org/${workspace.orgId}/projects`}
-                  className="flex items-center justify-between cursor-pointer"
+                  className="flex items-center justify-between"
                 >
-                  <span className="truncate">{workspace.name}</span>
+                  <div className="flex items-center gap-2 truncate">
+                    <div className="w-4 h-4 rounded-sm bg-[#37352f] flex items-center justify-center text-[8px] text-white font-bold shrink-0">
+                      {workspace.name?.[0]}
+                    </div>
+                    <span className="truncate text-sm">{workspace.name}</span>
+                  </div>
                   {workspace.hasUnreadInbox && (
-                    <div className="h-2 w-2 bg-red-500 rounded-full shrink-0" />
+                    <div className="h-1.5 w-1.5 bg-[#eb5757] rounded-full shrink-0" />
                   )}
                 </Link>
               </DropdownMenuItem>
             ))}
+            <DropdownMenuSeparator className="bg-[#2c2d31]" />
+            <DropdownMenuItem asChild className="focus:bg-[#2c2d31] focus:text-white cursor-pointer">
+              <Link href="/onboarding" className="flex items-center gap-2">
+                <Plus className="h-3.5 w-3.5" />
+                <span className="text-sm">Create or Join</span>
+              </Link>
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
 
-      {/* Navigation */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="p-2 space-y-1">
-          {/* Inbox Link */}
-          <Link
+      {/* Main Navigation */}
+      <div className="flex-1 overflow-y-auto px-1.5 pb-4 custom-scrollbar">
+        <div className="space-y-0.5">
+          <NavItem
+            href={`/org/${currentOrgId}/search`}
+            icon={Search}
+            label="Search"
+            isActive={pathname.includes("/search")}
+          />
+          <NavItem
+            href={`/org/${currentOrgId}/projects`}
+            icon={Home}
+            label="Home"
+            isActive={pathname === `/org/${currentOrgId}/projects`}
+          />
+          <NavItem
             href={`/org/${currentOrgId}/inbox`}
-            className={cn(
-              "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
-              isInboxActive
-                ? "bg-indigo-50 text-indigo-700"
-                : "text-gray-700 hover:bg-gray-100"
-            )}
-          >
-            <Inbox className="h-4 w-4 shrink-0" />
-            <span>Inbox</span>
-            {currentWorkspace?.hasUnreadInbox && (
-              <div className="h-2 w-2 bg-red-500 rounded-full ml-auto shrink-0" />
-            )}
-          </Link>
+            icon={Inbox}
+            label="Inbox"
+            isActive={pathname.includes("/inbox")}
+            unread={currentWorkspace?.hasUnreadInbox}
+          />
+        </div>
 
-          {/* Projects Section */}
-          <div className="pt-4">
-            <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              Projects
+        {/* Private Section */}
+        <div className="mt-6 pt-2">
+          <div className="flex items-center justify-between px-3 mb-1 group">
+            <div className="flex items-center gap-2 text-[11px] font-bold text-[#7b7c7e] uppercase tracking-wider">
+              <Lock className="h-3 w-3" /> Private
             </div>
-            <div className="space-y-1">
-              {projects?.projects.map((project) => {
-                const isActive = currentProjectId === project.id;
-                return (
-                  <Link
-                    key={project.id}
-                    href={`/org/${currentOrgId}/projects/${project.id}/graph`}
-                    className={cn(
-                      "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
-                      isActive
-                        ? "bg-indigo-50 text-indigo-700 border-l-2 border-indigo-600"
-                        : "text-gray-700 hover:bg-gray-100"
-                    )}
-                  >
-                    <FolderKanban className="h-4 w-4 shrink-0" />
-                    <span className="truncate">{project.name}</span>
-                  </Link>
-                );
-              })}
+            <button className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 hover:bg-[#2c2d31] rounded">
+              <Plus className="h-3.5 w-3.5 text-[#7b7c7e]" />
+            </button>
+          </div>
+          <div className="space-y-0.5">
+            {privateProjects.map((project) => (
+              <Link
+                key={project.id}
+                href={`/org/${currentOrgId}/projects/${project.id}/graph`}
+                className={cn(
+                  "flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] transition-colors group",
+                  currentProjectId === project.id
+                    ? "bg-[#2c2d31] text-white"
+                    : "text-[#d1d2d5] hover:bg-[#2c2d31] hover:text-white"
+                )}
+              >
+                <FolderKanban className={cn("h-4 w-4 shrink-0 opacity-60", currentProjectId === project.id && "opacity-100")} />
+                <span className="truncate">{project.name}</span>
+              </Link>
+            ))}
+            {privateProjects.length === 0 && (
+              <div className="px-3 py-1.5 text-[12px] text-[#7b7c7e] italic">No private projects</div>
+            )}
+          </div>
+        </div>
+
+        {/* Shared Section */}
+        <div className="mt-6">
+          <div className="flex items-center justify-between px-3 mb-1 group">
+            <div className="flex items-center gap-2 text-[11px] font-bold text-[#7b7c7e] uppercase tracking-wider">
+              <Users2 className="h-3 w-3" /> Shared
             </div>
           </div>
+          <div className="space-y-0.5">
+            {sharedProjects.map((project) => (
+              <Link
+                key={project.id}
+                href={`/org/${currentOrgId}/projects/${project.id}/graph`}
+                className={cn(
+                  "flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] transition-colors group",
+                  currentProjectId === project.id
+                    ? "bg-[#2c2d31] text-white"
+                    : "text-[#d1d2d5] hover:bg-[#2c2d31] hover:text-white"
+                )}
+              >
+                <FolderKanban className={cn("h-4 w-4 shrink-0 opacity-60", currentProjectId === project.id && "opacity-100")} />
+                <span className="truncate">{project.name}</span>
+              </Link>
+            ))}
+            {sharedProjects.length === 0 && (
+              <div className="px-3 py-1.5 text-[12px] text-[#7b7c7e] italic">No shared projects</div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Sidebar Footer */}
+      <div className="mt-auto p-1.5 border-t border-[#2c2d31] bg-[#1a1b1e]/50">
+        <NavItem
+          href={`/org/${currentOrgId}/settings`}
+          icon={Settings}
+          label="Settings"
+          isActive={pathname.includes("/settings")}
+        />
+        <div className="mt-1">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                className="w-full justify-start gap-2.5 h-11 px-3 text-[#d1d2d5] hover:bg-[#2c2d31] hover:text-white"
+              >
+                <Avatar className="h-5 w-5 border border-[#2c2d31]">
+                  <AvatarImage src={session?.user?.image || undefined} />
+                  <AvatarFallback className="bg-[#37352f] text-[10px] text-white font-bold">{initials}</AvatarFallback>
+                </Avatar>
+                <div className="flex-1 text-left truncate">
+                  <div className="text-[13px] font-medium truncate">{session?.user?.name || "My Account"}</div>
+                  <div className="text-[10px] text-[#7b7c7e] truncate">{session?.user?.email}</div>
+                </div>
+                <ChevronDown className="h-3 w-3 text-[#7b7c7e] shrink-0" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-56 bg-[#1a1b1e] border-[#2c2d31] text-[#d1d2d5]" align="end" side="right">
+              <DropdownMenuItem className="focus:bg-[#2c2d31] focus:text-white hover:bg-[#2c2d31] hover:text-white cursor-pointer">
+                <Settings className="h-3.5 w-3.5 mr-2" />
+                <span>Profile Settings</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator className="bg-[#2c2d31]" />
+              <DropdownMenuItem
+                onClick={() => signOut({ callbackUrl: "/login" })}
+                className="focus:bg-[#2c2d31] focus:text-white hover:bg-[#2c2d31] hover:text-white cursor-pointer text-red-400 focus:text-red-400"
+              >
+                <LogOut className="h-3.5 w-3.5 mr-2" />
+                <span>Sign out</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
     </div>
