@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/utils/auth";
 
+export const dynamic = "force-dynamic";
+
 // GET /api/workspaces - Get all user's workspaces with unread inbox indicator
 export async function GET() {
   try {
@@ -102,7 +104,7 @@ export async function GET() {
         return org;
       });
 
-      // Re-fetch memberships to include the new one
+      // Re-fetch memberships to include the new one (with status)
       orgMemberships = await prisma.orgMember.findMany({
         where: {
           userId: user.id,
