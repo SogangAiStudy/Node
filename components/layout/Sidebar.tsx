@@ -589,49 +589,51 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
                 )}
               </Droppable>
 
-              {/* Unfiled Projects */}
-              {(localGroupedProjects.get("unfiled") || []).length > 0 && (
-                <div className="space-y-0.5 mt-4">
-                  <div className="px-3 py-1 text-[10px] font-bold text-[#7b7c7e]/60 uppercase tracking-widest border-b border-[#2c2d31]/30 mb-1">
-                    Unfiled
-                  </div>
-                  <Droppable droppableId="unfiled" type="PROJECT">
-                    {(provided, snapshot) => (
-                      <div
-                        ref={provided.innerRef}
-                        {...provided.droppableProps}
-                        className={cn(snapshot.isDraggingOver && "bg-zinc-800/30 rounded")}
-                      >
-                        {(localGroupedProjects.get("unfiled") || []).map((project: any, index: number) => (
-                          <Draggable key={project.id} draggableId={project.id} index={index}>
-                            {(providedP) => (
-                              <div
-                                ref={providedP.innerRef}
-                                {...providedP.draggableProps}
-                                {...providedP.dragHandleProps}
-                              >
-                                <Link
-                                  href={`/org/${currentOrgId}/projects/${project.id}/graph`}
-                                  className={cn(
-                                    "flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] transition-colors group",
-                                    currentProjectId === project.id
-                                      ? "bg-[#2c2d31] text-white"
-                                      : "text-[#d1d2d5] hover:bg-[#2c2d31] hover:text-white"
-                                  )}
-                                >
-                                  <FolderKanban className={cn("h-4 w-4 shrink-0 opacity-60", currentProjectId === project.id && "opacity-100")} />
-                                  <span className="truncate">{project.name}</span>
-                                </Link>
-                              </div>
-                            )}
-                          </Draggable>
-                        ))}
-                        {provided.placeholder}
-                      </div>
-                    )}
-                  </Droppable>
+              {/* Unfiled Projects - Always visible as default drop zone */}
+              <div className="space-y-0.5 mt-4">
+                {/* Only show label if there are other folders, otherwise it looks redundant? 
+                      Actually, keeping it consistent is safer. 
+                      Let's call it "General" or keep "Unfiled" for now but make sure it renders. 
+                  */}
+                <div className="px-3 py-1 text-[10px] font-bold text-[#7b7c7e]/60 uppercase tracking-widest border-b border-[#2c2d31]/30 mb-1">
+                  Unfiled
                 </div>
-              )}
+                <Droppable droppableId="unfiled" type="PROJECT">
+                  {(provided, snapshot) => (
+                    <div
+                      ref={provided.innerRef}
+                      {...provided.droppableProps}
+                      className={cn(snapshot.isDraggingOver && "bg-zinc-800/30 rounded")}
+                    >
+                      {(localGroupedProjects.get("unfiled") || []).map((project: any, index: number) => (
+                        <Draggable key={project.id} draggableId={project.id} index={index}>
+                          {(providedP) => (
+                            <div
+                              ref={providedP.innerRef}
+                              {...providedP.draggableProps}
+                              {...providedP.dragHandleProps}
+                            >
+                              <Link
+                                href={`/org/${currentOrgId}/projects/${project.id}/graph`}
+                                className={cn(
+                                  "flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] transition-colors group",
+                                  currentProjectId === project.id
+                                    ? "bg-[#2c2d31] text-white"
+                                    : "text-[#d1d2d5] hover:bg-[#2c2d31] hover:text-white"
+                                )}
+                              >
+                                <FolderKanban className={cn("h-4 w-4 shrink-0 opacity-60", currentProjectId === project.id && "opacity-100")} />
+                                <span className="truncate">{project.name}</span>
+                              </Link>
+                            </div>
+                          )}
+                        </Draggable>
+                      ))}
+                      {provided.placeholder}
+                    </div>
+                  )}
+                </Droppable>
+              </div>
             </div>
           </DragDropContext>
 
