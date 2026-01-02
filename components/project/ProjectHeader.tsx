@@ -174,14 +174,6 @@ export function ProjectHeader({
                 projectId={projectId}
                 orgId={orgId}
             />
-
-            {/* Full Member Management Modal */}
-            <ShareModal
-                open={memberManagementOpen}
-                onOpenChange={setMemberManagementOpen}
-                projectId={projectId}
-                orgId={orgId}
-            />
         </>
     );
 }
