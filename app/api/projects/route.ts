@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
           },
         },
         orderBy: [
-          { order: "asc" },
+          // { order: "asc" },
           { createdAt: "desc" },
         ],
       });
@@ -124,7 +124,7 @@ export async function GET(request: NextRequest) {
           },
         },
         orderBy: [
-          { order: "asc" },
+          // { order: "asc" },
           { createdAt: "desc" },
         ],
       });
@@ -146,7 +146,11 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ projects: projectDTOs });
   } catch (error) {
-    console.error("GET /api/projects error:", error);
+    console.error("GET /api/projects error details:", error);
+    // @ts-ignore
+    if (error.code) console.error("Error code:", error.code);
+    // @ts-ignore
+    if (error.meta) console.error("Error meta:", error.meta);
     return NextResponse.json({ error: "Failed to fetch projects" }, { status: 500 });
   }
 }
