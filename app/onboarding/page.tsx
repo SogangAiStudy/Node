@@ -59,6 +59,45 @@ export default function OnboardingPage() {
   // Show "Pending Approval" screen ONLY if the user has no active workspace to fallback to
   const showPendingScreen = !!pendingOrg && !activeOrg;
 
+  // Handle invite code from URL
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const code = searchParams.get("code");
+    if (code && session?.user && !isCheckingWorkspaces) {
+      handleJoinRequestWithCode(code);
+    }
+  }, [session?.user, isCheckingWorkspaces]);
+
+  const handleJoinRequestWithCode = async (inviteCode: string) => {
+    setIsSubmittingJoin(true);
+    try {
+      const res = await fetch("/api/organizations/join", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ inviteCode }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        // If already member, just redirect
+        if (data.error?.includes("already have a membership")) {
+          // Find the orgId if possible from existing workspaces
+          return;
+        }
+        throw new Error(data.error || "Failed to join");
+      }
+
+      toast.success("Joined successfully!");
+      await queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+      // Remove code from URL
+      window.history.replaceState({}, "", "/onboarding");
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setIsSubmittingJoin(false);
+    }
+  };
+
   // We REMOVED the automatic redirect useEffect here.
   // This allows users to manually visit /onboarding to join more organizations
   // while already having a personal workspace.

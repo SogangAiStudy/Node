@@ -4,14 +4,15 @@ import { requireAuth, isOrgAdmin } from "@/lib/utils/auth";
 import { z } from "zod";
 
 const UpdateMemberSchema = z.object({
+    orgId: z.string().min(1, "Organization ID is required"),
     role: z.enum(["ADMIN", "MEMBER"]).optional(),
-    status: z.enum(["ACTIVE", "PENDING_TEAM_ASSIGNMENT", "DEACTIVATED"]).optional(),
+    status: z.enum(["ACTIVE", "PENDING_TEAM_ASSIGNMENT", "DEACTIVATED", "PENDING_APPROVAL"]).optional(),
     teamIds: z.array(z.string()).optional(),
 });
 
 /**
  * PATCH /api/organizations/members/[userId]
- * Update a member's role, status, and team assignments
+ * Update a member's role, status, and team assignments within a specific organization
  */
 export async function PATCH(
     request: NextRequest,
@@ -21,12 +22,15 @@ export async function PATCH(
         const { userId: targetUserId } = await params;
         const currentUser = await requireAuth();
         const body = await request.json();
-        const { role, status, teamIds } = UpdateMemberSchema.parse(body);
+        const { role, status, teamIds, orgId } = UpdateMemberSchema.parse(body);
 
         // Get currentUser's organization and check if they are admin
-        const currentOrgMember = await prisma.orgMember.findFirst({
+        const currentOrgMember = await prisma.orgMember.findUnique({
             where: {
-                userId: currentUser.id,
+                orgId_userId: {
+                    orgId,
+                    userId: currentUser.id,
+                },
             },
             select: {
                 orgId: true,
@@ -40,8 +44,6 @@ export async function PATCH(
                 { status: 403 }
             );
         }
-
-        const orgId = currentOrgMember.orgId;
 
         // Check if target user is in the same organization
         const targetOrgMember = await prisma.orgMember.findUnique({

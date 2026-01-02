@@ -3,22 +3,40 @@ import { prisma } from "@/lib/db/prisma";
 import { requireAuth, isOrgAdmin } from "@/lib/utils/auth";
 
 /**
- * GET /api/organizations/members
- * List all members of the user's current organization
+ * GET /api/organizations/members?orgId=...
+ * List all members of a specific organization
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
     try {
         const user = await requireAuth();
+        const searchParams = request.nextUrl.searchParams;
+        const requestedOrgId = searchParams.get("orgId");
 
-        // Get user's current organization
-        const orgMember = await prisma.orgMember.findFirst({
-            where: {
-                userId: user.id,
-            },
-            select: {
-                orgId: true,
-            },
-        });
+        // Get user's membership in the target organization
+        let orgMember;
+        if (requestedOrgId) {
+            orgMember = await prisma.orgMember.findUnique({
+                where: {
+                    orgId_userId: {
+                        orgId: requestedOrgId,
+                        userId: user.id,
+                    },
+                },
+                select: {
+                    orgId: true,
+                },
+            });
+        } else {
+            // Fallback for older clients
+            orgMember = await prisma.orgMember.findFirst({
+                where: {
+                    userId: user.id,
+                },
+                select: {
+                    orgId: true,
+                },
+            });
+        }
 
         if (!orgMember) {
             return NextResponse.json({ members: [] });

@@ -4,30 +4,48 @@ import { requireAuth } from "@/lib/utils/auth";
 import { z } from "zod";
 
 const createTeamSchema = z.object({
+    orgId: z.string().optional(), // Optional for backward compatibility, but preferred
     name: z.string().min(1, "Team name is required").max(100),
     description: z.string().max(500).optional(),
 });
 
 /**
  * POST /api/organizations/teams
- * Create a new team in the user's current organization
+ * Create a new team in a specific organization
  */
 export async function POST(request: NextRequest) {
     try {
         const user = await requireAuth();
         const body = await request.json();
-        const { name, description } = createTeamSchema.parse(body);
+        const { name, description, orgId: bodyOrgId } = createTeamSchema.parse(body);
 
-        // Get user's current organization and check if they are admin
-        const orgMember = await prisma.orgMember.findFirst({
-            where: {
-                userId: user.id,
-            },
-            select: {
-                orgId: true,
-                role: true,
-            },
-        });
+        // Get target organization and check if user is admin
+        let orgMember;
+        if (bodyOrgId) {
+            orgMember = await prisma.orgMember.findUnique({
+                where: {
+                    orgId_userId: {
+                        orgId: bodyOrgId,
+                        userId: user.id,
+                    },
+                },
+                select: {
+                    orgId: true,
+                    role: true,
+                },
+            });
+        } else {
+            // Fallback for older clients
+            orgMember = await prisma.orgMember.findFirst({
+                where: {
+                    userId: user.id,
+                },
+                select: {
+                    orgId: true,
+                    role: true,
+                },
+            });
+        }
 
         if (!orgMember || orgMember.role !== "ADMIN") {
             return NextResponse.json(

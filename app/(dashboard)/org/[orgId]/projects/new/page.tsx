@@ -30,6 +30,11 @@ export default function NewProjectPage() {
     const queryClient = useQueryClient();
     const orgId = params.orgId as string;
 
+    // Redirect if orgId is literally "undefined"
+    if (orgId === "undefined") {
+        router.push("/");
+    }
+
     const [name, setName] = useState("");
     const [description, setDescription] = useState("");
     const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([]);
