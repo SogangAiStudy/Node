@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { requireAuth, requireProjectMembership } from "@/lib/utils/auth";
+import { requireAuth, requireProjectMembership, isOrgMember } from "@/lib/utils/auth";
+import { z } from "zod";
+
+const UpdateProjectSchema = z.object({
+  name: z.string().min(1).optional(),
+  description: z.string().optional(),
+});
 
 // GET /api/projects/[projectId] - Get project details
 export async function GET(
@@ -72,5 +78,102 @@ export async function GET(
     }
 
     return NextResponse.json({ error: "Failed to fetch project" }, { status: 500 });
+  }
+}
+
+// PATCH /api/projects/[projectId] - Update project (rename)
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ projectId: string }> }
+) {
+  try {
+    const user = await requireAuth();
+    const { projectId } = await params;
+    const body = await request.json();
+    const validated = UpdateProjectSchema.parse(body);
+
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { orgId: true, folderId: true, name: true },
+    });
+
+    if (!project) {
+      return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    }
+
+    if (!(await isOrgMember(project.orgId, user.id))) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    // Check for name conflicts if renaming
+    if (validated.name && validated.name !== project.name) {
+      const [existingFolder, existingProject] = await Promise.all([
+        prisma.folder.findFirst({
+          where: {
+            orgId: project.orgId,
+            parentId: project.folderId,
+            name: validated.name,
+          }
+        }),
+        prisma.project.findFirst({
+          where: {
+            orgId: project.orgId,
+            folderId: project.folderId,
+            name: validated.name,
+            id: { not: projectId },
+          }
+        })
+      ]);
+
+      if (existingFolder || existingProject) {
+        return NextResponse.json({
+          error: "An item with this name already exists in this location"
+        }, { status: 409 });
+      }
+    }
+
+    const updatedProject = await prisma.project.update({
+      where: { id: projectId },
+      data: validated,
+    });
+
+    return NextResponse.json({ project: updatedProject });
+  } catch (error) {
+    console.error("PATCH /api/projects/[projectId] error:", error);
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+  }
+}
+
+// DELETE /api/projects/[projectId] - Delete project
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ projectId: string }> }
+) {
+  try {
+    const user = await requireAuth();
+    const { projectId } = await params;
+
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { orgId: true, ownerId: true },
+    });
+
+    if (!project) {
+      return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    }
+
+    // Only org members can delete, and preferably the owner
+    if (!(await isOrgMember(project.orgId, user.id))) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    await prisma.project.delete({
+      where: { id: projectId },
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("DELETE /api/projects/[projectId] error:", error);
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

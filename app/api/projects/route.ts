@@ -209,6 +209,31 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Check for name conflicts with existing folders and projects at the same location
+    const targetFolderId = validated.folderId || null;
+    const [existingFolder, existingProject] = await Promise.all([
+      prisma.folder.findFirst({
+        where: {
+          orgId: orgMember.orgId,
+          parentId: targetFolderId,
+          name: validated.name,
+        }
+      }),
+      prisma.project.findFirst({
+        where: {
+          orgId: orgMember.orgId,
+          folderId: targetFolderId,
+          name: validated.name,
+        }
+      })
+    ]);
+
+    if (existingFolder || existingProject) {
+      return NextResponse.json({
+        error: "A folder or project with this name already exists in this location"
+      }, { status: 409 });
+    }
+
     // Create project with multiple ProjectTeam entries
     const project = await prisma.$transaction(async (tx: any) => {
       // Create project
