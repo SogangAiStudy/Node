@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Folder, Project } from "@/hooks/use-workspace-structure";
-import { ChevronRight, Folder as FolderIcon, Plus, FileText, GripVertical } from "lucide-react";
+import { ChevronRight, Folder as FolderIcon, Plus, FileText, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -49,14 +49,24 @@ export function FolderTreeItem({ folder, orgId, level = 0, onCreateSubFolder, in
                             />
                         </div>
 
-                        <FolderIcon className="h-3.5 w-3.5 text-blue-500/80 mr-1" />
+                        <FolderIcon
+                            className="h-3.5 w-3.5 mr-1"
+                            style={{ color: folder.color || '#3b82f6' }}
+                        />
 
                         <span className="text-sm font-medium truncate flex-1">{folder.name}</span>
 
+                        {/* Project count badge */}
+                        {folder.projects.length > 0 && (
+                            <span className="text-[10px] text-[#6b7280] bg-[#2c2d31] px-1.5 py-0.5 rounded-full">
+                                {folder.projects.length}
+                            </span>
+                        )}
+
                         {/* Quick Actions (Add Subfolder) */}
                         <div className="opacity-0 group-hover:opacity-100 flex items-center">
-                            <button 
-                                className="p-0.5 hover:bg-[#3b3c40] rounded text-[#6b7280] hover:text-white" 
+                            <button
+                                className="p-0.5 hover:bg-[#3b3c40] rounded text-[#6b7280] hover:text-white"
                                 title="Add Subfolder"
                                 onClick={(e) => {
                                     e.stopPropagation();
@@ -68,83 +78,92 @@ export function FolderTreeItem({ folder, orgId, level = 0, onCreateSubFolder, in
                         </div>
                     </div>
 
-                    {/* Children */}
-                    {isOpen && (
-                        <Droppable droppableId={folder.id} type="SIDEBAR_ITEM">
-                            {(provided, snapshot) => (
-                                <div
-                                    ref={provided.innerRef}
-                                    {...provided.droppableProps}
-                                    className={cn(
-                                        "min-h-[2px] transition-colors rounded-sm", 
-                                        snapshot.isDraggingOver && "bg-[#2c2d31]/40 ring-1 ring-[#3b82f6]/20"
-                                    )}
-                                >
-                                    {folder.children.map((child, idx) => (
-                                        <FolderTreeItem 
-                                            key={child.id} 
-                                            folder={child} 
-                                            orgId={orgId} 
-                                            level={level + 1} 
-                                            onCreateSubFolder={onCreateSubFolder}
-                                            index={idx}
-                                        />
-                                    ))}
-                                    {folder.projects.map((project, idx) => (
-                                        <ProjectTreeItem 
-                                            key={project.id} 
-                                            project={project} 
-                                            orgId={orgId} 
-                                            level={level + 1} 
-                                            index={idx + folder.children.length} // Offset index
-                                        />
-                                    ))}
-                                    {provided.placeholder}
-                                    {folder.children.length === 0 && folder.projects.length === 0 && (
-                                        <div
-                                            className="text-[11px] text-[#4b5563] py-1 italic"
-                                            style={{ paddingLeft: `${((level + 1) * 12) + 28}px` }}
-                                        >
-                                            Empty
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                        </Droppable>
-                    )}
-                </div>
-            )}
-        </Draggable>
-    )
-}
-
-export function ProjectTreeItem({ project, orgId, level, index }: { project: Project, orgId: string, level: number, index: number }) {
-    const pathname = usePathname();
-    const href = `/org/${orgId}/projects/${project.id}/graph`;
-    const isActive = pathname?.includes(project.id);
-
-    return (
-        <Draggable draggableId={project.id} index={index}>
-            {(provided, snapshot) => (
-                <div
-                    ref={provided.innerRef}
-                    {...provided.draggableProps}
-                    {...provided.dragHandleProps}
-                >
-                    <Link
-                        href={href}
+                    {/* Children - hide when dragging with animation */}
+                    <div
                         className={cn(
-                            "flex items-center gap-2 py-1.5 px-2 rounded-md group text-[#9ca3af] hover:text-[#e5e7eb] hover:bg-[#2c2d31] transition-colors block",
-                            isActive && "bg-[#2c2d31] text-white font-medium",
-                            snapshot.isDragging && "opacity-50"
+                            "transition-all duration-200 ease-in-out overflow-hidden",
+                            (isOpen && !snapshot.isDragging) ? "max-h-[2000px] opacity-100" : "max-h-0 opacity-0"
                         )}
-                        style={{ paddingLeft: `${(level * 12) + 24}px` }}
                     >
-                        <FileText className="h-3.5 w-3.5 text-[#6b7280] group-hover:text-[#9ca3af] shrink-0" />
-                        <span className="text-sm truncate">{project.name}</span>
-                    </Link>
-                </div>
+                        {(isOpen && !snapshot.isDragging) && (
+                            <Droppable droppableId={folder.id} type="SIDEBAR_ITEM">
+                                {(provided, snapshot) => (
+                                    <div
+                                        ref={provided.innerRef}
+                                        {...provided.droppableProps}
+                                        className={cn(
+                                            "min-h-[8px] transition-all duration-150 rounded-sm ml-2",
+                                            snapshot.isDraggingOver && "bg-blue-500/20 border-l-2 border-blue-500 pl-1"
+                                        )}
+                                    >
+                                        {folder.projects.map((project, idx) => (
+                                            <ProjectTreeItem
+                                                key={project.id}
+                                                project={project}
+                                                orgId={orgId}
+                                                level={level + 1}
+                                                index={idx}
+                                            />
+                                        ))}
+                                        {folder.children.map((child, idx) => (
+                                            <FolderTreeItem
+                                                key={child.id}
+                                                folder={child}
+                                                orgId={orgId}
+                                                level={level + 1}
+                                                onCreateSubFolder={onCreateSubFolder}
+                                                index={idx + folder.projects.length}
+                                            />
+                                        ))}
+                                        {provided.placeholder}
+                                        {folder.children.length === 0 && folder.projects.length === 0 && (
+                                            <div
+                                                className="text-[11px] text-[#4b5563] py-1 italic"
+                                                style={{ paddingLeft: `${((level + 1) * 12) + 28}px` }}
+                                            >
+                                                Empty
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </Droppable>
+                        )}
+                    </div>
             )}
-        </Draggable>
-    )
+                </Draggable>
+            )
+            }
+
+            export function ProjectTreeItem({project, orgId, level, index}: {project: Project, orgId: string, level: number, index: number }) {
+    const pathname = usePathname();
+            const href = `/org/${orgId}/projects/${project.id}/graph`;
+            const isActive = pathname?.includes(project.id);
+
+            return (
+            <Draggable draggableId={project.id} index={index}>
+                {(provided, snapshot) => (
+                    <div
+                        ref={provided.innerRef}
+                        {...provided.draggableProps}
+                        {...provided.dragHandleProps}
+                    >
+                        <Link
+                            href={href}
+                            className={cn(
+                                "flex flex-row items-center gap-2 py-1.5 px-2 rounded-md group text-[#9ca3af] hover:text-[#e5e7eb] hover:bg-[#2c2d31] transition-colors",
+                                isActive && "bg-[#2c2d31] text-white font-medium",
+                                snapshot.isDragging && "opacity-50"
+                            )}
+                            style={{ paddingLeft: `${(level * 12) + 12}px` }}
+                        >
+                            <FileText className="h-4 w-4 text-[#6b7280] group-hover:text-[#9ca3af] shrink-0" />
+                            <span className="text-sm truncate flex-1">{project.name}</span>
+                            {project.isFavorite && (
+                                <Star className="h-3 w-3 text-yellow-500 fill-yellow-500 shrink-0" />
+                            )}
+                        </Link>
+                    </div>
+                )}
+            </Draggable>
+            )
 }

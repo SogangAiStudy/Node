@@ -126,8 +126,8 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
   };
 
   const openCreateFolderModal = (parentId?: string) => {
-      setTargetParentId(parentId);
-      setIsFolderModalOpen(true);
+    setTargetParentId(parentId);
+    setIsFolderModalOpen(true);
   };
 
   const handleSearch = useCallback((query: string) => {
@@ -136,103 +136,149 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
   }, []);
 
   const onDragEnd = (result: DropResult) => {
-      const { source, destination, draggableId } = result;
+    const { source, destination, draggableId } = result;
 
-      if (!destination) return;
-      if (source.droppableId === destination.droppableId && source.index === destination.index) return;
+    if (!destination) return;
+    if (source.droppableId === destination.droppableId && source.index === destination.index) return;
 
-      // Identify Item Type
-      let isFolder = false;
-      const findItemType = (folders: Folder[]): "FOLDER" | "PROJECT" | null => {
-          for (const f of folders) {
-              if (f.id === draggableId) return "FOLDER";
-              if (f.projects.some(p => p.id === draggableId)) return "PROJECT";
-              const found = findItemType(f.children);
-              if (found) return found;
-          }
-          return null;
-      };
+    // Identify Item Type
+    let isFolder = false;
+    const findItemType = (folders: Folder[]): "FOLDER" | "PROJECT" | null => {
+      for (const f of folders) {
+        if (f.id === draggableId) return "FOLDER";
+        if (f.projects.some(p => p.id === draggableId)) return "PROJECT";
+        const found = findItemType(f.children);
+        if (found) return found;
+      }
+      return null;
+    };
 
-      if (structure?.root.unfiledProjects.some(p => p.id === draggableId)) {
-          isFolder = false;
+    if (structure?.root.unfiledProjects.some(p => p.id === draggableId)) {
+      isFolder = false;
+    } else {
+      // If structure is loading or something, this might be partial?
+      // We rely on structure being present.
+      const type = findItemType(structure?.root.folders || []);
+      // Default to false (project) if not found? Or return?
+      // If we can't find it, we can't move it safely.
+      if (!type) {
+        console.warn("Could not find item type for", draggableId);
+        return;
+      }
+      isFolder = type === "FOLDER";
+    }
+
+    // Identify Destination
+    let destFolderId: string | null = null;
+    let destProjects: Project[] = [];
+    let destFolders: Folder[] = [];
+
+    if (destination.droppableId === "unfiled") {
+      destFolderId = null;
+      destProjects = structure?.root.unfiledProjects || [];
+    } else if (destination.droppableId === "sidebar-root") {
+      destFolderId = null;
+      destFolders = structure?.root.folders || [];
+    } else {
+      destFolderId = destination.droppableId;
+      const findF = (folders: Folder[]): Folder | null => {
+        for (const f of folders) {
+          if (f.id === destFolderId) return f;
+          const found = findF(f.children);
+          if (found) return found;
+        }
+        return null;
+      }
+      const folder = findF(structure?.root.folders || []);
+      if (folder) {
+        destProjects = folder.projects;
+        destFolders = folder.children;
       } else {
-          const type = findItemType(structure?.root.folders || []);
-          isFolder = type === "FOLDER";
+        // Target folder not found (maybe just deleted?)
+        console.warn("Target folder not found", destFolderId);
+        return;
       }
+    }
 
-      // Identify Destination
-      let destFolderId: string | null = null;
-      let destProjects: Project[] = [];
-      let destFolders: Folder[] = [];
+    // Validate: Cannot drop folder into its own descendant or itself
+    if (isFolder && destFolderId === draggableId) return;
 
-      if (destination.droppableId === "unfiled") {
-          destFolderId = null;
-          destProjects = structure?.root.unfiledProjects || [];
-      } else if (destination.droppableId === "sidebar-root") {
-          destFolderId = null;
-          destFolders = structure?.root.folders || [];
-      } else {
-          destFolderId = destination.droppableId;
-          const findF = (folders: Folder[]): Folder | null => {
-              for (const f of folders) {
-                  if (f.id === destFolderId) return f;
-                  const found = findF(f.children);
-                  if (found) return found;
-              }
-              return null;
-          }
-          const folder = findF(structure?.root.folders || []);
-          if (folder) {
-              destProjects = folder.projects;
-              destFolders = folder.children;
-          }
-      }
+    let listToUse: any[] = isFolder ? destFolders : destProjects;
+    let targetIndex = destination.index;
 
-      // Validate: Cannot drop folder into its own descendant or itself
-      if (isFolder && destFolderId === draggableId) return; // Basic check
-      
-      let listToUse: any[] = isFolder ? destFolders : destProjects;
-      let targetIndex = destination.index;
+    // Adjust index logic for mixed lists
+    // In the Droppable, Folders come FIRST, then Projects.
+    // If we drop a PROJECT, the visual index provided by DnD includes the count of folders above it.
+    // So relative index in `destProjects` is `destination.index - destFolders.length`.
+    if (!isFolder && destFolderId !== null) {
+      // Inside a folder, we have children (folders) then projects.
+      // Note: destFolders.length here refers to the target folder's children.
+      // If we drop at index 0 (top of folder), and there are 2 subfolders.
+      // We want it to be the first PROJECT.
+      // DnD says index 0. 
+      // If we use index 0 in `destProjects`, it becomes the first project. Correct.
+      // BUT wait. If DnD says index 0, it means visually ABOVE the subfolders.
+      // Our renderer FORCES projects to be below folders.
+      // So even if we save it as "first project", it will render after "last folder".
+      // This is a UI constraint.
+      // But calculating the SortOrder needs to be correct relative to PROJECTS.
 
-      if (!isFolder && destFolderId !== null) {
-          // Dropping project into folder
-          targetIndex = Math.max(0, targetIndex - destFolders.length);
-      }
-      
-      // Remove self from listToUse
-      const filteredList = listToUse.filter(i => i.id !== draggableId);
-      
-      let prevOrder = 0;
-      let nextOrder = 0;
-      
-      // Clamp targetIndex
-      targetIndex = Math.max(0, Math.min(targetIndex, filteredList.length));
+      // If I drop at index = (num_folders + 2), I am dropping at 3rd project position.
+      // The index I get is (num_folders + 2).
+      // So I subtract num_folders to get index 2.
 
-      if (filteredList.length === 0) {
-          prevOrder = 1000;
-          nextOrder = 2000;
-      } else if (targetIndex === 0) {
-          nextOrder = filteredList[0].sortOrder;
-          prevOrder = nextOrder - 1000;
-      } else if (targetIndex >= filteredList.length) {
-          prevOrder = filteredList[filteredList.length - 1].sortOrder;
-          nextOrder = prevOrder + 1000;
-      } else {
-          prevOrder = filteredList[targetIndex - 1].sortOrder;
-          nextOrder = filteredList[targetIndex].sortOrder;
-      }
+      // What if I drop at index 0 (top)?
+      // Index = 0.
+      // 0 - num_folders. If num_folders = 2.
+      // Result -2. 
+      // Clamping to 0 fixes this -> becomes 0 (first project).
+      // So visually it jumps down to start of projects list. This is acceptable/expected for enforced grouping.
 
-      const newSortOrder = (prevOrder + nextOrder) / 2;
+      targetIndex = Math.max(0, targetIndex - destFolders.length);
+    }
+    // Note: At root level, we have separate Droppables ("sidebar-root" and "unfiled"), 
+    // so we don't need this adjustment for root items if they are strictly separated.
+    // But in Sidebar.tsx we separate them:
+    // <Droppable droppableId="sidebar-root"> renders folders.
+    // <Droppable droppableId="unfiled"> renders projects.
+    // So at root, index is pure.
 
-      moveItem({
-          orgId: currentOrgId,
-          itemType: isFolder ? "FOLDER" : "PROJECT",
-          itemId: draggableId,
-          destinationParentId: destFolderId,
-          newSortOrder
-      });
+    // We only need adjustment if we are in a nested folder (destFolderId !== null).
 
-      toast.info(isFolder ? "Moving folder..." : "Moving project...");
+    // Remove self from listToUse
+    const filteredList = listToUse.filter(i => i.id !== draggableId);
+
+    let prevOrder = 0;
+    let nextOrder = 0;
+
+    // Clamp targetIndex
+    targetIndex = Math.max(0, Math.min(targetIndex, filteredList.length));
+
+    if (filteredList.length === 0) {
+      prevOrder = 1000;
+      nextOrder = 2000;
+    } else if (targetIndex === 0) {
+      nextOrder = filteredList[0].sortOrder;
+      prevOrder = nextOrder - 1000;
+    } else if (targetIndex >= filteredList.length) {
+      prevOrder = filteredList[filteredList.length - 1].sortOrder;
+      nextOrder = prevOrder + 1000;
+    } else {
+      prevOrder = filteredList[targetIndex - 1].sortOrder;
+      nextOrder = filteredList[targetIndex].sortOrder;
+    }
+
+    const newSortOrder = (prevOrder + nextOrder) / 2;
+
+    moveItem({
+      orgId: currentOrgId,
+      itemType: isFolder ? "FOLDER" : "PROJECT",
+      itemId: draggableId,
+      destinationParentId: destFolderId,
+      newSortOrder
+    });
+
+    toast.info(isFolder ? "Moving folder..." : "Moving project...");
   };
 
   const currentWorkspace = workspaces?.find((w) => w.orgId === currentOrgId);
@@ -315,10 +361,10 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
 
           <div className="space-y-1">
             <NavItem
-                href={`/org/${currentOrgId}/home`}
-                icon={Home}
-                label="Home"
-                active={pathname?.includes("/home")}
+              href={`/org/${currentOrgId}/home`}
+              icon={Home}
+              label="Home"
+              active={pathname?.includes("/home")}
             />
             <NavItem
               href={`/org/${currentOrgId}/inbox`}
@@ -355,63 +401,83 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
             </div>
 
             <DragDropContext onDragEnd={onDragEnd}>
-            <div className="px-1 space-y-0.5" id="sidebar-projects-list">
-              {isLoading ? (
-                <div className="px-3 text-sm text-[#6b7280]">Loading...</div>
-              ) : (
-                <>
-                  <Droppable droppableId="sidebar-root" type="SIDEBAR_ITEM">
-                    {(provided, snapshot) => (
-                      <div
-                        ref={provided.innerRef}
-                        {...provided.droppableProps}
-                        className={cn("min-h-[2px]", snapshot.isDraggingOver && "bg-[#2c2d31]/20")}
-                      >
-                         {structure?.root.folders.map((folder, index) => (
-                            <FolderTreeItem 
-                                key={folder.id} 
-                                folder={folder} 
-                                orgId={currentOrgId} 
-                                onCreateSubFolder={openCreateFolderModal}
-                                index={index}
+              <div className="px-1 space-y-0.5" id="sidebar-projects-list">
+                {isLoading ? (
+                  <div className="space-y-2 px-2">
+                    {/* Skeleton folder items */}
+                    <div className="flex items-center gap-2 py-1.5 px-2">
+                      <div className="h-3 w-3 bg-[#2c2d31] rounded animate-pulse" />
+                      <div className="h-3.5 w-3.5 bg-[#2c2d31] rounded animate-pulse" />
+                      <div className="h-3 flex-1 bg-[#2c2d31] rounded animate-pulse" />
+                    </div>
+                    <div className="flex items-center gap-2 py-1.5 px-2">
+                      <div className="h-3 w-3 bg-[#2c2d31] rounded animate-pulse" />
+                      <div className="h-3.5 w-3.5 bg-[#2c2d31] rounded animate-pulse" />
+                      <div className="h-3 w-24 bg-[#2c2d31] rounded animate-pulse" />
+                    </div>
+                    <div className="flex items-center gap-2 py-1.5 px-2 pl-6">
+                      <div className="h-4 w-4 bg-[#2c2d31] rounded animate-pulse" />
+                      <div className="h-3 w-32 bg-[#2c2d31] rounded animate-pulse" />
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <Droppable droppableId="sidebar-root" type="SIDEBAR_ITEM">
+                      {(provided, snapshot) => (
+                        <div
+                          ref={provided.innerRef}
+                          {...provided.droppableProps}
+                          className={cn("min-h-[8px] transition-all duration-150", snapshot.isDraggingOver && "bg-blue-500/15 border-l-2 border-blue-500")}
+                        >
+                          {structure?.root.folders.map((folder, index) => (
+                            <FolderTreeItem
+                              key={folder.id}
+                              folder={folder}
+                              orgId={currentOrgId}
+                              onCreateSubFolder={openCreateFolderModal}
+                              index={index}
                             />
-                         ))}
-                         {provided.placeholder}
-                      </div>
-                    )}
-                  </Droppable>
+                          ))}
+                          {provided.placeholder}
+                        </div>
+                      )}
+                    </Droppable>
 
-                  <Droppable droppableId="unfiled" type="SIDEBAR_ITEM">
-                    {(provided, snapshot) => (
-                      <div
-                        ref={provided.innerRef}
-                        {...provided.droppableProps}
-                        className={cn("min-h-[10px]", snapshot.isDraggingOver && "bg-[#2c2d31]/20")}
-                      >
-                        {structure?.root.unfiledProjects.map((project, index) => (
-                          <ProjectTreeItem 
-                             key={project.id} 
-                             project={project} 
-                             orgId={currentOrgId} 
-                             level={0} 
-                             index={index} 
-                          />
-                        ))}
-                        {provided.placeholder}
-                      </div>
-                    )}
-                  </Droppable>
+                    <Droppable droppableId="unfiled" type="SIDEBAR_ITEM">
+                      {(provided, snapshot) => (
+                        <div
+                          ref={provided.innerRef}
+                          {...provided.droppableProps}
+                          className={cn("min-h-[16px] mt-2 transition-all duration-150 rounded", snapshot.isDraggingOver && "bg-blue-500/15 border-l-2 border-blue-500")}
+                        >
+                          {structure?.root.unfiledProjects.map((project, index) => (
+                            <ProjectTreeItem
+                              key={project.id}
+                              project={project}
+                              orgId={currentOrgId}
+                              level={0}
+                              index={index}
+                            />
+                          ))}
+                          {provided.placeholder}
+                        </div>
+                      )}
+                    </Droppable>
 
-                  {!isLoading &&
-                    structure?.root.folders.length === 0 &&
-                    structure?.root.unfiledProjects.length === 0 && (
-                      <div className="px-3 py-2 text-sm text-[#6b7280] italic">
-                        No projects yet
-                      </div>
-                    )}
-                </>
-              )}
-            </div>
+                    {!isLoading &&
+                      structure?.root.folders.length === 0 &&
+                      structure?.root.unfiledProjects.length === 0 && (
+                        <div className="px-3 py-6 text-center">
+                          <FolderKanban className="h-8 w-8 mx-auto text-[#3b3c40] mb-2" />
+                          <p className="text-xs text-[#6b7280]">No projects yet</p>
+                          <p className="text-[10px] text-[#4b5563] mt-1">
+                            Click + to create one
+                          </p>
+                        </div>
+                      )}
+                  </>
+                )}
+              </div>
             </DragDropContext>
           </div>
         </div>

@@ -54,7 +54,11 @@ export const useMoveItem = () => {
             }
         },
         onSettled: (data, error, variables) => {
-            queryClient.invalidateQueries({ queryKey: ["workspace-structure", variables.orgId] });
+            // Delay invalidation slightly to allow DnD library to complete cleanup
+            // This prevents "Cannot find draggable entry" errors
+            setTimeout(() => {
+                queryClient.invalidateQueries({ queryKey: ["workspace-structure", variables.orgId] });
+            }, 100);
         },
     });
 };
