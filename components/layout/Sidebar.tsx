@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState, useEffect, useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams, usePathname, useRouter } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
@@ -23,22 +23,15 @@ import {
   Home,
   Plus,
   Settings,
-  Lock,
-  Users2,
   LogOut,
   UserCircle2,
-  X,
-  Layers,
-  Star,
-  GripVertical
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { mockFolders, searchWorkspace, enrichProjectWithWorkspaceData } from "@/lib/mock-workspace-data";
 import { FolderCreationModal } from "@/components/workspace/FolderCreationModal";
 import { GlobalSearchModal } from "./GlobalSearchModal";
 import { toast } from "sonner";
-import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
-import { useWorkspaceStructure } from "@/hooks/use-workspace-structure";
+import { DragDropContext, Droppable, DropResult } from "@hello-pangea/dnd";
+import { useWorkspaceStructure, Folder, Project } from "@/hooks/use-workspace-structure";
 import { FolderTreeItem, ProjectTreeItem } from "./FolderTreeItem";
 import { useMoveItem } from "@/hooks/use-move-item";
 
@@ -58,10 +51,10 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
   const params = useParams();
   const pathname = usePathname();
   const router = useRouter();
-  const currentProjectId = params.projectId as string | undefined;
 
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
+  const [targetParentId, setTargetParentId] = useState<string | undefined>(undefined);
 
   const initials = session?.user?.name
     ?.split("")
@@ -79,13 +72,11 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
     },
   });
 
-  // Unified Workspace Structure (Single Source of Truth)
+  // Unified Workspace Structure
   const { data: structure, isLoading } = useWorkspaceStructure(currentOrgId);
-
-  // Move Item Mutation
   const { mutate: moveItem } = useMoveItem();
+  const queryClient = useQueryClient();
 
-  // Safety redirect
   useEffect(() => {
     if (workspaces && workspaces.length > 0) {
       if (!currentOrgId || currentOrgId === "undefined") {
@@ -99,7 +90,6 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
     }
   }, [currentOrgId, workspaces, router]);
 
-  // Keyboard shortcut for search
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
@@ -116,7 +106,7 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
       const res = await fetch("/api/folders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orgId: currentOrgId, name }),
+        body: JSON.stringify({ orgId: currentOrgId, name, parentId: targetParentId }),
       });
 
       if (!res.ok) {
@@ -124,31 +114,126 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
         throw new Error(data.error || "Failed to create folder");
       }
 
-      // Invalidate structure to refresh
-      // queryClient.invalidateQueries({ queryKey: ["workspace-structure", currentOrgId] }); 
-      // Actually useMoveItem handles this if we used it, but here we manually might need strictly queryClient or let useWorkspaceStructure revalidate?
-      // useWorkspaceStructure uses staleTime. We should invalidate manually.
-      // But I didn't import queryClient here yet. I should.
-      // Or just reload page? No.
-      // I'll leave basic refetch for now or simple "window.location.reload()" if lazy, 
-      // but better is invalidate. I'll add queryClient.
+      queryClient.invalidateQueries({ queryKey: ["workspace-structure", currentOrgId] });
+      queryClient.invalidateQueries({ queryKey: ["folders", currentOrgId] });
       toast.success("Folder created");
       setIsFolderModalOpen(false);
-      // Force reload for now as simple fix, or import queryClient.
-      // Let's import queryClient.
+      setTargetParentId(undefined);
     } catch (error: any) {
       console.error("Failed to create folder:", error);
       toast.error(error.message || "Failed to create folder");
     }
   };
 
+  const openCreateFolderModal = (parentId?: string) => {
+      setTargetParentId(parentId);
+      setIsFolderModalOpen(true);
+  };
+
   const handleSearch = useCallback((query: string) => {
-    // Basic search integration using mock data for now as structure is complex to flatten
-    // In future, flatten `structure` to search.
     if (!query.trim()) return { projects: [], folders: [] };
-    // Temp fix: return empty or usage mock
     return { projects: [], folders: [] };
   }, []);
+
+  const onDragEnd = (result: DropResult) => {
+      const { source, destination, draggableId } = result;
+
+      if (!destination) return;
+      if (source.droppableId === destination.droppableId && source.index === destination.index) return;
+
+      // Identify Item Type
+      let isFolder = false;
+      const findItemType = (folders: Folder[]): "FOLDER" | "PROJECT" | null => {
+          for (const f of folders) {
+              if (f.id === draggableId) return "FOLDER";
+              if (f.projects.some(p => p.id === draggableId)) return "PROJECT";
+              const found = findItemType(f.children);
+              if (found) return found;
+          }
+          return null;
+      };
+
+      if (structure?.root.unfiledProjects.some(p => p.id === draggableId)) {
+          isFolder = false;
+      } else {
+          const type = findItemType(structure?.root.folders || []);
+          isFolder = type === "FOLDER";
+      }
+
+      // Identify Destination
+      let destFolderId: string | null = null;
+      let destProjects: Project[] = [];
+      let destFolders: Folder[] = [];
+
+      if (destination.droppableId === "unfiled") {
+          destFolderId = null;
+          destProjects = structure?.root.unfiledProjects || [];
+      } else if (destination.droppableId === "sidebar-root") {
+          destFolderId = null;
+          destFolders = structure?.root.folders || [];
+      } else {
+          destFolderId = destination.droppableId;
+          const findF = (folders: Folder[]): Folder | null => {
+              for (const f of folders) {
+                  if (f.id === destFolderId) return f;
+                  const found = findF(f.children);
+                  if (found) return found;
+              }
+              return null;
+          }
+          const folder = findF(structure?.root.folders || []);
+          if (folder) {
+              destProjects = folder.projects;
+              destFolders = folder.children;
+          }
+      }
+
+      // Validate: Cannot drop folder into its own descendant or itself
+      if (isFolder && destFolderId === draggableId) return; // Basic check
+      
+      let listToUse: any[] = isFolder ? destFolders : destProjects;
+      let targetIndex = destination.index;
+
+      if (!isFolder && destFolderId !== null) {
+          // Dropping project into folder
+          targetIndex = Math.max(0, targetIndex - destFolders.length);
+      }
+      
+      // Remove self from listToUse
+      const filteredList = listToUse.filter(i => i.id !== draggableId);
+      
+      let prevOrder = 0;
+      let nextOrder = 0;
+      
+      // Clamp targetIndex
+      targetIndex = Math.max(0, Math.min(targetIndex, filteredList.length));
+
+      if (filteredList.length === 0) {
+          prevOrder = 1000;
+          nextOrder = 2000;
+      } else if (targetIndex === 0) {
+          nextOrder = filteredList[0].sortOrder;
+          prevOrder = nextOrder - 1000;
+      } else if (targetIndex >= filteredList.length) {
+          prevOrder = filteredList[filteredList.length - 1].sortOrder;
+          nextOrder = prevOrder + 1000;
+      } else {
+          prevOrder = filteredList[targetIndex - 1].sortOrder;
+          nextOrder = filteredList[targetIndex].sortOrder;
+      }
+
+      const newSortOrder = (prevOrder + nextOrder) / 2;
+
+      moveItem({
+          orgId: currentOrgId,
+          itemType: isFolder ? "FOLDER" : "PROJECT",
+          itemId: draggableId,
+          destinationParentId: destFolderId,
+          newSortOrder
+      });
+
+      toast.info(isFolder ? "Moving folder..." : "Moving project...");
+  };
 
   const currentWorkspace = workspaces?.find((w) => w.orgId === currentOrgId);
 
@@ -214,9 +299,11 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
 
       <ScrollArea className="flex-1 py-4">
         <div className="px-3 space-y-1">
+          {/* SEARCH */}
           <Button
-            variant="outline"
-            className="w-full justify-start gap-2 bg-[#2c2d31] border-0 text-[#9ca3af] hover:bg-[#3b3c40] hover:text-white mb-6"
+            variant="ghost"
+            size="sm"
+            className="w-full justify-start gap-2 text-muted-foreground hover:text-foreground mb-6 h-9 px-2"
             onClick={() => setIsSearchModalOpen(true)}
           >
             <SearchIcon className="h-4 w-4" />
@@ -227,6 +314,12 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
           </Button>
 
           <div className="space-y-1">
+            <NavItem
+                href={`/org/${currentOrgId}/home`}
+                icon={Home}
+                label="Home"
+                active={pathname?.includes("/home")}
+            />
             <NavItem
               href={`/org/${currentOrgId}/inbox`}
               icon={Inbox}
@@ -254,29 +347,61 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
                   variant="ghost"
                   size="icon"
                   className="h-4 w-4 text-[#6b7280] hover:text-[#e5e7eb] hover:bg-transparent"
-                  onClick={() => setIsFolderModalOpen(true)}
+                  onClick={() => openCreateFolderModal(undefined)}
                 >
                   <FolderKanban className="h-3 w-3" />
                 </Button>
               </div>
             </div>
 
+            <DragDropContext onDragEnd={onDragEnd}>
             <div className="px-1 space-y-0.5" id="sidebar-projects-list">
               {isLoading ? (
                 <div className="px-3 text-sm text-[#6b7280]">Loading...</div>
               ) : (
                 <>
-                  {/* Nested Folders */}
-                  {structure?.root.folders.map(folder => (
-                    <FolderTreeItem key={folder.id} folder={folder} orgId={currentOrgId} />
-                  ))}
+                  <Droppable droppableId="sidebar-root" type="SIDEBAR_ITEM">
+                    {(provided, snapshot) => (
+                      <div
+                        ref={provided.innerRef}
+                        {...provided.droppableProps}
+                        className={cn("min-h-[2px]", snapshot.isDraggingOver && "bg-[#2c2d31]/20")}
+                      >
+                         {structure?.root.folders.map((folder, index) => (
+                            <FolderTreeItem 
+                                key={folder.id} 
+                                folder={folder} 
+                                orgId={currentOrgId} 
+                                onCreateSubFolder={openCreateFolderModal}
+                                index={index}
+                            />
+                         ))}
+                         {provided.placeholder}
+                      </div>
+                    )}
+                  </Droppable>
 
-                  {/* Unfiled Projects */}
-                  {structure?.root.unfiledProjects.map(project => (
-                    <ProjectTreeItem key={project.id} project={project} orgId={currentOrgId} level={0} />
-                  ))}
+                  <Droppable droppableId="unfiled" type="SIDEBAR_ITEM">
+                    {(provided, snapshot) => (
+                      <div
+                        ref={provided.innerRef}
+                        {...provided.droppableProps}
+                        className={cn("min-h-[10px]", snapshot.isDraggingOver && "bg-[#2c2d31]/20")}
+                      >
+                        {structure?.root.unfiledProjects.map((project, index) => (
+                          <ProjectTreeItem 
+                             key={project.id} 
+                             project={project} 
+                             orgId={currentOrgId} 
+                             level={0} 
+                             index={index} 
+                          />
+                        ))}
+                        {provided.placeholder}
+                      </div>
+                    )}
+                  </Droppable>
 
-                  {/* Empty State */}
                   {!isLoading &&
                     structure?.root.folders.length === 0 &&
                     structure?.root.unfiledProjects.length === 0 && (
@@ -287,6 +412,7 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
                 </>
               )}
             </div>
+            </DragDropContext>
           </div>
         </div>
       </ScrollArea>
