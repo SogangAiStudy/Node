@@ -300,6 +300,7 @@ model Request {
   claimedAt     DateTime?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
+  isArchived    Boolean       @default(false)
   orgId         String
   approvedBy    User?         @relation("RequestApprover", fields: [approvedById], references: [id])
   fromUser      User          @relation("RequestCreator", fields: [fromUserId], references: [id], onDelete: Cascade)

@@ -16,6 +16,8 @@ import dagre from "dagre";
 import "reactflow/dist/style.css";
 import { NodeDTO, GraphData, EdgeRelation } from "@/types";
 import { CustomNode } from "./CustomNode";
+import { ProjectMonitor } from "../project/ProjectMonitor";
+import { useSession } from "next-auth/react";
 import { Toolbar } from "./Toolbar";
 import {
   Dialog,
@@ -356,24 +358,35 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
         onDataChange={onDataChange}
       />
 
-      <div className="h-full">
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          onEdgeClick={onEdgeClick}
-          onNodeDragStop={onNodeDragStop}
-          nodeTypes={nodeTypes}
-          fitView
-          snapToGrid
-          snapGrid={[15, 15]}
-        >
-          <Background color="#f1f5f9" gap={15} />
-          <Controls />
-          <MiniMap nodeStrokeColor="#e2e8f0" nodeColor="#f8fafc" />
-        </ReactFlow>
+      <div className="flex h-full">
+        <div className="flex-1 relative">
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            onEdgeClick={onEdgeClick}
+            onNodeDragStop={onNodeDragStop}
+            nodeTypes={nodeTypes}
+            fitView
+            snapToGrid
+            snapGrid={[15, 15]}
+          >
+            <Background color="#f1f5f9" gap={15} />
+            <Controls />
+            <MiniMap nodeStrokeColor="#e2e8f0" nodeColor="#f8fafc" />
+          </ReactFlow>
+        </div>
+
+        {/* Project Monitor Side Panel */}
+        <div className="hidden border-l border-border bg-background lg:block">
+          <ProjectMonitor
+            nodes={data.nodes}
+            edges={data.edges}
+            userId={useSession().data?.user?.id || ""}
+          />
+        </div>
       </div>
 
       {/* Connection Picker Dialog */}

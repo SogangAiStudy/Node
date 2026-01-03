@@ -427,7 +427,7 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
                         <div
                           ref={provided.innerRef}
                           {...provided.droppableProps}
-                          className={cn("min-h-[8px] transition-all duration-150", snapshot.isDraggingOver && "bg-blue-500/15 border-l-2 border-blue-500")}
+                          className={cn("min-h-[4px] transition-all duration-150 relative", snapshot.isDraggingOver && "before:absolute before:top-0 before:left-0 before:right-0 before:h-0.5 before:bg-blue-500 before:rounded-full")}
                         >
                           {structure?.root.folders.map((folder, index) => (
                             <FolderTreeItem
@@ -448,7 +448,7 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
                         <div
                           ref={provided.innerRef}
                           {...provided.droppableProps}
-                          className={cn("min-h-[16px] mt-2 transition-all duration-150 rounded", snapshot.isDraggingOver && "bg-blue-500/15 border-l-2 border-blue-500")}
+                          className={cn("min-h-[8px] mt-2 transition-all duration-150 relative", snapshot.isDraggingOver && "before:absolute before:top-0 before:left-0 before:right-0 before:h-0.5 before:bg-blue-500 before:rounded-full")}
                         >
                           {structure?.root.unfiledProjects.map((project, index) => (
                             <ProjectTreeItem

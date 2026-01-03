@@ -41,21 +41,10 @@ export default function ProjectLayout({ children }: { children: ReactNode }) {
         />
       )}
 
-      <div className="flex-1 overflow-auto">
-        <div className="space-y-6">
-          <Tabs value={currentTab}>
-            <TabsList>
-              <Link href={`/org/${orgId}/projects/${projectId}/now`}>
-                <TabsTrigger value="now">Now</TabsTrigger>
-              </Link>
-              <Link href={`/org/${orgId}/projects/${projectId}/graph`}>
-                <TabsTrigger value="graph">Graph</TabsTrigger>
-              </Link>
-            </TabsList>
-          </Tabs>
-          {children}
-        </div>
+      <div className="flex-1 overflow-hidden">
+        {children}
       </div>
     </div>
   );
 }
+

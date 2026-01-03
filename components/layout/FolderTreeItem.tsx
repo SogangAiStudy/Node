@@ -198,8 +198,8 @@ export function FolderTreeItem({ folder, orgId, level = 0, onCreateSubFolder, in
                                         ref={droppableProvided.innerRef}
                                         {...droppableProvided.droppableProps}
                                         className={cn(
-                                            "min-h-[8px] transition-all duration-150 rounded-sm ml-2",
-                                            droppableSnapshot.isDraggingOver && "bg-blue-500/20 border-l-2 border-blue-500 pl-1"
+                                            "min-h-[4px] transition-all duration-150 ml-2 relative",
+                                            droppableSnapshot.isDraggingOver && "before:absolute before:top-0 before:left-0 before:right-0 before:h-0.5 before:bg-blue-500 before:rounded-full"
                                         )}
                                     >
                                         {folder.children.map((child, idx) => (
@@ -222,14 +222,6 @@ export function FolderTreeItem({ folder, orgId, level = 0, onCreateSubFolder, in
                                             />
                                         ))}
                                         {droppableProvided.placeholder}
-                                        {folder.children.length === 0 && folder.projects.length === 0 && (
-                                            <div
-                                                className="text-[11px] text-[#4b5563] py-1 italic"
-                                                style={{ paddingLeft: `${((level + 1) * 12) + 28}px` }}
-                                            >
-                                                Empty
-                                            </div>
-                                        )}
                                     </div>
                                 )}
                             </Droppable>

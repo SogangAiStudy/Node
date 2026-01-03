@@ -10,7 +10,14 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { RequestDTO } from "@/types";
 import { toast } from "sonner";
-import { ExternalLink, Clock, Inbox as InboxIcon } from "lucide-react";
+import { ExternalLink, Clock, Inbox as InboxIcon, MoreHorizontal } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 function RequestCard({
   request,
@@ -81,95 +88,121 @@ function RequestCard({
     }
   };
 
-  const handleClose = async () => {
+  const handleArchive = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch(`/api/requests/${request.id}/close`, {
+      const res = await fetch(`/api/requests/${request.id}/archive`, {
         method: "PATCH",
       });
-      if (!res.ok) throw new Error("Failed to close");
-      toast.success("Request closed");
+      if (!res.ok) throw new Error("Failed to archive");
+      toast.success("Request archived");
       onAction();
     } catch (error) {
-      toast.error("Failed to close request");
+      toast.error("Failed to archive request");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!confirm("Are you sure you want to delete this request?")) return;
+    setIsLoading(true);
+    try {
+      const res = await fetch(`/api/requests/${request.id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to delete");
+      toast.success("Request deleted");
+      onAction();
+    } catch (error) {
+      toast.error("Failed to delete request");
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-start justify-between gap-2">
-          <CardTitle className="text-base">{request.question}</CardTitle>
-          <Badge>{request.status}</Badge>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="space-y-2 text-sm">
-          <p className="text-muted-foreground">
-            From: <span className="font-medium">{request.fromUserName}</span>
-          </p>
+    <Card className="overflow-hidden">
+      {/* Header row - Project, Node, Status */}
+      <div className="flex items-center justify-between px-4 py-2 bg-muted/50 border-b">
+        <div className="flex items-center gap-3 text-sm">
           <button
             onClick={handleNavigateToNode}
-            className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors group"
+            className="flex items-center gap-1.5 font-medium text-primary hover:underline"
           >
-            <span>Node:</span>
-            <span className="font-medium text-primary group-hover:underline">
-              {request.linkedNodeTitle}
-            </span>
-            <ExternalLink className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+            {request.linkedNodeTitle}
+            <ExternalLink className="h-3 w-3" />
           </button>
-          {request.toTeam && !request.toUserId && (
-            <p className="text-muted-foreground">
-              To Team: <span className="font-medium">{request.toTeam}</span>
-            </p>
-          )}
-          <div className="flex items-center gap-4 text-xs text-muted-foreground pt-1">
-            <span className="flex items-center gap-1">
-              <Clock className="h-3 w-3" />
-              Created {new Date(request.createdAt).toLocaleDateString()}
-            </span>
-            {request.updatedAt !== request.createdAt && (
-              <span className="flex items-center gap-1">
-                Updated {new Date(request.updatedAt).toLocaleDateString()}
-              </span>
-            )}
-          </div>
+          <span className="text-muted-foreground">•</span>
+          <span className="text-muted-foreground">
+            From <span className="font-medium text-foreground">{request.fromUserName}</span>
+          </span>
+          <span className="text-muted-foreground">•</span>
+          <span className="text-xs text-muted-foreground flex items-center gap-1">
+            <Clock className="h-3 w-3" />
+            {new Date(request.createdAt).toLocaleDateString()}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Badge variant={request.status === "APPROVED" ? "default" : "secondary"}>
+            {request.status}
+          </Badge>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-6 w-6">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={handleArchive}>
+                Archive
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleDelete} className="text-red-600 focus:text-red-600">
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+
+      <CardContent className="p-4 space-y-3">
+        {/* Question - Emphasized */}
+        <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 rounded-lg p-3">
+          <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mb-1">Question</p>
+          <p className="text-sm font-medium">{request.question}</p>
         </div>
 
-        {request.status !== "CLOSED" && request.status !== "APPROVED" && (
-          <div className="space-y-2">
+        {/* Response Section - Emphasized */}
+        {request.status !== "CLOSED" && request.status !== "APPROVED" ? (
+          <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900 rounded-lg p-3 space-y-2">
+            <p className="text-xs font-medium text-green-600 dark:text-green-400">Your Response</p>
             <Textarea
               value={responseDraft}
               onChange={(e) => setResponseDraft(e.target.value)}
               placeholder="Type your response..."
-              rows={3}
+              rows={2}
+              className="resize-none text-sm"
             />
-            <div className="flex gap-2">
+            <div className="flex gap-2 pt-1">
               {request.toTeam && !request.toUserId && (
-                <Button size="sm" onClick={handleClaim} disabled={isLoading}>
+                <Button size="sm" variant="outline" onClick={handleClaim} disabled={isLoading}>
                   Claim
                 </Button>
               )}
               <Button size="sm" onClick={handleRespond} disabled={isLoading}>
-                {request.status === "RESPONDED" ? "Update Response" : "Respond"}
+                {request.status === "RESPONDED" ? "Update" : "Respond"}
               </Button>
               {request.status === "RESPONDED" && request.toUserId && (
-                <Button size="sm" onClick={handleApprove} disabled={isLoading}>
+                <Button size="sm" variant="default" onClick={handleApprove} disabled={isLoading}>
                   Approve
                 </Button>
               )}
-              <Button size="sm" variant="outline" onClick={handleClose} disabled={isLoading}>
-                Close
-              </Button>
             </div>
           </div>
-        )}
-
-        {request.responseFinal && (
-          <div className="rounded bg-muted p-3">
-            <p className="text-sm font-medium mb-1">Final Response:</p>
+        ) : request.responseFinal ? (
+          <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900 rounded-lg p-3">
+            <p className="text-xs font-medium text-green-600 dark:text-green-400 mb-1">Final Response</p>
             <p className="text-sm">{request.responseFinal}</p>
             {request.approvedByName && (
               <p className="text-xs text-muted-foreground mt-2">
@@ -177,7 +210,7 @@ function RequestCard({
               </p>
             )}
           </div>
-        )}
+        ) : null}
       </CardContent>
     </Card>
   );
@@ -186,12 +219,14 @@ function RequestCard({
 export default function OrgInboxPage() {
   const params = useParams();
   const orgId = params.orgId as string;
-  const [mode, setMode] = useState<"mine" | "team">("mine");
+  const [activeTab, setActiveTab] = useState("mine");
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ["org-inbox", orgId, mode],
+    queryKey: ["org-inbox", orgId, activeTab],
     queryFn: async () => {
-      const res = await fetch(`/api/requests/org-inbox?orgId=${orgId}&mode=${mode}`);
+      const mode = activeTab === "archived" ? "mine" : activeTab;
+      const archived = activeTab === "archived";
+      const res = await fetch(`/api/requests/org-inbox?orgId=${orgId}&mode=${mode}&archived=${archived}`);
       if (!res.ok) throw new Error("Failed to fetch inbox");
       return res.json() as Promise<{ requests: RequestDTO[] }>;
     },
@@ -213,10 +248,11 @@ export default function OrgInboxPage() {
     <div className="space-y-6">
       <h1 className="text-3xl font-bold">Inbox</h1>
 
-      <Tabs value={mode} onValueChange={(v) => setMode(v as "mine" | "team")}>
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="mine">To Me</TabsTrigger>
           <TabsTrigger value="team">To My Team</TabsTrigger>
+          <TabsTrigger value="archived">Archived</TabsTrigger>
         </TabsList>
       </Tabs>
 

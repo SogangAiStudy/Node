@@ -10,6 +10,7 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const orgId = searchParams.get("orgId");
     const mode = searchParams.get("mode") || "mine"; // mine or team
+    const archived = searchParams.get("archived") === "true";
 
     if (!orgId) {
       return NextResponse.json({ error: "orgId is required" }, { status: 400 });
@@ -40,6 +41,7 @@ export async function GET(request: NextRequest) {
         where: {
           orgId,
           toUserId: user.id,
+          isArchived: archived,
         },
         include: {
           linkedNode: {
@@ -76,6 +78,7 @@ export async function GET(request: NextRequest) {
         where: {
           orgId,
           toTeam: { in: teamNames.map((t) => t.name) },
+          isArchived: archived,
         },
         include: {
           linkedNode: {

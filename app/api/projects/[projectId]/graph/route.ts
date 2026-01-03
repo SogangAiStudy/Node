@@ -100,28 +100,67 @@ export async function GET(
     const statusMap = computeAllNodeStatuses(baseNodes, edges, requests);
 
     // 4. Transform to DTOs using maps
-    const nodeDTOs: NodeDTO[] = baseNodes.map((node: any) => ({
-      id: node.id,
-      orgId: node.orgId,
-      projectId: node.projectId,
-      teamId: node.teamId,
-      teamName: node.teamId ? teamMap.get(node.teamId) || null : null,
-      title: node.title,
-      description: node.description,
-      type: node.type,
-      manualStatus: node.manualStatus,
-      computedStatus: statusMap.get(node.id)!,
-      ownerId: node.ownerId,
-      ownerName: node.ownerId ? ownerMap.get(node.ownerId) || null : null,
-      teams: nodeTeamsMap.get(node.id) || [],
-      owners: nodeOwnersMap.get(node.id) || [],
-      priority: node.priority,
-      dueAt: node.dueAt?.toISOString() || null,
-      createdAt: node.createdAt.toISOString(),
-      updatedAt: node.updatedAt.toISOString(),
-      positionX: node.positionX,
-      positionY: node.positionY,
-    }));
+    const nodeDTOs: NodeDTO[] = baseNodes.map((node: any) => {
+      const computedStatus = statusMap.get(node.id)!;
+
+      // Calculate blocking count
+      // Find edges where this node is the 'to' (dependency) and the 'from' (dependent) is BLOCKED
+      // relation DEPENDS_ON: from depends on to.
+      let blocksCount = 0;
+      if (computedStatus !== 'DONE') {
+        const dependentEdges = edges.filter((e: any) => e.toNodeId === node.id && e.relation === 'DEPENDS_ON');
+        blocksCount = dependentEdges.filter((e: any) => {
+          const dependentStatus = statusMap.get(e.fromNodeId);
+          return dependentStatus === 'BLOCKED';
+        }).length;
+      }
+
+      // Calculate waiting reason
+      let waitingReason = undefined;
+      if (computedStatus === 'WAITING' || computedStatus === 'BLOCKED') {
+        // Check requests
+        const nodeRequests = requests.filter((r: any) => r.linkedNodeId === node.id && (r.status === 'OPEN' || r.status === 'RESPONDED'));
+        if (nodeRequests.length > 0) {
+          waitingReason = "Waiting for response";
+        } else {
+          // Check approval edges
+          const approvalEdges = edges.filter((e: any) => e.fromNodeId === node.id && e.relation === 'APPROVAL_BY');
+          if (approvalEdges.length > 0) {
+            waitingReason = "Waiting for approval";
+          } else if (computedStatus === 'BLOCKED') {
+            const blockingEdges = edges.filter((e: any) => e.fromNodeId === node.id && e.relation === 'DEPENDS_ON');
+            if (blockingEdges.length > 0) {
+              waitingReason = `Blocked by ${blockingEdges.length} task${blockingEdges.length > 1 ? 's' : ''}`;
+            }
+          }
+        }
+      }
+
+      return {
+        id: node.id,
+        orgId: node.orgId,
+        projectId: node.projectId,
+        teamId: node.teamId,
+        teamName: node.teamId ? teamMap.get(node.teamId) || null : null,
+        title: node.title,
+        description: node.description,
+        type: node.type,
+        manualStatus: node.manualStatus,
+        computedStatus,
+        blocksCount,
+        waitingReason,
+        ownerId: node.ownerId,
+        ownerName: node.ownerId ? ownerMap.get(node.ownerId) || null : null,
+        teams: nodeTeamsMap.get(node.id) || [],
+        owners: nodeOwnersMap.get(node.id) || [],
+        priority: node.priority,
+        dueAt: node.dueAt?.toISOString() || null,
+        createdAt: node.createdAt.toISOString(),
+        updatedAt: node.updatedAt.toISOString(),
+        positionX: node.positionX,
+        positionY: node.positionY,
+      };
+    });
 
     const edgeDTOs: EdgeDTO[] = edges.map((edge: any) => ({
       id: edge.id,

@@ -30,7 +30,7 @@ export default function ProjectGraphPage() {
   }
 
   return (
-    <div className="h-[calc(100vh-8rem)]">
+    <div className="h-full">
       <GraphCanvas
         projectId={projectId}
         orgId={orgId}

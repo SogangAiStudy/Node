@@ -100,6 +100,7 @@ export interface NodeDTO {
   projectId: string;
   teamId: string | null;
   teamName: string | null;
+  projectName?: string; // Optional for now as it might not be populated everywhere
   ownerId: string | null;
   ownerName: string | null;
 
@@ -112,6 +113,8 @@ export interface NodeDTO {
   type: NodeType;
   manualStatus: ManualStatus;
   computedStatus: ComputedStatus; // Computed on server
+  blocksCount?: number; // How many nodes are blocked by this node
+  waitingReason?: string; // Reason for WAITING/BLOCKED status
   priority: number;
   dueAt: string | null;
   createdAt: string;
