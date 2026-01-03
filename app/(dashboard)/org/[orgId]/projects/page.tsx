@@ -41,7 +41,7 @@ export default function OrgProjectsPage() {
 
   const allProjectsRaw = useMemo(() => {
     if (!structure) return [];
-    return [...structure.root.unfiledProjects, ...getAllProjects(structure.root.folders)];
+    return [...(structure.root.unfiledProjects || []), ...getAllProjects(structure.root.folders || [])];
   }, [structure]);
 
   // Enrich with current logic (add lastUpdated text etc)
@@ -225,10 +225,10 @@ export default function OrgProjectsPage() {
             {activeTab === "all" ? (
               <>
                 {/* Folders & Projects Tree */}
-                {structure?.root.folders.map(renderFolderSection)}
+                {(structure?.root?.folders || []).map(renderFolderSection)}
 
                 {/* Unfiled Projects */}
-                {structure?.root.unfiledProjects.length > 0 && (
+                {(structure?.root?.unfiledProjects?.length ?? 0) > 0 && (
                   <FolderSection
                     folder={{
                       id: "unfiled",
@@ -238,7 +238,7 @@ export default function OrgProjectsPage() {
                       projectIds: [],
                       isExpanded: true,
                     } as any}
-                    projects={structure.root.unfiledProjects as any[]}
+                    projects={(structure?.root?.unfiledProjects ?? []) as any[]}
                     orgId={orgId}
                     isDropZone={true}
                   />
