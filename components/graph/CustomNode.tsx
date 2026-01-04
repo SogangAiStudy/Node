@@ -412,6 +412,32 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
                   Reopen
                 </button>
               )}
+
+              {/* Request Button */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCreateRequestOpen(true);
+                }}
+                className="px-2 py-1 text-[10px] font-medium rounded border border-slate-200 text-slate-500 hover:bg-slate-100 transition-colors flex items-center gap-1"
+              >
+                <MessageSquarePlus className="w-3 h-3" />
+                Request
+              </button>
+
+              {/* Analyze Button */}
+              <button
+                onClick={(e) => { e.stopPropagation(); analyzeBlock(); }}
+                disabled={isAnalyzing}
+                className="px-2 py-1 text-[10px] font-medium rounded border border-purple-200 text-purple-600 hover:bg-purple-50 transition-colors flex items-center gap-1 disabled:opacity-50"
+              >
+                {isAnalyzing ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <Sparkles className="w-3 h-3" />
+                )}
+                Analyze
+              </button>
             </div>
 
             {/* Open Sidebar Button */}
@@ -427,24 +453,6 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
             >
               <ChevronRight className="w-4 h-4" />
             </Button>
-          </div>
-        )}
-
-        {/* Why Blocked? Button - only for BLOCKED status */}
-        {isBlocked && (
-          <div className="mt-2 text-center">
-            <button
-              onClick={(e) => { e.stopPropagation(); analyzeBlock(); }}
-              disabled={isAnalyzing}
-              className="w-full text-[9px] font-medium text-red-600 bg-red-50 hover:bg-red-100 px-2 py-1 rounded flex items-center justify-center gap-1 transition-colors"
-            >
-              {isAnalyzing ? (
-                <Loader2 className="w-2.5 h-2.5 animate-spin" />
-              ) : (
-                <Sparkles className="w-2.5 h-2.5" />
-              )}
-              Analyze Blockers
-            </button>
           </div>
         )}
 
