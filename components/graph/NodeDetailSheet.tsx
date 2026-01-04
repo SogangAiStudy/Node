@@ -70,10 +70,11 @@ export function NodeDetailSheet({
             fetch(`/api/projects/${projectId}/members`)
                 .then(res => res.json())
                 .then(data => {
-                    const formatted = data.map((m: any) => ({
+                    const membersArray = data.members || [];
+                    const formatted = membersArray.map((m: any) => ({
                         id: m.userId,
-                        name: m.user.name || m.user.email,
-                        image: m.user.image,
+                        name: m.userName || m.userEmail,
+                        image: m.userImage,
                         type: "user" as const
                     }));
                     setMembers(formatted);
