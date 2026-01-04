@@ -14,7 +14,7 @@ export default async function InvitePage({ params }: InvitePageProps) {
 
     // If not logged in, redirect to login with return URL
     if (!session?.user?.id) {
-        return redirect(`/auth/signin?callbackUrl=/invite/${code}`);
+        return redirect(`/login?callbackUrl=/invite/${code}`);
     }
 
     // Find organization by invite code

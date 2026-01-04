@@ -2,7 +2,14 @@ import { signIn } from "@/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
-export default function LoginPage() {
+interface LoginPageProps {
+  searchParams: Promise<{ callbackUrl?: string }>;
+}
+
+export default async function LoginPage({ searchParams }: LoginPageProps) {
+  const { callbackUrl } = await searchParams;
+  const redirectTo = callbackUrl || "/";
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50">
       <Card className="w-full max-w-md">
@@ -16,7 +23,7 @@ export default function LoginPage() {
           <form
             action={async () => {
               "use server";
-              await signIn("google", { redirectTo: "/" });
+              await signIn("google", { redirectTo: redirectTo });
             }}
           >
             <Button type="submit" className="w-full">
