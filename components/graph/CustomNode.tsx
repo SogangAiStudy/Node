@@ -19,7 +19,7 @@ import {
   HelpCircle,
   Sparkles,
   X,
-  ChevronRight,
+  PanelRightOpen,
   CheckCircle2,
   PlayCircle,
   MessageSquarePlus,
@@ -451,7 +451,7 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
                 if (data.onOpenDetail) data.onOpenDetail();
               }}
             >
-              <ChevronRight className="w-4 h-4" />
+              <PanelRightOpen className="w-4 h-4 scale-x-[-1]" />
             </Button>
           </div>
         )}
