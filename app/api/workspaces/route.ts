@@ -95,11 +95,71 @@ export async function GET(request: NextRequest) {
         });
 
         if (existingByEmail) {
-          console.log(`[DEBUG] Found user by email with different ID: ${existingByEmail.id}. Re-syncing ID to ${user.id}...`);
+          const oldId = existingByEmail.id;
+          const newId = user.id;
+          console.log(`[DEBUG] Found user by email with different ID: ${oldId}. Re-syncing ID to ${newId}...`);
           try {
+            // CRITICAL: Update all related tables FIRST before changing the user ID
+            // This is necessary because userId is a foreign key in these tables
+
+            // Update org_members
+            await prisma.orgMember.updateMany({
+              where: { userId: oldId },
+              data: { userId: newId },
+            });
+
+            // Update team_members
+            await prisma.teamMember.updateMany({
+              where: { userId: oldId },
+              data: { userId: newId },
+            });
+
+            // Update project_members
+            await prisma.projectMember.updateMany({
+              where: { userId: oldId },
+              data: { userId: newId },
+            });
+
+            // Update nodes where user is owner
+            await prisma.node.updateMany({
+              where: { ownerId: oldId },
+              data: { ownerId: newId },
+            });
+
+            // Update node_owners
+            await prisma.nodeOwner.updateMany({
+              where: { userId: oldId },
+              data: { userId: newId },
+            });
+
+            // Update requests
+            await prisma.request.updateMany({
+              where: { fromUserId: oldId },
+              data: { fromUserId: newId },
+            });
+            await prisma.request.updateMany({
+              where: { toUserId: oldId },
+              data: { toUserId: newId },
+            });
+
+            // Update activity_logs
+            await prisma.activityLog.updateMany({
+              where: { userId: oldId },
+              data: { userId: newId },
+            });
+
+            // Update org_inbox_states
+            await prisma.orgInboxState.updateMany({
+              where: { userId: oldId },
+              data: { userId: newId },
+            });
+
+            console.log(`[DEBUG] Updated all related tables from userId ${oldId} to ${newId}`);
+
+            // NOW update the user ID itself
             dbUser = await prisma.user.update({
-              where: { id: existingByEmail.id },
-              data: { id: user.id },
+              where: { id: oldId },
+              data: { id: newId },
             });
 
             // CRITICAL: Re-check memberships after sync. They might have data!
