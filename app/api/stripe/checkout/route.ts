@@ -120,7 +120,7 @@ export async function POST(req: NextRequest) {
                     quantity: 1,
                 },
             ],
-            success_url: `${baseUrl}/org/${orgId}/billing?success=1`,
+            success_url: `${baseUrl}/org/${orgId}/billing?session_id={CHECKOUT_SESSION_ID}`,
             cancel_url: `${baseUrl}/org/${orgId}/billing?canceled=1`,
             metadata: {
                 orgId: org.id,

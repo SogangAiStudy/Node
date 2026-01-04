@@ -38,8 +38,12 @@ export default function BillingPageClient({
     // Verify session on mount if sessionId is present
     useEffect(() => {
         const verifySession = async () => {
-            if (!sessionId || isVerifying) return;
+            if (!sessionId || isVerifying) {
+                console.log("[Billing] No session_id or already verifying", { sessionId, isVerifying });
+                return;
+            }
 
+            console.log("[Billing] Starting session verification", { sessionId, orgId });
             setIsVerifying(true);
             try {
                 const res = await fetch("/api/stripe/verify-session", {
@@ -48,17 +52,22 @@ export default function BillingPageClient({
                     body: JSON.stringify({ sessionId, orgId }),
                 });
 
+                console.log("[Billing] Verification response status:", res.status);
+
                 if (res.ok) {
+                    const data = await res.json();
+                    console.log("[Billing] Verification successful", data);
                     // Successful verification - show success dialog
                     setShowSuccessDialog(true);
                     // Remove session_id from URL
                     router.replace(`/org/${orgId}/billing?success=1`);
                 } else {
-                    console.error("Session verification failed");
+                    const errorData = await res.json();
+                    console.error("[Billing] Session verification failed", errorData);
                     toast.error("Failed to verify payment. Please contact support.");
                 }
             } catch (error) {
-                console.error("Session verification error:", error);
+                console.error("[Billing] Session verification error:", error);
                 toast.error("Failed to verify payment");
             } finally {
                 setIsVerifying(false);
@@ -66,7 +75,7 @@ export default function BillingPageClient({
         };
 
         verifySession();
-    }, [sessionId, orgId, router]);
+    }, [sessionId, orgId, router, isVerifying]);
 
     // Show success dialog if showSuccess flag is set (for returning from checkout)
     useEffect(() => {
@@ -144,12 +153,13 @@ export default function BillingPageClient({
                                 <span className="text-2xl">🎉</span>
                             </div>
                         </div>
+                        <DialogTitle className="text-center text-xl">Congratulations!</DialogTitle>
                         <DialogDescription className="text-center text-base pt-2">
                             You have successfully upgraded to the Pro plan.
                             <br />
                             Enjoy unlimited nodes and priority support.
                         </DialogDescription>
-                    </DialogHeader >
+                    </DialogHeader>
                     <div className="flex justify-center mt-4">
                         <Button onClick={handleGoToProfile} className="w-full sm:w-auto">
                             Continue
