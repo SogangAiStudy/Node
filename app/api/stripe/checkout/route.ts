@@ -120,7 +120,12 @@ export async function POST(req: NextRequest) {
         }
 
         // Create Checkout Session
-        const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
+        // Dynamically determine base URL from request headers or environment
+        const origin = req.headers.get("origin") || req.headers.get("referer")?.split("/").slice(0, 3).join("/");
+        const baseUrl = process.env.NEXTAUTH_URL || origin || "http://localhost:3000";
+
+        console.log("[Checkout] Using baseUrl:", baseUrl);
+
         const checkoutSession = await stripe.checkout.sessions.create({
             customer: customerId,
             mode: "subscription",

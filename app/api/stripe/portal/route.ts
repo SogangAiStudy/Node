@@ -68,7 +68,10 @@ export async function POST(req: NextRequest) {
         }
 
         // Create billing portal session
-        const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
+        // Dynamically determine base URL from request headers or environment
+        const origin = req.headers.get("origin") || req.headers.get("referer")?.split("/").slice(0, 3).join("/");
+        const baseUrl = process.env.NEXTAUTH_URL || origin || "http://localhost:3000";
+
         const portalSession = await stripe.billingPortal.sessions.create({
             customer: org.stripeCustomerId,
             return_url: `${baseUrl}/org/${orgId}/billing`,
