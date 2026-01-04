@@ -291,18 +291,22 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
               </div>
               <span className="text-[10px] text-slate-400 font-medium">Unassigned</span>
               {/* Tiny Add Button */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
+              <DropdownMenu onOpenChange={(open) => { if (open && !hasLoadedMetadata) fetchMetadata(); }}>
+                <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                   <button className="ml-1 hover:bg-slate-100 p-0.5 rounded text-slate-400 opacity-50 hover:opacity-100 transition-opacity">
                     <Plus className="w-3 h-3" />
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-56">
-                  {members.map(m => (
-                    <DropdownMenuItem key={m.userId} onClick={() => updateNode({ ownerIds: [m.userId] } as any)}>
-                      <span className="text-sm">{m.userName}</span>
-                    </DropdownMenuItem>
-                  ))}
+                <DropdownMenuContent align="start" className="w-56" onClick={(e) => e.stopPropagation()}>
+                  {members.length === 0 ? (
+                    <div className="text-xs text-slate-400 p-2 text-center">Loading...</div>
+                  ) : (
+                    members.map(m => (
+                      <DropdownMenuItem key={m.userId} onClick={() => updateNode({ ownerIds: [m.userId] } as any)}>
+                        <span className="text-sm">{m.userName}</span>
+                      </DropdownMenuItem>
+                    ))
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
@@ -320,6 +324,20 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
             </div>
           )}
         </div>
+
+        {/* Assigned Teams */}
+        {node.teams && node.teams.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-2">
+            {node.teams.map(team => (
+              <span
+                key={team.id}
+                className="text-[9px] px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded"
+              >
+                {team.name}
+              </span>
+            ))}
+          </div>
+        )}
 
         <div className="flex items-center justify-between pt-2 border-t border-slate-50 mt-1">
           <div className="flex items-center gap-2 text-slate-400">
@@ -345,20 +363,55 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
         {/* EXPANDED VIEW: Extra Controls when Selected */}
         {selected && (
           <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between animate-in fade-in slide-in-from-top-1 duration-200">
-            {/* Quick Status Switcher */}
-            <div className="flex gap-1 bg-slate-50 p-0.5 rounded-md">
-              {(['TODO', 'DOING', 'DONE'] as const).map(s => (
+            {/* Contextual Action Button */}
+            <div className="flex gap-1">
+              {node.manualStatus === 'TODO' && (
                 <button
-                  key={s}
-                  onClick={(e) => { e.stopPropagation(); updateNode({ manualStatus: s }); }}
-                  className={cn(
-                    "px-2 py-1 text-[8px] font-bold rounded transition-colors",
-                    node.manualStatus === s ? "bg-white shadow text-slate-800" : "text-slate-400 hover:text-slate-600 hover:bg-slate-200"
-                  )}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    updateNode({ manualStatus: 'DOING' });
+                  }}
+                  className="px-3 py-1 text-[10px] font-semibold rounded bg-blue-500 text-white hover:bg-blue-600 transition-colors flex items-center gap-1"
                 >
-                  {s}
+                  <PlayCircle className="w-3 h-3" />
+                  Start
                 </button>
-              ))}
+              )}
+              {node.manualStatus === 'DOING' && (
+                <>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      updateNode({ manualStatus: 'DONE' });
+                    }}
+                    className="px-3 py-1 text-[10px] font-semibold rounded bg-green-500 text-white hover:bg-green-600 transition-colors flex items-center gap-1"
+                  >
+                    <CheckCircle2 className="w-3 h-3" />
+                    Done
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      updateNode({ manualStatus: 'TODO' });
+                    }}
+                    className="px-2 py-1 text-[10px] font-medium rounded border border-slate-200 text-slate-500 hover:bg-slate-100 transition-colors"
+                  >
+                    Stop
+                  </button>
+                </>
+              )}
+              {node.manualStatus === 'DONE' && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    updateNode({ manualStatus: 'TODO' });
+                  }}
+                  className="px-3 py-1 text-[10px] font-medium rounded border border-slate-200 text-slate-500 hover:bg-slate-100 transition-colors flex items-center gap-1"
+                >
+                  <Clock className="w-3 h-3" />
+                  Reopen
+                </button>
+              )}
             </div>
 
             {/* Open Sidebar Button */}

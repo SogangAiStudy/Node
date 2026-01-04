@@ -53,8 +53,8 @@ export function NodeDetailSheet({
     const [isEditing, setIsEditing] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [requestDialogOpen, setRequestDialogOpen] = useState(false);
-
     const [members, setMembers] = useState<SelectItem[]>([]);
+    const [optimisticStatus, setOptimisticStatus] = useState<ManualStatus | null>(null);
 
     // Sync local state when node changes
     useEffect(() => {
@@ -83,6 +83,11 @@ export function NodeDetailSheet({
         }
     }, [open, projectId]);
 
+    // Reset optimistic status when node changes
+    useEffect(() => {
+        setOptimisticStatus(null);
+    }, [node]);
+
     if (!node) return null;
 
     const updateNode = async (updates: Partial<NodeDTO> & { ownerIds?: string[] }) => {
@@ -107,14 +112,6 @@ export function NodeDetailSheet({
         await updateNode({ title, description });
         setIsEditing(false);
     };
-
-    // Optimistic status state
-    const [optimisticStatus, setOptimisticStatus] = useState<ManualStatus | null>(null);
-
-    // Reset optimistic status when node changes
-    useEffect(() => {
-        setOptimisticStatus(null);
-    }, [node]);
 
     const currentStatus = optimisticStatus || node.manualStatus;
 
