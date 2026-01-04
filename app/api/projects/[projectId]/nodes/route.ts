@@ -9,7 +9,7 @@ import { NodeType, ManualStatus } from "@/types";
 
 const CreateNodeSchema = z.object({
   title: z.string().min(1).max(200),
-  description: z.string().optional(),
+  description: z.string().optional().nullable(),
   type: z.nativeEnum(NodeType).default(NodeType.TASK),
   manualStatus: z.nativeEnum(ManualStatus).default(ManualStatus.TODO),
   ownerId: z.string().optional(),
@@ -17,7 +17,7 @@ const CreateNodeSchema = z.object({
   team: z.string().optional(),
   teamIds: z.array(z.string()).optional(),
   priority: z.number().int().min(1).max(5).default(3),
-  dueAt: z.string().datetime().optional(),
+  dueAt: z.string().datetime().optional().nullable(),
 });
 
 // POST /api/projects/[projectId]/nodes - Create new node
