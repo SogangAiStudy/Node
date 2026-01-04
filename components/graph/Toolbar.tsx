@@ -11,7 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { TeamDTO } from "@/types";
+import { TeamDTO, NodeDTO } from "@/types";
 import {
   Plus,
   Search,
@@ -22,10 +22,14 @@ import {
   Clock,
   AlertCircle,
   PlayCircle,
-  Layout
+  Layout,
+  Sparkles,
+  Layers,
 } from "lucide-react";
 import { AddNodeDialog } from "./AddNodeDialog";
 import { AddEdgeDialog } from "./AddEdgeDialog";
+import { GenerateNodesDialog } from "./GenerateNodesDialog";
+import { AutoOrganizeDialog } from "./AutoOrganizeDialog";
 
 interface Team {
   id: string;
@@ -42,6 +46,8 @@ interface ToolbarProps {
   searchQuery: string;
   onSearchChange: (query: string) => void;
   onDataChange: () => void;
+  nodes: NodeDTO[];
+  onLayoutChange?: (clusters: any[], layout: string) => void;
 }
 
 export function Toolbar({
@@ -54,9 +60,13 @@ export function Toolbar({
   searchQuery,
   onSearchChange,
   onDataChange,
+  nodes,
+  onLayoutChange,
 }: ToolbarProps) {
   const [addNodeOpen, setAddNodeOpen] = useState(false);
   const [addEdgeOpen, setAddEdgeOpen] = useState(false);
+  const [generateNodesOpen, setGenerateNodesOpen] = useState(false);
+  const [autoOrganizeOpen, setAutoOrganizeOpen] = useState(false);
 
   const { data: teamsData } = useQuery({
     queryKey: ["project-teams", projectId],
@@ -108,6 +118,30 @@ export function Toolbar({
             >
               <Layout className="h-4 w-4 mr-1.5" />
               Connect
+            </Button>
+          </div>
+
+          <div className="h-6 w-px bg-slate-200" />
+
+          {/* AI Features */}
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setGenerateNodesOpen(true)}
+              className="h-8 border-purple-200 text-purple-700 hover:bg-purple-50 hover:text-purple-800 hover:border-purple-300"
+            >
+              <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+              Generate
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setAutoOrganizeOpen(true)}
+              className="h-8 border-slate-200 text-slate-600 hover:text-slate-800"
+            >
+              <Layers className="h-3.5 w-3.5 mr-1.5" />
+              Organize
             </Button>
           </div>
 
@@ -195,6 +229,29 @@ export function Toolbar({
         onSuccess={() => {
           onDataChange();
           setAddEdgeOpen(false);
+        }}
+      />
+
+      <GenerateNodesDialog
+        projectId={projectId}
+        orgId={orgId}
+        open={generateNodesOpen}
+        onOpenChange={setGenerateNodesOpen}
+        onSuccess={() => {
+          onDataChange();
+          setGenerateNodesOpen(false);
+        }}
+      />
+
+      <AutoOrganizeDialog
+        projectId={projectId}
+        nodes={nodes}
+        open={autoOrganizeOpen}
+        onOpenChange={setAutoOrganizeOpen}
+        onApply={(clusters, layout) => {
+          if (onLayoutChange) {
+            onLayoutChange(clusters, layout);
+          }
         }}
       />
     </div>

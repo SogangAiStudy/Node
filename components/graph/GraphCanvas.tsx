@@ -17,6 +17,7 @@ import "reactflow/dist/style.css";
 import { NodeDTO, GraphData, EdgeRelation } from "@/types";
 import { CustomNode } from "./CustomNode";
 import { ActionCenterBar } from "./ActionCenterBar";
+import { Toolbar } from "./Toolbar";
 import { CanvasContextMenu, ContextMenuPosition } from "./CanvasContextMenu";
 import { AddNodeDialog } from "./AddNodeDialog";
 import { useSession } from "next-auth/react";
@@ -97,6 +98,7 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
   const [contextMenu, setContextMenu] = useState<ContextMenuPosition | null>(null);
   const [addNodeOpen, setAddNodeOpen] = useState(false);
   const [addNodePosition, setAddNodePosition] = useState<{ x: number; y: number } | null>(null);
+  const [layoutDirection, setLayoutDirection] = useState<"LR" | "TB">("LR");
 
   const { layoutedNodes, layoutedEdges } = useMemo(() => {
     const initialNodes: Node[] = data.nodes.map((node) => {
@@ -174,7 +176,7 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
 
       // Auto-layout nodes without saved positions
       if (nodesNeedingLayout.length > 0) {
-        const { nodes: layoutedNodes } = getLayoutedElements(nodesNeedingLayout, initialEdges);
+        const { nodes: layoutedNodes } = getLayoutedElements(nodesNeedingLayout, initialEdges, layoutDirection);
         return { nodes: [...nodesWithSavedPos, ...layoutedNodes], edges: initialEdges };
       }
 
@@ -221,7 +223,7 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
     });
 
     return { layoutedNodes: nodesWithExtraData, layoutedEdges: edges };
-  }, [data.nodes, data.edges, filterStatus, searchQuery, selectedTeamIds, projectId, orgId, onDataChange]);
+  }, [data.nodes, data.edges, filterStatus, searchQuery, selectedTeamIds, projectId, orgId, onDataChange, layoutDirection]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(layoutedNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(layoutedEdges);
@@ -348,6 +350,19 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
     [onDataChange]
   );
 
+  const handleLayoutChange = useCallback((clusters: any[], layout: string) => {
+    // Map layout suggestion to direction
+    if (layout === "vertical") setLayoutDirection("TB");
+    else setLayoutDirection("LR");
+
+    // Toast about clusters (since we don't visualize them yet)
+    if (clusters.length > 0) {
+      toast.success(`Layout applied. ${clusters.length} clusters suggested.`);
+    } else {
+      toast.success("Layout applied.");
+    }
+  }, []);
+
   return (
     <div className="relative h-full w-full flex flex-col rounded-lg border bg-white overflow-hidden shadow-inner">
       {/* Action Center Bar at Top */}
@@ -367,6 +382,19 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
 
       {/* Canvas (full remaining height) */}
       <div className="flex-1 relative" onClick={() => setContextMenu(null)}>
+        <Toolbar
+          orgId={orgId}
+          projectId={projectId}
+          filterStatus={filterStatus}
+          onFilterChange={setFilterStatus}
+          selectedTeamIds={selectedTeamIds}
+          onTeamFilterChange={setSelectedTeamIds}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          onDataChange={onDataChange}
+          nodes={data.nodes}
+          onLayoutChange={handleLayoutChange}
+        />
         <ReactFlow
           nodes={nodes}
           edges={edges}
