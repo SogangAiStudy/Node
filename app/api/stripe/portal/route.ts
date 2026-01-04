@@ -51,7 +51,18 @@ export async function POST(req: NextRequest) {
 
         if (!org.stripeCustomerId) {
             return NextResponse.json(
-                { error: "No Stripe customer found" },
+                { error: "No Stripe customer found. Please upgrade to Pro first." },
+                { status: 400 }
+            );
+        }
+
+        // Validate that the customer exists in Stripe
+        try {
+            await stripe.customers.retrieve(org.stripeCustomerId);
+        } catch (error: any) {
+            console.error(`Customer ${org.stripeCustomerId} not found in Stripe:`, error);
+            return NextResponse.json(
+                { error: "Stripe customer not found. Please contact support or try upgrading again." },
                 { status: 400 }
             );
         }
