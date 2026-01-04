@@ -7,6 +7,7 @@ import { z } from "zod";
 const CreateProjectSchema = z.object({
   name: z.string().min(1).max(100),
   description: z.string().optional(),
+  orgId: z.string().optional(),
   primaryTeamId: z.string().optional(),
   folderId: z.string().optional(),
   teamIds: z.array(z.string()).optional().default([]),
@@ -170,6 +171,7 @@ export async function POST(request: NextRequest) {
       where: {
         userId: user.id,
         status: { in: ["ACTIVE", "PENDING_TEAM_ASSIGNMENT"] },
+        ...(requestedOrgId ? { orgId: requestedOrgId } : {}),
       },
       select: {
         orgId: true,
