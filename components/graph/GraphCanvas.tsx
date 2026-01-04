@@ -61,7 +61,18 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = "LR") => 
   dagreGraph.setDefaultEdgeLabel(() => ({}));
 
   const isHorizontal = direction === "LR";
-  dagreGraph.setGraph({ rankdir: direction });
+
+  // Optimized layout settings for edge crossing minimization and visual clarity
+  dagreGraph.setGraph({
+    rankdir: direction,
+    ranksep: 100,     // Space between layers (horizontal in LR, vertical in TB)
+    nodesep: 60,      // Space between nodes in the same layer
+    edgesep: 25,      // Minimum edge separation
+    marginx: 30,      // Horizontal margin
+    marginy: 30,      // Vertical margin
+    acyclicer: "greedy",  // Algorithm for making graphs acyclic
+    ranker: "network-simplex",  // Ranking algorithm (best for minimizing edge crossings)
+  });
 
   nodes.forEach((node) => {
     dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight });
@@ -375,18 +386,27 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
     [projectId, queryClient, onDataChange]
   );
 
-  const handleLayoutChange = useCallback((clusters: any[], layout: string) => {
-    // Map layout suggestion to direction
-    if (layout === "vertical") setLayoutDirection("TB");
-    else setLayoutDirection("LR");
+  const handleOrganizeApply = useCallback(
+    (positions: Array<{ nodeId: string; x: number; y: number }>) => {
+      // Update local state immediately
+      setNodes((nds) =>
+        nds.map((node) => {
+          const newPos = positions.find((p) => p.nodeId === node.id);
+          if (newPos) {
+            return {
+              ...node,
+              position: { x: newPos.x, y: newPos.y },
+            };
+          }
+          return node;
+        })
+      );
 
-    // Toast about clusters (since we don't visualize them yet)
-    if (clusters.length > 0) {
-      toast.success(`Layout applied. ${clusters.length} clusters suggested.`);
-    } else {
-      toast.success("Layout applied.");
-    }
-  }, []);
+      // Refetch data to sync with server
+      onDataChange();
+    },
+    [setNodes, onDataChange]
+  );
 
   return (
     <div className="relative h-full w-full flex flex-col rounded-lg border bg-white overflow-hidden shadow-inner">
@@ -420,7 +440,8 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
           onSearchChange={setSearchQuery}
           onDataChange={onDataChange}
           nodes={data.nodes}
-          onLayoutChange={handleLayoutChange}
+          edges={data.edges}
+          onOrganizeApply={handleOrganizeApply}
         />
         <ReactFlow
           nodes={nodes}

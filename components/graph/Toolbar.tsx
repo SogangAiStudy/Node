@@ -29,7 +29,7 @@ import {
 import { AddNodeDialog } from "./AddNodeDialog";
 import { AddEdgeDialog } from "./AddEdgeDialog";
 import { GenerateNodesDialog } from "./GenerateNodesDialog";
-import { AutoOrganizeDialog } from "./AutoOrganizeDialog";
+import { OrganizeDialog } from "./OrganizeDialog";
 
 interface Team {
   id: string;
@@ -47,7 +47,8 @@ interface ToolbarProps {
   onSearchChange: (query: string) => void;
   onDataChange: () => void;
   nodes: NodeDTO[];
-  onLayoutChange?: (clusters: any[], layout: string) => void;
+  edges: Array<{ id: string; fromNodeId: string; toNodeId: string }>;
+  onOrganizeApply: (positions: Array<{ nodeId: string; x: number; y: number }>) => void;
 }
 
 export function Toolbar({
@@ -61,7 +62,8 @@ export function Toolbar({
   onSearchChange,
   onDataChange,
   nodes,
-  onLayoutChange,
+  edges,
+  onOrganizeApply,
 }: ToolbarProps) {
   const [addNodeOpen, setAddNodeOpen] = useState(false);
   const [addEdgeOpen, setAddEdgeOpen] = useState(false);
@@ -243,16 +245,13 @@ export function Toolbar({
         }}
       />
 
-      <AutoOrganizeDialog
+      <OrganizeDialog
         projectId={projectId}
-        nodes={nodes}
+        nodes={nodes.map(n => ({ id: n.id, title: n.title }))}
+        edges={edges.map(e => ({ id: e.id, source: e.fromNodeId, target: e.toNodeId }))}
         open={autoOrganizeOpen}
         onOpenChange={setAutoOrganizeOpen}
-        onApply={(clusters, layout) => {
-          if (onLayoutChange) {
-            onLayoutChange(clusters, layout);
-          }
-        }}
+        onApply={onOrganizeApply}
       />
     </div>
   );
