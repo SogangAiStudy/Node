@@ -54,7 +54,8 @@ export function AddNodeDialog({ projectId, orgId, open, onOpenChange, onSuccess 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [type, setType] = useState("TASK");
-  const [ownerIds, setOwnerIds] = useState<string[]>([]);
+  const [ownerId, setOwnerId] = useState<string>(""); // Primary Owner
+  const [participantIds, setParticipantIds] = useState<string[]>([]); // Participating Members
   const [teamIds, setTeamIds] = useState<string[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
@@ -70,10 +71,10 @@ export function AddNodeDialog({ projectId, orgId, open, onOpenChange, onSuccess 
         setMembers(data.members || []);
 
         // Auto-set current user as owner if they are a member and none selected
-        if (session?.user?.id && ownerIds.length === 0) {
+        if (session?.user?.id && !ownerId) {
           const isMember = data.members.some((m: Member) => m.userId === session.user?.id);
           if (isMember) {
-            setOwnerIds([session.user.id]);
+            setOwnerId(session.user.id);
           }
         }
       }
@@ -87,7 +88,7 @@ export function AddNodeDialog({ projectId, orgId, open, onOpenChange, onSuccess 
     } catch (error) {
       console.error("Failed to fetch members and teams:", error);
     }
-  }, [projectId, session?.user?.id, ownerIds.length]);
+  }, [projectId, session?.user?.id, ownerId]);
 
   useEffect(() => {
     if (open) {
@@ -99,6 +100,11 @@ export function AddNodeDialog({ projectId, orgId, open, onOpenChange, onSuccess 
     e.preventDefault();
     setIsLoading(true);
 
+    // Combine primary owner and participants for the backend
+    const allOwnerIds = ownerId ? [ownerId, ...participantIds] : participantIds;
+    // Remove duplicates just in case
+    const uniqueOwnerIds = Array.from(new Set(allOwnerIds));
+
     try {
       const res = await fetch(`/api/projects/${projectId}/nodes`, {
         method: "POST",
@@ -107,7 +113,8 @@ export function AddNodeDialog({ projectId, orgId, open, onOpenChange, onSuccess 
           title,
           description,
           type,
-          ownerIds,
+          ownerId: ownerId || null, // Primary owner
+          ownerIds: uniqueOwnerIds, // All owners/participants
           teamIds,
         }),
       });
@@ -139,11 +146,18 @@ export function AddNodeDialog({ projectId, orgId, open, onOpenChange, onSuccess 
     setTitle("");
     setDescription("");
     setType("TASK");
-    setOwnerIds([]);
+    // Don't reset ownerId if it's the current user, ideally. 
+    // But to match previous behavior closer to "reset":
+    if (session?.user?.id && members.some(m => m.userId === session.user?.id)) {
+      setOwnerId(session.user.id);
+    } else {
+      setOwnerId("");
+    }
+    setParticipantIds([]);
     setTeamIds([]);
   };
 
-  const ownerItems: MultiSelectItem[] = members.map((m: Member) => ({
+  const memberItems: MultiSelectItem[] = members.map((m: Member) => ({
     id: m.userId,
     name: m.userName || "Unknown",
     subtitle: m.teamName || undefined,
@@ -155,7 +169,6 @@ export function AddNodeDialog({ projectId, orgId, open, onOpenChange, onSuccess 
     name: t.name,
     type: "team",
   }));
-
 
   return (
     <>
@@ -193,24 +206,40 @@ export function AddNodeDialog({ projectId, orgId, open, onOpenChange, onSuccess 
                     </SelectContent>
                   </Select>
                 </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="owner" className="text-sm font-medium">Primary Owner</Label>
+                  <Select value={ownerId} onValueChange={setOwnerId}>
+                    <SelectTrigger id="owner">
+                      <SelectValue placeholder="Select owner" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {members.map((member) => (
+                        <SelectItem key={member.userId} value={member.userId}>
+                          {member.userName || "Unknown"}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
               <div className="grid gap-4">
                 <div className="grid gap-2">
-                  <Label className="text-sm font-medium">Owners</Label>
+                  <Label className="text-sm font-medium">Participating Members (optional)</Label>
                   <MultiSelectSearch
-                    items={ownerItems}
-                    selectedIds={ownerIds}
-                    onSelect={(id: string) => setOwnerIds((prev: string[]) => [...prev, id])}
-                    onRemove={(id: string) => setOwnerIds((prev: string[]) => prev.filter((i: string) => i !== id))}
-                    placeholder="Select owners"
+                    items={memberItems.filter(item => item.id !== ownerId)} // Exclude primary owner
+                    selectedIds={participantIds}
+                    onSelect={(id: string) => setParticipantIds((prev: string[]) => [...prev, id])}
+                    onRemove={(id: string) => setParticipantIds((prev: string[]) => prev.filter((i: string) => i !== id))}
+                    placeholder="Select participants"
                     searchPlaceholder="Search people..."
                   />
                 </div>
 
                 {teams.length > 0 && (
                   <div className="grid gap-2">
-                    <Label className="text-sm font-medium">Responsible Teams (optional)</Label>
+                    <Label className="text-sm font-medium">Participating Teams (optional)</Label>
                     <MultiSelectSearch
                       items={teamItems}
                       selectedIds={teamIds}
