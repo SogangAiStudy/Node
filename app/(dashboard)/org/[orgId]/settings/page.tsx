@@ -56,7 +56,8 @@ import {
     Shield,
     UserCircle,
     Settings as SettingsIcon,
-    ArrowLeft
+    ArrowLeft,
+    AlertTriangle
 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -111,6 +112,10 @@ export default function WorkspaceSettingsPage() {
     // Team Creation State
     const [newTeamName, setNewTeamName] = useState("");
     const [newTeamDescription, setNewTeamDescription] = useState("");
+
+    // Delete Workspace State
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [deleteConfirmName, setDeleteConfirmName] = useState("");
 
     // --- Queries ---
 
@@ -224,6 +229,27 @@ export default function WorkspaceSettingsPage() {
             queryClient.invalidateQueries({ queryKey: ["org-teams", orgId] });
             toast.success("Team deleted");
         }
+    });
+
+    const deleteWorkspaceMutation = useMutation({
+        mutationFn: async (confirmName: string) => {
+            const res = await fetch(`/api/organizations/${orgId}`, {
+                method: "DELETE",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ confirmName }),
+            });
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.error || "Failed to delete workspace");
+            }
+            return res.json();
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+            toast.success("Workspace deleted successfully");
+            router.push("/");
+        },
+        onError: (err) => toast.error(err.message),
     });
 
     // --- Handlers ---
@@ -369,6 +395,39 @@ export default function WorkspaceSettingsPage() {
                             </div>
                         </CardContent>
                     </Card>
+
+                    {/* Danger Zone - Delete Workspace */}
+                    {isAdmin && (
+                        <Card className="border-red-200 bg-red-50/30">
+                            <CardHeader>
+                                <CardTitle className="text-lg text-red-600 flex items-center gap-2">
+                                    <AlertTriangle className="h-5 w-5" />
+                                    Danger Zone
+                                </CardTitle>
+                                <CardDescription className="text-red-600/70">
+                                    Irreversible and destructive actions.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <div className="font-medium text-sm">Delete this workspace</div>
+                                        <p className="text-xs text-[#7b7c7e] mt-1">
+                                            Once you delete a workspace, there is no going back. All projects, nodes, and data will be permanently removed.
+                                        </p>
+                                    </div>
+                                    <Button
+                                        variant="destructive"
+                                        onClick={() => setDeleteDialogOpen(true)}
+                                        className="bg-red-600 hover:bg-red-700"
+                                    >
+                                        <Trash2 className="h-4 w-4 mr-2" />
+                                        Delete Workspace
+                                    </Button>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
                 </TabsContent>
 
                 {/* --- Members Management --- */}
@@ -684,6 +743,65 @@ export default function WorkspaceSettingsPage() {
                             </Button>
                         </DialogFooter>
                     </form>
+                </DialogContent>
+            </Dialog>
+
+            {/* Delete Workspace Confirmation Dialog */}
+            <Dialog open={deleteDialogOpen} onOpenChange={(open) => {
+                setDeleteDialogOpen(open);
+                if (!open) setDeleteConfirmName("");
+            }}>
+                <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader>
+                        <DialogTitle className="text-red-600 flex items-center gap-2">
+                            <AlertTriangle className="h-5 w-5" />
+                            Delete Workspace
+                        </DialogTitle>
+                        <DialogDescription>
+                            This action cannot be undone. This will permanently delete the{" "}
+                            <strong className="text-[#1a1b1e]">{orgData?.name}</strong> workspace and all of its data.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4 space-y-4">
+                        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                            <strong>Warning:</strong> All projects, nodes, edges, teams, and member data will be permanently deleted.
+                        </div>
+                        <div className="space-y-2">
+                            <Label className="text-sm">
+                                Please type <strong className="text-[#1a1b1e]">{orgData?.name}</strong> to confirm:
+                            </Label>
+                            <Input
+                                value={deleteConfirmName}
+                                onChange={(e) => setDeleteConfirmName(e.target.value)}
+                                placeholder="Enter workspace name"
+                                className="h-10"
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button
+                            variant="ghost"
+                            onClick={() => {
+                                setDeleteDialogOpen(false);
+                                setDeleteConfirmName("");
+                            }}
+                            className="h-10"
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            onClick={() => deleteWorkspaceMutation.mutate(deleteConfirmName)}
+                            disabled={deleteConfirmName !== orgData?.name || deleteWorkspaceMutation.isPending}
+                            className="bg-red-600 hover:bg-red-700 h-10 px-6 font-semibold"
+                        >
+                            {deleteWorkspaceMutation.isPending ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                                "Delete Workspace"
+                            )}
+                        </Button>
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
         </div>
