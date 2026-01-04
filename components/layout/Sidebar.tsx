@@ -530,7 +530,7 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
               className="gap-2 focus:bg-[#2c2d31] focus:text-white cursor-pointer"
               onClick={() => router.push(`/org/${currentOrgId}/settings`)}
             >
-              <Settings className="h-4 w-4" /> Org Settings
+              <Settings className="h-4 w-4" /> Workspace Settings
             </DropdownMenuItem>
             <DropdownMenuSeparator className="bg-[#2c2d31]" />
             <DropdownMenuItem

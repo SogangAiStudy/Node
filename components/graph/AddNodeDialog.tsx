@@ -57,6 +57,7 @@ export function AddNodeDialog({ projectId, orgId, open, onOpenChange, onSuccess 
   const [ownerId, setOwnerId] = useState<string>(""); // Primary Owner
   const [participantIds, setParticipantIds] = useState<string[]>([]); // Participating Members
   const [teamIds, setTeamIds] = useState<string[]>([]);
+  const [dueAt, setDueAt] = useState("");
   const [members, setMembers] = useState<Member[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -116,6 +117,7 @@ export function AddNodeDialog({ projectId, orgId, open, onOpenChange, onSuccess 
           ownerId: ownerId || null, // Primary owner
           ownerIds: uniqueOwnerIds, // All owners/participants
           teamIds,
+          dueAt: dueAt ? new Date(dueAt).toISOString() : null,
         }),
       });
 
@@ -155,6 +157,7 @@ export function AddNodeDialog({ projectId, orgId, open, onOpenChange, onSuccess 
     }
     setParticipantIds([]);
     setTeamIds([]);
+    setDueAt("");
   };
 
   const memberItems: MultiSelectItem[] = members.map((m: Member) => ({
@@ -226,42 +229,63 @@ export function AddNodeDialog({ projectId, orgId, open, onOpenChange, onSuccess 
 
               <div className="grid gap-4">
                 <div className="grid gap-2">
-                  <Label className="text-sm font-medium">Participating Members (optional)</Label>
+                  <Label className="text-sm font-medium">Participating Members & Teams (optional)</Label>
                   <MultiSelectSearch
-                    items={memberItems.filter(item => item.id !== ownerId)} // Exclude primary owner
-                    selectedIds={participantIds}
-                    onSelect={(id: string) => setParticipantIds((prev: string[]) => [...prev, id])}
-                    onRemove={(id: string) => setParticipantIds((prev: string[]) => prev.filter((i: string) => i !== id))}
-                    placeholder="Select participants"
-                    searchPlaceholder="Search people..."
+                    items={[...memberItems.filter(item => item.id !== ownerId), ...teamItems]}
+                    selectedIds={[...participantIds, ...teamIds]}
+                    onSelect={(id: string) => {
+                      const allItems = [...memberItems, ...teamItems];
+                      const item = allItems.find(i => i.id === id);
+                      if (!item) return;
+
+                      if (item.type === "user") {
+                        setParticipantIds(prev => [...prev, id]);
+                      } else if (item.type === "team") {
+                        setTeamIds(prev => [...prev, id]);
+                      }
+                    }}
+                    onRemove={(id: string) => {
+                      // Try removing from both, as IDs are unique across entities usually
+                      // or check existence. Simpler to just filter both.
+                      setParticipantIds(prev => prev.filter(i => i !== id));
+                      setTeamIds(prev => prev.filter(i => i !== id));
+                    }}
+                    placeholder="Select members or teams..."
+                    searchPlaceholder="Search people or teams..."
                   />
                 </div>
 
-                {teams.length > 0 && (
-                  <div className="grid gap-2">
-                    <Label className="text-sm font-medium">Participating Teams (optional)</Label>
-                    <MultiSelectSearch
-                      items={teamItems}
-                      selectedIds={teamIds}
-                      onSelect={(id: string) => setTeamIds((prev: string[]) => [...prev, id])}
-                      onRemove={(id: string) => setTeamIds((prev: string[]) => prev.filter((i: string) => i !== id))}
-                      placeholder="Select teams"
-                      searchPlaceholder="Search teams..."
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
+                {/* Due Date (Moved up to align with previous design if needed, but keeping flow) */}
+                <div className="grid gap-2">
+                  <Label htmlFor="dueAt" className="text-sm font-medium">Due Date (optional)</Label>
+                  <Input
+                    type="date"
+                    id="dueAt"
+                    value={dueAt}
+                    onFocus={() => {
+                      if (!dueAt) {
+                        const today = new Date();
+                        const year = today.getFullYear();
+                        const month = String(today.getMonth() + 1).padStart(2, '0');
+                        const day = String(today.getDate()).padStart(2, '0');
+                        setDueAt(`${year}-${month}-${day}`);
+                      }
+                    }}
+                    onChange={(e) => setDueAt(e.target.value)}
+                  />
+                </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="description" className="text-sm font-medium">Description (optional)</Label>
-              <Textarea
-                id="description"
-                value={description}
-                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setDescription(e.target.value)}
-                placeholder="Add more context..."
-                className="h-24 resize-none"
-              />
+                <div className="grid gap-2">
+                  <Label htmlFor="description" className="text-sm font-medium">Description (optional)</Label>
+                  <Textarea
+                    id="description"
+                    value={description}
+                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setDescription(e.target.value)}
+                    placeholder="Add more context..."
+                    className="h-24 resize-none"
+                  />
+                </div>
+              </div>
             </div>
             <DialogFooter className="gap-2 sm:gap-0">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="flex-1 sm:flex-none">

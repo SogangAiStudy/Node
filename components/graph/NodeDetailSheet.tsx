@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { CreateRequestDialog } from "./CreateRequestDialog";
+import { MultiSelectSearch, SelectItem } from "@/components/ui/multi-select-search";
 import { cn } from "@/lib/utils";
 
 interface NodeDetailSheetProps {
@@ -53,6 +54,8 @@ export function NodeDetailSheet({
     const [isSaving, setIsSaving] = useState(false);
     const [requestDialogOpen, setRequestDialogOpen] = useState(false);
 
+    const [members, setMembers] = useState<SelectItem[]>([]);
+
     // Sync local state when node changes
     useEffect(() => {
         if (node) {
@@ -60,6 +63,24 @@ export function NodeDetailSheet({
             setDescription(node.description || "");
         }
     }, [node]);
+
+    // Fetch members
+    useEffect(() => {
+        if (open && projectId) {
+            fetch(`/api/projects/${projectId}/members`)
+                .then(res => res.json())
+                .then(data => {
+                    const formatted = data.map((m: any) => ({
+                        id: m.userId,
+                        name: m.user.name || m.user.email,
+                        image: m.user.image,
+                        type: "user" as const
+                    }));
+                    setMembers(formatted);
+                })
+                .catch(err => console.error("Failed to fetch members", err));
+        }
+    }, [open, projectId]);
 
     if (!node) return null;
 
@@ -86,9 +107,28 @@ export function NodeDetailSheet({
         setIsEditing(false);
     };
 
+    // Optimistic status state
+    const [optimisticStatus, setOptimisticStatus] = useState<ManualStatus | null>(null);
+
+    // Reset optimistic status when node changes
+    useEffect(() => {
+        setOptimisticStatus(null);
+    }, [node]);
+
+    const currentStatus = optimisticStatus || node.manualStatus;
+
     const handleStatusChange = async (newStatus: ManualStatus) => {
-        if (newStatus === node.manualStatus) return;
-        await updateNode({ manualStatus: newStatus });
+        if (newStatus === currentStatus) return;
+
+        // Optimistic update
+        setOptimisticStatus(newStatus);
+
+        try {
+            await updateNode({ manualStatus: newStatus });
+        } catch (error) {
+            // Revert on error
+            setOptimisticStatus(null);
+        }
     };
 
     const getInitials = (name: string) => {
@@ -139,7 +179,7 @@ export function NodeDetailSheet({
                                     onClick={() => handleStatusChange(status)}
                                     className={cn(
                                         "px-4 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-2",
-                                        node.manualStatus === status
+                                        currentStatus === status
                                             ? "bg-white text-slate-900 shadow-sm"
                                             : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
                                     )}
@@ -172,41 +212,43 @@ export function NodeDetailSheet({
                         </div>
 
                         {/* Metadata Grid */}
-                        <div className="grid grid-cols-2 gap-6">
+                        <div className="grid grid-cols-1 gap-6">
                             <div className="space-y-3">
-                                <h4 className="text-sm font-medium text-slate-500 uppercase tracking-wider">Owner</h4>
-                                {primaryOwner ? (
-                                    <div className="flex items-center gap-3">
-                                        <Avatar className="h-8 w-8">
-                                            <AvatarFallback className="bg-blue-100 text-blue-700 text-xs">
-                                                {getInitials(primaryOwner.name)}
-                                            </AvatarFallback>
-                                        </Avatar>
-                                        <div className="flex flex-col">
-                                            <span className="text-sm font-medium text-slate-900">{primaryOwner.name}</span>
-                                            <span className="text-xs text-slate-500">Primary Owner</span>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className="flex items-center gap-2 text-slate-400">
-                                        <div className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center">
-                                            <User className="w-4 h-4" />
-                                        </div>
-                                        <span className="text-sm">Unassigned</span>
-                                    </div>
-                                )}
+                                <h4 className="text-sm font-medium text-slate-500 uppercase tracking-wider">Engaging Team</h4>
+                                <MultiSelectSearch
+                                    items={members}
+                                    selectedIds={node.owners?.map((o: any) => o.id) || []}
+                                    onSelect={(id) => {
+                                        const currentIds = node.owners?.map((o: any) => o.id) || [];
+                                        const newIds = [...currentIds, id];
+                                        updateNode({ ownerIds: newIds });
+                                    }}
+                                    onRemove={(id) => {
+                                        const currentIds = node.owners?.map((o: any) => o.id) || [];
+                                        const newIds = currentIds.filter(cid => cid !== id);
+                                        updateNode({ ownerIds: newIds });
+                                    }}
+                                    placeholder="Add team members..."
+                                    searchPlaceholder="Search members..."
+                                />
                             </div>
 
                             <div className="space-y-3">
                                 <h4 className="text-sm font-medium text-slate-500 uppercase tracking-wider">Due Date</h4>
-                                {node.dueAt ? (
-                                    <div className="flex items-center gap-2 text-sm text-slate-700">
-                                        <Calendar className="w-4 h-4 text-slate-400" />
-                                        <span>{new Date(node.dueAt).toLocaleDateString()}</span>
+                                <div className="relative">
+                                    <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+                                        <Calendar className="h-4 w-4 text-slate-500" />
                                     </div>
-                                ) : (
-                                    <span className="text-sm text-slate-400 italic">No due date</span>
-                                )}
+                                    <Input
+                                        type="date"
+                                        className="pl-10"
+                                        value={node.dueAt ? new Date(node.dueAt).toISOString().split('T')[0] : ""}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            updateNode({ dueAt: val ? new Date(val).toISOString() : null });
+                                        }}
+                                    />
+                                </div>
                             </div>
                         </div>
 

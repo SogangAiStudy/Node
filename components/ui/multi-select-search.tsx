@@ -99,9 +99,7 @@ export function MultiSelectSearch({
                             </Badge>
                         ))}
                     </div>
-                ) : (
-                    !search && <span className="text-muted-foreground">{placeholder}</span>
-                )}
+                ) : null}
                 <input
                     className="flex-1 bg-transparent outline-none placeholder:text-muted-foreground"
                     placeholder={selectedItems.length === 0 ? placeholder : ""}
