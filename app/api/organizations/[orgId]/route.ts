@@ -35,11 +35,21 @@ export async function GET(
             return NextResponse.json({ error: "Access denied or workspace not found" }, { status: 403 });
         }
 
+        // Auto-generate inviteCode if missing (for existing workspaces created before this feature)
+        let inviteCode = orgMember.organization.inviteCode;
+        if (!inviteCode) {
+            inviteCode = crypto.randomUUID();
+            await prisma.organization.update({
+                where: { id: orgId },
+                data: { inviteCode },
+            });
+        }
+
         return NextResponse.json({
             organization: {
                 id: orgMember.organization.id,
                 name: orgMember.organization.name,
-                inviteCode: orgMember.organization.inviteCode,
+                inviteCode,
                 role: orgMember.role,
                 status: orgMember.status,
                 createdAt: orgMember.organization.createdAt,

@@ -23,12 +23,13 @@ export async function POST(request: NextRequest) {
 
     // Create organization, org membership, and optionally a default team
     const result = await prisma.$transaction(async (tx: any) => {
-      // Create organization
+      // Create organization with invite code
       const organization = await tx.organization.create({
         data: {
           name,
           ownerId: user.id,
           updatedAt: new Date(),
+          inviteCode: crypto.randomUUID(),
         },
       });
 

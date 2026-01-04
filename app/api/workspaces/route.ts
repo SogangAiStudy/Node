@@ -157,11 +157,12 @@ export async function GET(request: NextRequest) {
       }
 
       const personalOrg = await prisma.$transaction(async (tx: any) => {
-        // 1. Create the Personal Workspace (Organization)
+        // 1. Create the Personal Workspace (Organization) with invite code
         const org = await tx.organization.create({
           data: {
             name: `${user.name || "Personal"}'s Space`,
             ownerId: user.id,
+            inviteCode: crypto.randomUUID(),
           },
         });
 
