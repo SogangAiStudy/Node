@@ -102,6 +102,7 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
   const [addNodePosition, setAddNodePosition] = useState<{ x: number; y: number } | null>(null);
   const [layoutDirection, setLayoutDirection] = useState<"LR" | "TB">("LR");
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
 
   const { layoutedNodes, layoutedEdges } = useMemo(() => {
     const initialNodes: Node[] = data.nodes.map((node) => {
@@ -221,6 +222,7 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
           onDataChange,
           blockedBy: blockedByTitles,
           blocking: blockingTitles,
+          onOpenDetail: () => setIsSheetOpen(true),
         },
       };
     });
@@ -392,6 +394,7 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
         userId={useSession().data?.user?.id || ""}
         onNodeClick={(nodeId) => {
           setSelectedNodeId(nodeId);
+          setIsSheetOpen(false); // Valid: Reset sheet on new click
           setNodes((nds) =>
             nds.map((node) => ({
               ...node,
@@ -423,7 +426,10 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           onEdgeClick={onEdgeClick}
-          onNodeClick={(_event, node) => setSelectedNodeId(node.id)}
+          onNodeClick={(_event, node) => {
+            setSelectedNodeId(node.id);
+            setIsSheetOpen(false);
+          }}
           onNodeDragStop={onNodeDragStop}
           nodeTypes={nodeTypes}
           fitView
@@ -441,6 +447,7 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
           onPaneClick={() => {
             setContextMenu(null);
             setSelectedNodeId(null);
+            setIsSheetOpen(false);
           }}
         >
           <Background color="#f1f5f9" gap={15} />
@@ -594,8 +601,8 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
       {/* Node Detail Sheet */}
       <NodeDetailSheet
         node={data.nodes.find(n => n.id === selectedNodeId) || null}
-        open={!!selectedNodeId}
-        onOpenChange={(open: boolean) => !open && setSelectedNodeId(null)}
+        open={!!selectedNodeId && isSheetOpen}
+        onOpenChange={(open: boolean) => setIsSheetOpen(open)}
         projectId={projectId}
         orgId={orgId}
         onDataChange={onDataChange}

@@ -19,6 +19,10 @@ import {
   HelpCircle,
   Sparkles,
   X,
+  ChevronRight,
+  CheckCircle2,
+  PlayCircle,
+  MessageSquarePlus,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
@@ -153,10 +157,23 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
     }
   }, [selected, hasLoadedMetadata]);
 
+  // Optimistic State
+  const [optimisticStatus, setOptimisticStatus] = useState(node.manualStatus);
+
+  useEffect(() => {
+    setOptimisticStatus(node.manualStatus);
+  }, [node.manualStatus]);
+
   // Updating Logic
   const updateNode = async (updates: Partial<NodeDTO>, e?: React.MouseEvent | React.FocusEvent | React.KeyboardEvent) => {
     if (e) e.stopPropagation();
     setIsUpdating(true);
+
+    // Optimistic Update
+    if (updates.manualStatus) {
+      setOptimisticStatus(updates.manualStatus);
+    }
+
     try {
       await fetch(`/api/nodes/${node.id}`, {
         method: "PATCH",
@@ -164,6 +181,10 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
         body: JSON.stringify(updates),
       });
       onDataChange();
+    } catch (err) {
+      // Revert on error
+      setOptimisticStatus(node.manualStatus);
+      console.error(err);
     } finally {
       setIsUpdating(false);
     }
@@ -300,7 +321,6 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
           )}
         </div>
 
-        {/* 3. Metadata (Subtle Footer) */}
         <div className="flex items-center justify-between pt-2 border-t border-slate-50 mt-1">
           <div className="flex items-center gap-2 text-slate-400">
             {node.dueAt && (
@@ -320,23 +340,60 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
               {node.blocksCount}
             </div>
           )}
+        </div>
 
-          {/* Why Blocked? Button - only for BLOCKED status */}
-          {isBlocked && (
+        {/* EXPANDED VIEW: Extra Controls when Selected */}
+        {selected && (
+          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between animate-in fade-in slide-in-from-top-1 duration-200">
+            {/* Quick Status Switcher */}
+            <div className="flex gap-1 bg-slate-50 p-0.5 rounded-md">
+              {(['TODO', 'DOING', 'DONE'] as const).map(s => (
+                <button
+                  key={s}
+                  onClick={(e) => { e.stopPropagation(); updateNode({ manualStatus: s }); }}
+                  className={cn(
+                    "px-2 py-1 text-[8px] font-bold rounded transition-colors",
+                    node.manualStatus === s ? "bg-white shadow text-slate-800" : "text-slate-400 hover:text-slate-600 hover:bg-slate-200"
+                  )}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+
+            {/* Open Sidebar Button */}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded-full"
+              onClick={(e) => {
+                e.stopPropagation();
+                // @ts-ignore - Passed via data but not typed in CustomNodeProps yet
+                if (data.onOpenDetail) data.onOpenDetail();
+              }}
+            >
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </div>
+        )}
+
+        {/* Why Blocked? Button - only for BLOCKED status */}
+        {isBlocked && (
+          <div className="mt-2 text-center">
             <button
               onClick={(e) => { e.stopPropagation(); analyzeBlock(); }}
               disabled={isAnalyzing}
-              className="text-[9px] font-medium text-red-600 bg-red-50 hover:bg-red-100 px-1.5 py-0.5 rounded flex items-center gap-1 transition-colors"
+              className="w-full text-[9px] font-medium text-red-600 bg-red-50 hover:bg-red-100 px-2 py-1 rounded flex items-center justify-center gap-1 transition-colors"
             >
               {isAnalyzing ? (
                 <Loader2 className="w-2.5 h-2.5 animate-spin" />
               ) : (
                 <Sparkles className="w-2.5 h-2.5" />
               )}
-              Why blocked?
+              Analyze Blockers
             </button>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* AI Analysis Popup */}
         {showAnalysis && (

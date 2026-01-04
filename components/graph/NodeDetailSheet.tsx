@@ -105,10 +105,10 @@ export function NodeDetailSheet({
     return (
         <>
             <Sheet open={open} onOpenChange={onOpenChange}>
-                <SheetContent className="w-[400px] sm:w-[540px] overflow-y-auto">
-                    <SheetHeader className="space-y-4">
-                        <div className="flex items-start justify-between">
-                            <div className="space-y-1 flex-1">
+                <SheetContent className="w-[400px] sm:w-[540px] overflow-y-auto p-6 sm:p-8">
+                    <SheetHeader className="space-y-4 mb-6">
+                        <div className="flex items-start justify-between pr-8">
+                            <div className="space-y-1 flex-1 mr-4">
                                 {isEditing ? (
                                     <Input
                                         value={title}
