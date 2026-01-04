@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Plus, FolderKanban } from "lucide-react";
@@ -21,6 +21,7 @@ import { useMoveItem } from "@/hooks/use-move-item";
 
 export default function OrgProjectsPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const orgId = params.orgId as string;
   const [activeTab, setActiveTab] = useState<WorkspaceTab>("all");
   const queryClient = useQueryClient();
@@ -28,6 +29,17 @@ export default function OrgProjectsPage() {
   // Unified Data Hook
   const { data: structure, isLoading } = useWorkspaceStructure(orgId);
   const { mutate: moveItem } = useMoveItem();
+
+  // Show welcome toast when joining via invite
+  useEffect(() => {
+    if (searchParams.get("welcome") === "1") {
+      toast.success("Welcome to the workspace!", {
+        description: "You've successfully joined this workspace.",
+      });
+      // Clean up URL
+      window.history.replaceState({}, "", `/org/${orgId}/projects`);
+    }
+  }, [searchParams, orgId]);
 
   // Flatten all projects for "All Projects" / Filter logic
   // Recursive function to gather all projects from tree

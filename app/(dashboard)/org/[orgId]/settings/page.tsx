@@ -302,7 +302,7 @@ export default function WorkspaceSettingsPage() {
 
     const copyInviteLink = () => {
         if (!orgData?.inviteCode) return;
-        const link = `${window.location.origin}/onboarding?code=${orgData.inviteCode}`;
+        const link = `${window.location.origin}/invite/${orgData.inviteCode}`;
         navigator.clipboard.writeText(link);
         setCopied(true);
         toast.success("Invite link copied!");
@@ -378,24 +378,6 @@ export default function WorkspaceSettingsPage() {
                         </CardContent>
                     </Card>
 
-                    <Card className="border-[#e9e9e9] shadow-sm">
-                        <CardHeader>
-                            <CardTitle className="text-lg">Invite Members</CardTitle>
-                            <CardDescription>Share this link with people you want to join this workspace.</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="flex items-center gap-3">
-                                <div className="flex-1 px-3 h-10 bg-[#f7f7f5] border border-[#e9e9e9] rounded-lg text-sm flex items-center text-[#7b7c7e] truncate select-all">
-                                    {`${typeof window !== 'undefined' ? window.location.origin : ''}/onboarding?code=${orgData?.inviteCode}`}
-                                </div>
-                                <Button variant="outline" onClick={copyInviteLink} className="h-10 border-[#e9e9e9]">
-                                    {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
-                                    <span className="ml-2">{copied ? "Copied" : "Copy Link"}</span>
-                                </Button>
-                            </div>
-                        </CardContent>
-                    </Card>
-
                     {/* Danger Zone - Delete Workspace */}
                     {isAdmin && (
                         <Card className="border-red-200 bg-red-50/30">
@@ -432,6 +414,25 @@ export default function WorkspaceSettingsPage() {
 
                 {/* --- Members Management --- */}
                 <TabsContent value="members" className="space-y-6 animate-in fade-in duration-300">
+                    {/* Invite Members Card */}
+                    <Card className="border-[#e9e9e9] shadow-sm">
+                        <CardHeader>
+                            <CardTitle className="text-lg">Invite Members</CardTitle>
+                            <CardDescription>Share this link with people you want to join this workspace.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="flex items-center gap-3">
+                                <div className="flex-1 px-3 h-10 bg-[#f7f7f5] border border-[#e9e9e9] rounded-lg text-sm flex items-center text-[#7b7c7e] truncate select-all">
+                                    {`${typeof window !== 'undefined' ? window.location.origin : ''}/invite/${orgData?.inviteCode}`}
+                                </div>
+                                <Button variant="outline" onClick={copyInviteLink} className="h-10 border-[#e9e9e9]">
+                                    {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+                                    <span className="ml-2">{copied ? "Copied" : "Copy Link"}</span>
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+
                     {pendingApprovals.length > 0 && (
                         <Card className="border-[#f1f1ef] bg-[#fbfbfa]">
                             <CardHeader>
