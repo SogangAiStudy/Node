@@ -423,9 +423,16 @@ export default function WorkspaceSettingsPage() {
                         <CardContent>
                             <div className="flex items-center gap-3">
                                 <div className="flex-1 px-3 h-10 bg-[#f7f7f5] border border-[#e9e9e9] rounded-lg text-sm flex items-center text-[#7b7c7e] truncate select-all">
-                                    {`${typeof window !== 'undefined' ? window.location.origin : ''}/invite/${orgData?.inviteCode}`}
+                                    {orgData?.inviteCode
+                                        ? `${typeof window !== 'undefined' ? window.location.origin : ''}/invite/${orgData.inviteCode}`
+                                        : "Loading invite link..."}
                                 </div>
-                                <Button variant="outline" onClick={copyInviteLink} className="h-10 border-[#e9e9e9]">
+                                <Button
+                                    variant="outline"
+                                    onClick={copyInviteLink}
+                                    className="h-10 border-[#e9e9e9]"
+                                    disabled={!orgData?.inviteCode}
+                                >
                                     {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
                                     <span className="ml-2">{copied ? "Copied" : "Copy Link"}</span>
                                 </Button>
