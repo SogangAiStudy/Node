@@ -200,8 +200,7 @@ export function GenerateNodesDialog({
                                 value={text}
                                 onChange={(e) => setText(e.target.value)}
                                 placeholder="Paste your meeting notes, requirements, or task list here..."
-                                rows={8}
-                                className="mt-2 resize-none"
+                                className="mt-2 min-h-[300px] max-h-[50vh] resize-none"
                             />
                             <p className="text-xs text-muted-foreground mt-1">
                                 AI will extract tasks, decisions, and blockers from this text.

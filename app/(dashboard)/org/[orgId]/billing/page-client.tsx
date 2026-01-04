@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, CreditCard, ArrowRight } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
@@ -27,12 +27,13 @@ export default function BillingPageClient({
     const NODE_LIMIT = 20;
     const searchParams = useSearchParams();
     const router = useRouter();
+    const pathname = usePathname();
     const [showSuccessDialog, setShowSuccessDialog] = useState(false);
 
     useEffect(() => {
         if (searchParams.get("success") === "1") {
             setShowSuccessDialog(true);
-            // Confetti effect can be added here if a library is installed
+            // Don't refresh here to avoid loop. Refresh on dismiss.
         }
     }, [searchParams]);
 
@@ -88,7 +89,10 @@ export default function BillingPageClient({
 
     const handleGoToProfile = () => {
         setShowSuccessDialog(false);
-        router.push("/settings/profile");
+        const newParams = new URLSearchParams(searchParams);
+        newParams.delete("success");
+        router.replace(`${pathname}?${newParams.toString()}`);
+        router.refresh();
     }
 
     return (
@@ -101,21 +105,19 @@ export default function BillingPageClient({
                                 <span className="text-2xl">🎉</span>
                             </div>
                         </div>
-                        <DialogTitle className="text-center text-xl">Congratulations!</DialogTitle>
                         <DialogDescription className="text-center text-base pt-2">
                             You have successfully upgraded to the Pro plan.
                             <br />
                             Enjoy unlimited nodes and priority support.
                         </DialogDescription>
-                    </DialogHeader>
+                    </DialogHeader >
                     <div className="flex justify-center mt-4">
                         <Button onClick={handleGoToProfile} className="w-full sm:w-auto">
-                            Go to Profile & Check Subscription
-                            <ArrowRight className="ml-2 h-4 w-4" />
+                            Continue
                         </Button>
                     </div>
-                </DialogContent>
-            </Dialog>
+                </DialogContent >
+            </Dialog >
 
             <div>
                 <h1 className="text-3xl font-bold">Billing</h1>
@@ -230,6 +232,6 @@ export default function BillingPageClient({
                     </ul>
                 </CardContent>
             </Card>
-        </div>
+        </div >
     );
 }

@@ -23,7 +23,7 @@ export async function isOrgPro(orgId: string): Promise<boolean> {
 
     const isNotExpired =
         !org.stripeCurrentPeriodEnd ||
-        org.stripeCurrentPeriodEnd.getTime() > Date.now();
+        org.stripeCurrentPeriodEnd.getTime() + 86_400_000 > Date.now(); // Add 1 day grace period
 
     return Boolean(hasValidStatus && isNotExpired);
 }

@@ -15,6 +15,7 @@ import {
     Layers
 } from "lucide-react";
 import Link from "next/link";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
     Select,
@@ -73,7 +74,7 @@ export default function NewProjectPage() {
     const folders = foldersData?.folders || [];
 
     const createProjectMutation = useMutation({
-        mutationFn: async (data: { name: string; description: string; teamIds: string[]; folderId?: string }) => {
+        mutationFn: async (data: { name: string; description: string; teamIds: string[]; folderId?: string, orgId: string }) => {
             const res = await fetch("/api/projects", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -88,6 +89,9 @@ export default function NewProjectPage() {
         onSuccess: (data) => {
             queryClient.invalidateQueries({ queryKey: ["projects", orgId] });
             router.push(`/org/${orgId}/projects/${data.id}/graph`);
+        },
+        onError: (error) => {
+            toast.error(error instanceof Error ? error.message : "Failed to create project");
         },
     });
 
@@ -108,6 +112,7 @@ export default function NewProjectPage() {
             description,
             teamIds: selectedTeamIds,
             folderId: folderId && folderId !== "none" ? folderId : undefined,
+            orgId,
         });
     };
 
