@@ -3,13 +3,13 @@ import { prisma } from "@/lib/db/prisma";
 import { redirect } from "next/navigation";
 
 interface InvitePageProps {
-    params: {
+    params: Promise<{
         code: string;
-    };
+    }>;
 }
 
 export default async function InvitePage({ params }: InvitePageProps) {
-    const { code } = params;
+    const { code } = await params;
     const session = await auth();
 
     // If not logged in, redirect to login with return URL
@@ -52,7 +52,7 @@ export default async function InvitePage({ params }: InvitePageProps) {
 
     // Already a member
     if (organization.members.length > 0) {
-        return redirect(`/org/${organization.id}/projects`);
+        redirect(`/org/${organization.id}/projects`);
     }
 
     // Add user as member
@@ -65,9 +65,6 @@ export default async function InvitePage({ params }: InvitePageProps) {
                 status: "ACTIVE",
             },
         });
-
-        // Success - redirect to organization
-        return redirect(`/org/${organization.id}/projects?welcome=1`);
     } catch (error) {
         console.error("Error adding member:", error);
         return (
@@ -90,4 +87,7 @@ export default async function InvitePage({ params }: InvitePageProps) {
             </div>
         );
     }
+
+    // Success - redirect to organization
+    redirect(`/org/${organization.id}/projects?welcome=1`);
 }
