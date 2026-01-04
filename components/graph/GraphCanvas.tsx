@@ -222,7 +222,10 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
           onDataChange,
           blockedBy: blockedByTitles,
           blocking: blockingTitles,
-          onOpenDetail: () => setIsSheetOpen(true),
+          onOpenDetail: () => {
+            setSelectedNodeId(node.id);
+            setIsSheetOpen(true);
+          },
         },
       };
     });
