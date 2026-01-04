@@ -27,6 +27,8 @@ model User {
   teamMemberships    TeamMember[]
   nodeOwners         NodeOwner[]
   orgInboxStates     OrgInboxState[]
+  sentInvites        ProjectInvite[] @relation("InvitedBy")
+  receivedInvites    ProjectInvite[] @relation("TargetUser")
 
   @@map("users")
 }
@@ -97,6 +99,7 @@ model Organization {
   teams        Team[]
   folders      Folder[]
   inboxStates  OrgInboxState[]
+  invites      ProjectInvite[]
 
   @@index([ownerId])
   @@map("organizations")
@@ -183,7 +186,8 @@ model Project {
   nodes         Node[]
   members       ProjectMember[]
   projectTeams  ProjectTeam[]
-  organization  Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  invites      ProjectInvite[]
+  organization Organization    @relation(fields: [orgId], references: [id], onDelete: Cascade)
   owner         User            @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   primaryTeam   Team?           @relation("PrimaryTeam", fields: [primaryTeamId], references: [id])
   requests      Request[]
@@ -197,17 +201,40 @@ model Project {
 }
 
 model ProjectMember {
-  id         String   @id @default(cuid())
+  id         String      @id @default(cuid())
+  orgId      String
   projectId  String
   userId     String
-  team       String?
-  isFavorite Boolean  @default(false)
-  createdAt  DateTime @default(now())
-  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role       ProjectRole @default(EDITOR)
+  isFavorite Boolean     @default(false)
+  createdAt  DateTime    @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, userId])
+  @@index([orgId])
   @@map("project_members")
+}
+
+model ProjectInvite {
+  id              String              @id @default(cuid())
+  orgId           String
+  projectId       String
+  invitedByUserId String
+  targetUserId    String
+  status          ProjectInviteStatus @default(PENDING)
+  createdAt       DateTime            @default(now())
+  respondedAt     DateTime?
+
+  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  invitedBy    User         @relation("InvitedBy", fields: [invitedByUserId], references: [id], onDelete: Cascade)
+  targetUser   User         @relation("TargetUser", fields: [targetUserId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, targetUserId])
+  @@index([orgId])
+  @@map("project_invites")
 }
 
 model Node {
@@ -373,9 +400,17 @@ enum TeamRole {
 }
 
 enum ProjectRole {
+  OWNER
   PROJECT_ADMIN
   EDITOR
   VIEWER
+}
+
+enum ProjectInviteStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  CANCELED
 }
 
 enum NodeType {

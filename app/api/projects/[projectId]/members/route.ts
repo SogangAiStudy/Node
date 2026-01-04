@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { requireAuth, requireProjectMembership } from "@/lib/utils/auth";
+import { requireAuth } from "@/lib/utils/auth";
+import { requireProjectView } from "@/lib/utils/permissions";
 
 // GET /api/projects/[projectId]/members - Get project members
 export async function GET(
@@ -11,7 +12,7 @@ export async function GET(
     const user = await requireAuth();
     const { projectId } = await params;
 
-    await requireProjectMembership(projectId, user.id);
+    await requireProjectView(projectId, user.id);
 
     // Get all teams assigned to this project
     const projectTeams = await prisma.projectTeam.findMany({

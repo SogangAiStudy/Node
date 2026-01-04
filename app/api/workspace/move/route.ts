@@ -88,7 +88,7 @@ export async function PATCH(request: NextRequest) {
                     if (visited.has(currentParentId)) break;
                     visited.add(currentParentId);
 
-                    const parent = await prisma.folder.findUnique({
+                    const parent: { parentId: string | null } | null = await prisma.folder.findUnique({
                         where: { id: currentParentId },
                         select: { parentId: true }
                     });

@@ -16,9 +16,10 @@ import dagre from "dagre";
 import "reactflow/dist/style.css";
 import { NodeDTO, GraphData, EdgeRelation } from "@/types";
 import { CustomNode } from "./CustomNode";
-import { ProjectMonitor } from "../project/ProjectMonitor";
+import { ActionCenterBar } from "./ActionCenterBar";
+import { CanvasContextMenu, ContextMenuPosition } from "./CanvasContextMenu";
+import { AddNodeDialog } from "./AddNodeDialog";
 import { useSession } from "next-auth/react";
-import { Toolbar } from "./Toolbar";
 import {
   Dialog,
   DialogContent,
@@ -93,6 +94,9 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
   const [editingEdge, setEditingEdge] = useState<Edge | null>(null);
   const [relation, setRelation] = useState<string>("DEPENDS_ON");
   const [isSyncing, setIsSyncing] = useState(false);
+  const [contextMenu, setContextMenu] = useState<ContextMenuPosition | null>(null);
+  const [addNodeOpen, setAddNodeOpen] = useState(false);
+  const [addNodePosition, setAddNodePosition] = useState<{ x: number; y: number } | null>(null);
 
   const { layoutedNodes, layoutedEdges } = useMemo(() => {
     const initialNodes: Node[] = data.nodes.map((node) => {
@@ -345,49 +349,103 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
   );
 
   return (
-    <div className="relative h-full w-full rounded-lg border bg-white overflow-hidden shadow-inner">
-      <Toolbar
-        orgId={orgId}
-        projectId={projectId}
-        filterStatus={filterStatus}
-        onFilterChange={setFilterStatus}
-        selectedTeamIds={selectedTeamIds}
-        onTeamFilterChange={setSelectedTeamIds}
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        onDataChange={onDataChange}
+    <div className="relative h-full w-full flex flex-col rounded-lg border bg-white overflow-hidden shadow-inner">
+      {/* Action Center Bar at Top */}
+      <ActionCenterBar
+        nodes={data.nodes}
+        edges={data.edges}
+        userId={useSession().data?.user?.id || ""}
+        onNodeClick={(nodeId) => {
+          setNodes((nds) =>
+            nds.map((node) => ({
+              ...node,
+              selected: node.id === nodeId,
+            }))
+          );
+        }}
       />
 
-      <div className="flex h-full">
-        <div className="flex-1 relative">
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
-            onEdgeClick={onEdgeClick}
-            onNodeDragStop={onNodeDragStop}
-            nodeTypes={nodeTypes}
-            fitView
-            snapToGrid
-            snapGrid={[15, 15]}
-          >
-            <Background color="#f1f5f9" gap={15} />
-            <Controls />
-            <MiniMap nodeStrokeColor="#e2e8f0" nodeColor="#f8fafc" />
-          </ReactFlow>
-        </div>
+      {/* Canvas (full remaining height) */}
+      <div className="flex-1 relative" onClick={() => setContextMenu(null)}>
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onConnect={onConnect}
+          onEdgeClick={onEdgeClick}
+          onNodeDragStop={onNodeDragStop}
+          nodeTypes={nodeTypes}
+          fitView
+          snapToGrid
+          snapGrid={[15, 15]}
+          onPaneContextMenu={(event) => {
+            event.preventDefault();
+            setContextMenu({
+              x: event.clientX,
+              y: event.clientY,
+              canvasX: event.clientX,
+              canvasY: event.clientY,
+            });
+          }}
+          onPaneClick={() => setContextMenu(null)}
+        >
+          <Background color="#f1f5f9" gap={15} />
+          <Controls />
+          <MiniMap nodeStrokeColor="#e2e8f0" nodeColor="#f8fafc" />
+        </ReactFlow>
 
-        {/* Project Monitor Side Panel */}
-        <div className="hidden border-l border-border bg-background lg:block">
-          <ProjectMonitor
-            nodes={data.nodes}
-            edges={data.edges}
-            userId={useSession().data?.user?.id || ""}
+        {/* Empty State */}
+        {data.nodes.length === 0 && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl border border-slate-200 p-8 text-center max-w-md pointer-events-auto">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center">
+                <svg className="w-8 h-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-semibold text-slate-800 mb-2">No nodes yet</h3>
+              <p className="text-slate-500 text-sm mb-6">
+                Right-click anywhere on the canvas to add your first node,
+                or click the button below to get started.
+              </p>
+              <Button
+                onClick={() => setAddNodeOpen(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white shadow-md"
+              >
+                <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Add First Node
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Context Menu */}
+        {contextMenu && (
+          <CanvasContextMenu
+            position={contextMenu}
+            onClose={() => setContextMenu(null)}
+            onAddNode={(x, y) => {
+              setAddNodePosition({ x, y });
+              setAddNodeOpen(true);
+            }}
           />
-        </div>
+        )}
       </div>
+
+      {/* Add Node Dialog */}
+      <AddNodeDialog
+        projectId={projectId}
+        orgId={orgId}
+        open={addNodeOpen}
+        onOpenChange={setAddNodeOpen}
+        onSuccess={() => {
+          onDataChange();
+          setAddNodeOpen(false);
+        }}
+      />
 
       {/* Connection Picker Dialog */}
       <Dialog open={!!pendingConnection} onOpenChange={() => setPendingConnection(null)}>

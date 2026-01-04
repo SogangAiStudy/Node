@@ -26,11 +26,13 @@ export async function GET(req: Request) {
         }
 
         // 1. Fetch all nodes, edges, requests for the organization
-        const [nodes, edges, requests] = await Promise.all([
+        // Also fetch user's team memberships to determine TEAM reasons
+        const [nodes, edges, requests, userTeamMemberships] = await Promise.all([
             prisma.node.findMany({
                 where: { orgId },
                 include: {
                     nodeOwners: { include: { user: true } },
+                    nodeTeams: { include: { team: true } },
                     owner: true,
                     project: { select: { id: true, name: true } },
                     team: { select: { id: true, name: true } },
@@ -42,8 +44,14 @@ export async function GET(req: Request) {
             prisma.request.findMany({
                 where: { orgId },
                 include: { toUser: true }
+            }),
+            prisma.teamMember.findMany({
+                where: { orgId, userId: user.id },
+                select: { teamId: true }
             })
         ]);
+
+        const userTeamIds = userTeamMemberships.map(tm => tm.teamId);
 
         // 2. Compute statuses for EVERYTHING in the org
         const statusMap = computeAllNodeStatuses(nodes, edges, requests);
@@ -56,26 +64,57 @@ export async function GET(req: Request) {
         // 4. Transform to DTOs
         type NodeWithRelations = typeof nodes[number];
 
-        const mapNodeToDTO = (n: NodeWithRelations): any => ({
-            id: n.id,
-            title: n.title,
-            projectId: n.projectId,
-            projectName: n.project?.name,
-            manualStatus: n.manualStatus,
-            computedStatus: statusMap.get(n.id),
-            dueAt: n.dueAt,
-            ownerId: n.ownerId,
-            ownerName: n.owner?.name,
-            orgId: n.orgId,
-            teams: [],
-            owners: n.nodeOwners.map(no => ({ id: no.userId, name: no.user.name })),
-            createdAt: n.createdAt.toISOString(),
-            updatedAt: n.updatedAt.toISOString(),
-            type: n.type,
-            priority: n.priority
-        });
+        const mapNodeToDTO = (n: NodeWithRelations): any => {
+            // Determine reasons why this node appears
+            const reasons: string[] = [];
+            const isOwner = n.nodeOwners.some(no => no.userId === user.id) || n.ownerId === user.id;
+            const nodeTeamIds = (n as any).nodeTeams?.map((nt: any) => nt.teamId) || [];
+            const matchingTeamIds = nodeTeamIds.filter((tid: string) => userTeamIds.includes(tid));
+            const isTeam = matchingTeamIds.length > 0;
 
-        const myActions = myActionsNodes.map((n: any) => mapNodeToDTO(n));
+            if (isOwner) reasons.push("OWNER");
+            if (isTeam) reasons.push("TEAM");
+
+            const teamNames = (n as any).nodeTeams
+                ?.filter((nt: any) => userTeamIds.includes(nt.teamId))
+                ?.map((nt: any) => nt.team.name) || [];
+
+            return {
+                id: n.id,
+                title: n.title,
+                projectId: n.projectId,
+                projectName: n.project?.name,
+                manualStatus: n.manualStatus,
+                computedStatus: statusMap.get(n.id),
+                dueAt: n.dueAt,
+                ownerId: n.ownerId,
+                ownerName: n.owner?.name,
+                orgId: n.orgId,
+                teams: (n as any).nodeTeams?.map((nt: any) => ({ id: nt.teamId, name: nt.team.name })) || [],
+                owners: n.nodeOwners.map(no => ({ id: no.userId, name: no.user.name })),
+                createdAt: n.createdAt.toISOString(),
+                updatedAt: n.updatedAt.toISOString(),
+                type: n.type,
+                priority: n.priority,
+                reasons,
+                teamNames: teamNames.length > 0 ? teamNames : undefined,
+            };
+        };
+
+        // Sort: OWNER items first, then by dueAt, then by priority
+        const myActions = myActionsNodes
+            .map((n: any) => mapNodeToDTO(n))
+            .sort((a: any, b: any) => {
+                const aIsOwner = a.reasons?.includes("OWNER") ? 0 : 1;
+                const bIsOwner = b.reasons?.includes("OWNER") ? 0 : 1;
+                if (aIsOwner !== bIsOwner) return aIsOwner - bIsOwner;
+                // Then by dueAt (nulls last)
+                if (a.dueAt && b.dueAt) return new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime();
+                if (a.dueAt) return -1;
+                if (b.dueAt) return 1;
+                // Then by priority (higher first)
+                return (b.priority || 0) - (a.priority || 0);
+            });
 
         const enrichWaitingNode = (n: any) => {
             const status = statusMap.get(n.id);

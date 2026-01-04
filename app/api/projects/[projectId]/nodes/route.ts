@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { requireAuth, requireProjectMembership } from "@/lib/utils/auth";
+import { requireAuth } from "@/lib/utils/auth";
+import { requireProjectView } from "@/lib/utils/permissions";
 import { createActivityLog } from "@/lib/utils/activity-log";
 import { assertWithinNodeLimit } from "@/lib/subscription";
 import { z } from "zod";
@@ -28,7 +29,7 @@ export async function POST(
     const user = await requireAuth();
     const { projectId } = await params;
 
-    await requireProjectMembership(projectId, user.id);
+    await requireProjectView(projectId, user.id);
 
     const body = await request.json();
     const validated = CreateNodeSchema.parse(body);
@@ -36,10 +37,10 @@ export async function POST(
     // If ownerIds/ownerId provided, verify they are project members
     if (validated.ownerIds) {
       for (const oid of validated.ownerIds) {
-        await requireProjectMembership(projectId, oid);
+        await requireProjectView(projectId, oid);
       }
     } else if (validated.ownerId && validated.ownerId !== "unassigned") {
-      await requireProjectMembership(projectId, validated.ownerId);
+      await requireProjectView(projectId, validated.ownerId);
     }
 
     // Get project to get orgId

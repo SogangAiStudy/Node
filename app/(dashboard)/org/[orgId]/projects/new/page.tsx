@@ -149,6 +149,44 @@ export default function NewProjectPage() {
                         />
                     </div>
 
+                    {/* Team Selection */}
+                    {teams.length > 0 && (
+                        <div className="space-y-3">
+                            <label className="text-sm font-semibold text-[#1a1b1e] flex items-center gap-2">
+                                <Users className="h-4 w-4 text-[#7b7c7e]" />
+                                Team Access
+                            </label>
+                            <p className="text-xs text-[#7b7c7e] -mt-1">Select which teams should have access to this project.</p>
+                            <div className="grid gap-2 p-3 bg-[#f7f7f5] rounded-lg border border-[#e9e9e9]">
+                                {teams.map((team) => (
+                                    <label
+                                        key={team.id}
+                                        className={cn(
+                                            "flex items-center gap-3 p-2 rounded-md cursor-pointer transition-all",
+                                            selectedTeamIds.includes(team.id)
+                                                ? "bg-white border border-[#37352f]/20 shadow-sm"
+                                                : "hover:bg-white/50"
+                                        )}
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedTeamIds.includes(team.id)}
+                                            onChange={() => toggleTeam(team.id)}
+                                            className="h-4 w-4 rounded border-[#e9e9e9] text-[#37352f] focus:ring-[#37352f]/10"
+                                        />
+                                        <div className="flex-1">
+                                            <div className="text-sm font-medium text-[#1a1b1e]">{team.name}</div>
+                                            <div className="text-[11px] text-[#7b7c7e]">{team.memberCount} members</div>
+                                        </div>
+                                        {selectedTeamIds.includes(team.id) && (
+                                            <Check className="h-4 w-4 text-[#37352f]" />
+                                        )}
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     <div className="space-y-2">
                         <label className="text-sm font-semibold text-[#1a1b1e]">Folder (Optional)</label>
                         <Select value={folderId} onValueChange={setFolderId}>

@@ -1,8 +1,11 @@
-
 import { redirect } from 'next/navigation';
 
-export async function GET(request: Request, { params }: { params: { projectId: string } }) {
-    redirect(`/org/${await getOrgId(params.projectId)}/projects/${params.projectId}/graph`);
+export async function GET(
+    request: Request,
+    { params }: { params: Promise<{ projectId: string }> }
+) {
+    const { projectId } = await params;
+    redirect(`/org/${await getOrgId(projectId)}/projects/${projectId}/graph`);
 }
 
 async function getOrgId(projectId: string) {

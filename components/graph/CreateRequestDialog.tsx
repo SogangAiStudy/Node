@@ -20,8 +20,7 @@ import {
 } from "@/components/ui/select";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { toast } from "sonner";
-import { useCompletion } from "@ai-sdk/react";
-import { Loader2, Sparkles, User } from "lucide-react";
+import { Loader2, Sparkles } from "lucide-react";
 
 interface CreateRequestDialogProps {
   projectId: string;
@@ -36,11 +35,6 @@ interface Member {
   userName: string | null;
   teamId: string | null;
   teamName: string | null;
-}
-
-interface Team {
-  id: string;
-  name: string;
 }
 
 interface NodeData {
@@ -58,18 +52,7 @@ export function CreateRequestDialog({
   const [question, setQuestion] = useState("");
   const [toUserId, setToUserId] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-
-  // AI Streaming Hook
-  const { complete, completion, isLoading: isDrafting, setCompletion } = useCompletion({
-    api: "/api/ai/draft-request",
-    onFinish: (_, result) => {
-      setQuestion(result);
-      toast.success("Draft generated!");
-    },
-    onError: (err) => {
-      toast.error("Failed to generate draft: " + err.message);
-    }
-  });
+  const [isDrafting, setIsDrafting] = useState(false);
 
   // Data fetching state
   const [members, setMembers] = useState<Member[]>([]);
@@ -107,25 +90,34 @@ export function CreateRequestDialog({
 
   const handleAutoDraft = async () => {
     if (!linkedNodeId) return;
+    setIsDrafting(true);
     try {
-      await complete("", {
-        body: {
+      const res = await fetch("/api/ai/draft-request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           nodeId: linkedNodeId,
           recipientId: toUserId || undefined,
-          context: question // Send current text as context 
-        }
+          context: question || undefined,
+        }),
       });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to generate draft");
+      }
+
+      const data = await res.json();
+      if (data.draft) {
+        setQuestion(data.draft);
+        toast.success("Draft generated!");
+      }
     } catch (e) {
-      console.error(e);
+      toast.error(e instanceof Error ? e.message : "Failed to generate draft");
+    } finally {
+      setIsDrafting(false);
     }
   };
-
-  // Effect to update the textarea as stream comes in
-  if (isDrafting && completion) {
-    if (question !== completion) {
-      setQuestion(completion);
-    }
-  }
 
   // Get suggested users (node owners first, then other team members)
   const suggestedUsers = members

@@ -44,21 +44,29 @@ interface Team {
   name: string;
 }
 
+interface Team {
+  id: string;
+  name: string;
+}
+
 export function AddNodeDialog({ projectId, orgId, open, onOpenChange, onSuccess }: AddNodeDialogProps) {
   const { data: session } = useSession();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [type, setType] = useState("TASK");
   const [ownerIds, setOwnerIds] = useState<string[]>([]);
+  const [teamIds, setTeamIds] = useState<string[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showLimitDialog, setShowLimitDialog] = useState(false);
 
   const fetchMembersAndTeams = useCallback(async () => {
     try {
-      const res = await fetch(`/api/projects/${projectId}/members`);
-      if (res.ok) {
-        const data = await res.json();
+      // Fetch members
+      const membersRes = await fetch(`/api/projects/${projectId}/members`);
+      if (membersRes.ok) {
+        const data = await membersRes.json();
         setMembers(data.members || []);
 
         // Auto-set current user as owner if they are a member and none selected
@@ -68,6 +76,13 @@ export function AddNodeDialog({ projectId, orgId, open, onOpenChange, onSuccess 
             setOwnerIds([session.user.id]);
           }
         }
+      }
+
+      // Fetch project teams
+      const teamsRes = await fetch(`/api/projects/${projectId}/teams`);
+      if (teamsRes.ok) {
+        const teamsData = await teamsRes.json();
+        setTeams(teamsData.teams || []);
       }
     } catch (error) {
       console.error("Failed to fetch members and teams:", error);
@@ -93,7 +108,7 @@ export function AddNodeDialog({ projectId, orgId, open, onOpenChange, onSuccess 
           description,
           type,
           ownerIds,
-          teamIds: [],
+          teamIds,
         }),
       });
 
@@ -125,6 +140,7 @@ export function AddNodeDialog({ projectId, orgId, open, onOpenChange, onSuccess 
     setDescription("");
     setType("TASK");
     setOwnerIds([]);
+    setTeamIds([]);
   };
 
   const ownerItems: MultiSelectItem[] = members.map((m: Member) => ({
@@ -132,6 +148,12 @@ export function AddNodeDialog({ projectId, orgId, open, onOpenChange, onSuccess 
     name: m.userName || "Unknown",
     subtitle: m.teamName || undefined,
     type: "user",
+  }));
+
+  const teamItems: MultiSelectItem[] = teams.map((t: Team) => ({
+    id: t.id,
+    name: t.name,
+    type: "team",
   }));
 
 
@@ -186,6 +208,19 @@ export function AddNodeDialog({ projectId, orgId, open, onOpenChange, onSuccess 
                   />
                 </div>
 
+                {teams.length > 0 && (
+                  <div className="grid gap-2">
+                    <Label className="text-sm font-medium">Responsible Teams (optional)</Label>
+                    <MultiSelectSearch
+                      items={teamItems}
+                      selectedIds={teamIds}
+                      onSelect={(id: string) => setTeamIds((prev: string[]) => [...prev, id])}
+                      onRemove={(id: string) => setTeamIds((prev: string[]) => prev.filter((i: string) => i !== id))}
+                      placeholder="Select teams"
+                      searchPlaceholder="Search teams..."
+                    />
+                  </div>
+                )}
               </div>
             </div>
 

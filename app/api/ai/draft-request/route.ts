@@ -1,91 +1,123 @@
-
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/auth";
-import { google } from "@ai-sdk/google";
-import { streamText } from "ai";
-import { z } from "zod";
 import { prisma } from "@/lib/db/prisma";
+import { requireAuth } from "@/lib/utils/auth";
+import { requireProjectView } from "@/lib/utils/permissions";
+import { isOrgPro } from "@/lib/subscription";
+import { getOpenAIClient, checkRateLimit } from "@/lib/ai/openai";
+import { z } from "zod";
 import { getBlockingDetails } from "@/lib/node-status";
+
+const DraftRequestSchema = z.object({
+    nodeId: z.string(),
+    recipientId: z.string().optional(),
+    recipientName: z.string().optional(),
+    context: z.string().optional(),
+});
 
 export async function POST(req: NextRequest) {
     try {
-        const session = await auth();
-        if (!session?.user?.id) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-        }
-
+        const user = await requireAuth();
         const body = await req.json();
-        const { nodeId, recipientId, context: userProvidedContext } = z.object({
-            nodeId: z.string(),
-            recipientId: z.string().optional(),
-            context: z.string().optional()
-        }).parse(body);
+        const { nodeId, recipientId, recipientName, context: userContext } = DraftRequestSchema.parse(body);
 
-        // 1. Fetch Node Data
+        // Fetch Node Data
         const node = await prisma.node.findUnique({
             where: { id: nodeId },
             include: {
-                project: true,
-                organization: true,
-                nodeOwners: {
+                project: { select: { id: true, name: true, orgId: true } },
+                nodeOwners: { include: { user: { select: { id: true, name: true } } } },
+                edgesFrom: {
                     include: {
-                        user: true
-                    }
+                        toNode: {
+                            select: {
+                                id: true,
+                                title: true,
+                                manualStatus: true,
+                                nodeOwners: { include: { user: { select: { id: true, name: true } } } },
+                            },
+                        },
+                    },
                 },
-                edgesFrom: { include: { toNode: { include: { nodeOwners: { include: { user: true } } } } } }
-            }
+            },
         });
 
         if (!node) {
             return NextResponse.json({ error: "Node not found" }, { status: 404 });
         }
 
-        // Auth Check (Separate)
-        const [isOrgMember, isProjectMember] = await Promise.all([
-            prisma.orgMember.count({ where: { orgId: node.orgId, userId: session.user.id } }),
-            prisma.projectMember.count({ where: { projectId: node.projectId, userId: session.user.id } })
-        ]);
+        // Permission Check
+        await requireProjectView(node.projectId, user.id);
 
-        if (isOrgMember === 0 && isProjectMember === 0) {
-            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        // Pro Subscription Check
+        const isPro = await isOrgPro(node.project.orgId);
+        if (!isPro) {
+            return NextResponse.json(
+                { error: "AI features require a Pro subscription" },
+                { status: 403 }
+            );
         }
 
-        // 2. Prepare Context
-        // Who are we writing to?
-        let recipientName = "the responsible party";
-        if (recipientId) {
-            // Try to find recipient name from node context (owners of dependencies, etc.)
-            // For simplicity, we trust the ID or look it up if we had a user cache.
-            // Let's just say "Colleague" if unknown, or try to find in edges.
-            const found = node.edgesFrom.flatMap(e => e.toNode.nodeOwners).find((o: any) => o.userId === recipientId);
-            if (found) recipientName = found.user.name || "Colleague";
+        // Rate Limit Check
+        if (!checkRateLimit(user.id)) {
+            return NextResponse.json(
+                { error: "Rate limit exceeded. Please try again in a minute." },
+                { status: 429 }
+            );
         }
 
+        // Build context
         const blockedDetails = getBlockingDetails(node as any);
-        const blockingReasons = blockedDetails.map(d => {
-            if (d.type === 'DEPENDENCY') return `Waiting on dependency: "${(d as any).nodeId.title}"`;
-            if (d.type === 'APPROVAL') return `Waiting for approval on: "${(d as any).nodeId.title}"`;
-            return "Unknown blocker";
-        }).join(", ");
+        const blockingReasons = blockedDetails
+            .map((d: any) => {
+                if (d.type === "DEPENDENCY") return `Waiting on: "${d.nodeId?.title || "a task"}"`;
+                if (d.type === "APPROVAL") return `Needs approval for: "${d.nodeId?.title || "a task"}"`;
+                if (d.type === "REQUEST") return "Has an open request pending";
+                return "Unknown blocker";
+            })
+            .join("; ");
 
-        // 3. Stream Text
-        const result = streamText({
-            model: google("models/gemini-1.5-flash-latest"),
-            system: `You are a helpful project assistant. Draft a polite, professional, and concise Slack-style message or email. 
-        Don't use hashtags. Keep it under 300 characters if possible.`,
-            prompt: `
-        Draft a request to ${recipientName} regarding the task "${node.title}".
-        My task is blocked because: ${blockingReasons || "we need to move forward"}.
-        ${userProvidedContext ? `Additional context from me: "${userProvidedContext}"` : ""}
-        
-        Goal: Unblock this task using a polite request.
-        `
+        // Determine recipient
+        let recipient = recipientName || "the team";
+        if (recipientId && !recipientName) {
+            const foundUser = await prisma.user.findUnique({
+                where: { id: recipientId },
+                select: { name: true },
+            });
+            if (foundUser?.name) recipient = foundUser.name;
+        }
+
+        // Call OpenAI (ChatGPT)
+        const openai = getOpenAIClient();
+        const completion = await openai.chat.completions.create({
+            model: "gpt-4o-mini",
+            messages: [
+                {
+                    role: "system",
+                    content: `You are a helpful project assistant. Draft a polite, professional, and concise request message.
+Keep it under 200 characters if possible. Don't use hashtags. Be friendly but direct.`,
+                },
+                {
+                    role: "user",
+                    content: `Draft a request to ${recipient} regarding the task "${node.title}".
+${blockingReasons ? `This task is blocked because: ${blockingReasons}` : "We need to move this forward."}
+${userContext ? `Additional context: "${userContext}"` : ""}
+Goal: Get them to help unblock this task.`,
+                },
+            ],
+            temperature: 0.8,
+            max_tokens: 200,
         });
 
-        return result.toTextStreamResponse();
+        const draft = completion.choices[0]?.message?.content || "Hi, could you please help with this task?";
 
+        return NextResponse.json({ draft });
     } catch (error) {
         console.error("Drafting Error:", error);
+
+        if (error instanceof z.ZodError) {
+            return NextResponse.json({ error: "Invalid input" }, { status: 400 });
+        }
+
         return NextResponse.json({ error: "Failed to draft" }, { status: 500 });
     }
 }

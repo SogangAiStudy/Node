@@ -457,7 +457,7 @@ export default function WorkspaceSettingsPage() {
                                                     <Avatar className="h-8 w-8 border border-[#e9e9e9]">
                                                         <AvatarImage src={member.image || undefined} />
                                                         <AvatarFallback className="text-[10px] font-bold bg-[#f1f1ef] text-[#7b7c7e]">
-                                                            {member.name?.[0] || member.email[0].toUpperCase()}
+                                                            {member.name?.[0] || member.email?.[0]?.toUpperCase() || "?"}
                                                         </AvatarFallback>
                                                     </Avatar>
                                                     <div>

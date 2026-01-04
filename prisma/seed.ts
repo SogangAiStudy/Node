@@ -83,17 +83,22 @@ async function main() {
       name: "Product Launch Q1",
       orgId: org.id,
       ownerId: user1.id,
-      members: {
-        create: [
-          { userId: user1.id, team: "Engineering" },
-          { userId: user2.id, team: "Design" },
-          { userId: user3.id, team: "Marketing" },
-        ],
-      },
     },
   });
 
   console.log("Using project:", project.name);
+
+  // 3b. Create project members
+  await prisma.projectMember.deleteMany({ where: { projectId: project.id } }); // Clear existing
+
+  await prisma.projectMember.createMany({
+    data: [
+      { projectId: project.id, userId: user1.id, orgId: org.id },
+      { projectId: project.id, userId: user2.id, orgId: org.id },
+      { projectId: project.id, userId: user3.id, orgId: org.id },
+    ],
+    skipDuplicates: true,
+  });
 
   // 4. Create nodes
   const designMockups = await prisma.node.upsert({

@@ -1,54 +1,76 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/utils/auth";
+import { isProjectAdmin } from "@/lib/utils/permissions";
+import { z } from "zod";
 
-export const dynamic = "force-dynamic";
+const AddTeamSchema = z.object({
+    teamId: z.string(),
+    role: z.enum(["PROJECT_ADMIN", "EDITOR", "VIEWER"]).default("EDITOR"),
+});
 
-interface RouteContext {
-    params: Promise<{ projectId: string }>;
-}
-
-export async function GET(
-    req: NextRequest,
-    context: RouteContext
+// POST /api/projects/[projectId]/teams
+export async function POST(
+    request: NextRequest,
+    { params }: { params: Promise<{ projectId: string }> }
 ) {
     try {
-        const session = await requireAuth();
-        const { projectId } = await context.params;
+        const user = await requireAuth();
+        const { projectId } = await params;
+        const body = await request.json();
+        const validated = AddTeamSchema.parse(body);
 
-        // Get project with its teams
         const project = await prisma.project.findUnique({
             where: { id: projectId },
-            include: {
-                projectTeams: {
-                    include: {
-                        team: true,
-                    },
+        });
+
+        if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
+
+        // Check permissions
+        const isAdmin = await isProjectAdmin(projectId, user.id);
+        if (!isAdmin) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+        }
+
+        // Verify team belongs to Org
+        const team = await prisma.team.findUnique({
+            where: { id: validated.teamId },
+        });
+
+        if (!team || team.orgId !== project.orgId) {
+            return NextResponse.json({ error: "Invalid team" }, { status: 400 });
+        }
+
+        // Check if team already added
+        const existing = await prisma.projectTeam.findUnique({
+            where: {
+                projectId_teamId: {
+                    projectId,
+                    teamId: validated.teamId,
                 },
             },
         });
 
-        if (!project) {
-            return NextResponse.json(
-                { error: "Project not found" },
-                { status: 404 }
-            );
+        if (existing) {
+            return NextResponse.json({ error: "Team already added" }, { status: 409 });
         }
 
-        // Extract teams from project teams
-        const teams = project.projectTeams.map((pt) => ({
-            id: pt.team.id,
-            name: pt.team.name,
-            orgId: pt.team.orgId,
-            createdAt: pt.team.createdAt,
-        }));
+        // Add Team
+        const projectTeam = await prisma.projectTeam.create({
+            data: {
+                orgId: project.orgId,
+                projectId,
+                teamId: validated.teamId,
+                role: validated.role,
+            },
+        });
 
-        return NextResponse.json({ teams });
+        return NextResponse.json(projectTeam);
     } catch (error) {
-        console.error("Error fetching project teams:", error);
-        return NextResponse.json(
-            { error: "Failed to fetch project teams" },
-            { status: 500 }
-        );
+        console.error("POST Add Team error:", error);
+        if (error instanceof z.ZodError) {
+            return NextResponse.json({ error: "Invalid input" }, { status: 400 });
+        }
+        return NextResponse.json({ error: "Failed to add team" }, { status: 500 });
     }
 }

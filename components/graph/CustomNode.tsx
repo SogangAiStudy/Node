@@ -16,6 +16,9 @@ import {
   ChevronDown,
   Plus,
   Ban,
+  HelpCircle,
+  Sparkles,
+  X,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
@@ -103,6 +106,33 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
   // AI Analysis (Subtle trigger)
   const [aiAnalysis, setAiAnalysis] = useState<any>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [showAnalysis, setShowAnalysis] = useState(false);
+  const [analyzeError, setAnalyzeError] = useState<string | null>(null);
+
+  const analyzeBlock = async () => {
+    if (isAnalyzing) return;
+    setIsAnalyzing(true);
+    setAnalyzeError(null);
+    try {
+      const res = await fetch("/api/ai/analyze-block", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nodeId: node.id }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to analyze");
+      }
+      const data = await res.json();
+      setAiAnalysis(data);
+      setShowAnalysis(true);
+    } catch (error) {
+      setAnalyzeError(error instanceof Error ? error.message : "Failed to analyze");
+      setShowAnalysis(true);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
 
   const fetchMetadata = async () => {
     try {
@@ -160,18 +190,27 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
   const primaryOwner = node.owners?.[0];
   const hasNoOwner = !primaryOwner;
   const isBlocked = node.computedStatus === "BLOCKED";
+  const isTodo = node.computedStatus === "TODO";
+  const isDoing = node.computedStatus === "DOING";
+  const isDone = node.computedStatus === "DONE";
 
   return (
     <div
       className={cn(
-        "min-w-[240px] max-w-[280px] rounded-md border bg-white shadow-sm transition-all duration-200",
-        // Selection state: Primary border, slight lift.
-        selected ? "border-primary ring-1 ring-primary/20 z-50 shadow-md" : "border-slate-200 hover:border-slate-300",
+        "min-w-[240px] max-w-[280px] rounded-md border bg-white transition-all duration-200",
+        // Base state
+        "border-slate-200",
+        // Selection state
+        selected && "border-primary ring-2 ring-primary/30 z-50",
+        // Hover
+        !selected && "hover:border-slate-300",
         // Faded state (filtering)
         isFaded && "opacity-30 grayscale-[0.8] pointer-events-none",
-        // NO warning colors for missing owner.
-        // Status Specific Borders only if critical (Blocked)
-        isBlocked && "border-l-4 border-l-red-500"
+        // Status-based emphasis
+        isBlocked && "border-l-4 border-l-red-500 shadow-md",
+        isTodo && !selected && "shadow-lg border-slate-300 scale-[1.02]",
+        isDoing && !selected && "ring-2 ring-blue-400/50 shadow-lg border-blue-200",
+        isDone && "opacity-60 shadow-none border-slate-100"
       )}
     >
       {/* Left Handle (Input) */}
@@ -281,7 +320,76 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
               {node.blocksCount}
             </div>
           )}
+
+          {/* Why Blocked? Button - only for BLOCKED status */}
+          {isBlocked && (
+            <button
+              onClick={(e) => { e.stopPropagation(); analyzeBlock(); }}
+              disabled={isAnalyzing}
+              className="text-[9px] font-medium text-red-600 bg-red-50 hover:bg-red-100 px-1.5 py-0.5 rounded flex items-center gap-1 transition-colors"
+            >
+              {isAnalyzing ? (
+                <Loader2 className="w-2.5 h-2.5 animate-spin" />
+              ) : (
+                <Sparkles className="w-2.5 h-2.5" />
+              )}
+              Why blocked?
+            </button>
+          )}
         </div>
+
+        {/* AI Analysis Popup */}
+        {showAnalysis && (
+          <div className="absolute z-50 top-full left-0 mt-2 w-72 bg-white rounded-lg shadow-xl border border-slate-200 p-3 text-xs">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-1.5 text-slate-700 font-semibold">
+                <Sparkles className="w-3.5 h-3.5 text-purple-500" />
+                AI Analysis
+              </div>
+              <button onClick={() => setShowAnalysis(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {analyzeError ? (
+              <div className="text-red-600 text-[11px]">{analyzeError}</div>
+            ) : aiAnalysis ? (
+              <div className="space-y-2">
+                {aiAnalysis.summary && (
+                  <p className="text-slate-600 leading-relaxed">{aiAnalysis.summary}</p>
+                )}
+
+                {aiAnalysis.blockingReasons?.length > 0 && (
+                  <div>
+                    <div className="font-semibold text-slate-700 mb-1">Blocking:</div>
+                    <ul className="space-y-1">
+                      {aiAnalysis.blockingReasons.map((r: any, i: number) => (
+                        <li key={i} className="text-slate-600 bg-slate-50 px-2 py-1 rounded">
+                          <span className="font-medium">{r.targetTitle}</span>: {r.actionNeeded}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {aiAnalysis.whoShouldAct?.length > 0 && (
+                  <div>
+                    <div className="font-semibold text-slate-700 mb-1">Who should act:</div>
+                    <ul className="space-y-1">
+                      {aiAnalysis.whoShouldAct.map((w: any, i: number) => (
+                        <li key={i} className="text-slate-600">
+                          <span className="font-medium">{w.name}</span>: {w.nextStep}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-slate-400">Loading...</div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Right Handle (Output) */}

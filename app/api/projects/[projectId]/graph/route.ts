@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { requireAuth, requireProjectMembership } from "@/lib/utils/auth";
+import { requireAuth } from "@/lib/utils/auth";
+import { requireProjectView } from "@/lib/utils/permissions";
 import { computeAllNodeStatuses } from "@/lib/status/compute-status";
 import { NodeDTO, EdgeDTO } from "@/types";
 
@@ -13,7 +14,7 @@ export async function GET(
     const user = await requireAuth();
     const { projectId } = await params;
 
-    await requireProjectMembership(projectId, user.id);
+    await requireProjectView(projectId, user.id);
 
     // 1. Fetch base nodes, edges, and requests without heavy inclusions first
     const [baseNodes, edges, requests] = await Promise.all([

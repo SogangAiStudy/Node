@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { requireAuth, requireProjectMembership } from "@/lib/utils/auth";
+import { requireAuth } from "@/lib/utils/auth";
+import { requireProjectView } from "@/lib/utils/permissions";
 import { createActivityLog } from "@/lib/utils/activity-log";
 import { z } from "zod";
 import { NodeType, ManualStatus } from "@/types";
@@ -42,15 +43,15 @@ export async function PATCH(
       return NextResponse.json({ error: "Node not found" }, { status: 404 });
     }
 
-    await requireProjectMembership(existingNode.projectId, user.id);
+    await requireProjectView(existingNode.projectId, user.id);
 
     // Verify all new owners are project members
     if (validated.ownerIds) {
       for (const oid of validated.ownerIds) {
-        await requireProjectMembership(existingNode.projectId, oid);
+        await requireProjectView(existingNode.projectId, oid);
       }
     } else if (validated.ownerId !== undefined && validated.ownerId !== null) {
-      await requireProjectMembership(existingNode.projectId, validated.ownerId);
+      await requireProjectView(existingNode.projectId, validated.ownerId);
     }
 
     // Update node
@@ -152,7 +153,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Node not found" }, { status: 404 });
     }
 
-    await requireProjectMembership(existingNode.projectId, user.id);
+    await requireProjectView(existingNode.projectId, user.id);
 
     // Delete node and decrement organization nodeCount in a transaction
     await prisma.$transaction(async (tx) => {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { requireAuth, getUserTeam } from "@/lib/utils/auth";
+import { requireAuth } from "@/lib/utils/auth";
+import { getUserTeams } from "@/lib/utils/permissions";
 import { createActivityLog } from "@/lib/utils/activity-log";
 import { z } from "zod";
 import { RequestStatus } from "@prisma/client";
@@ -36,8 +37,8 @@ export async function PATCH(
     if (existingRequest.toUserId === user.id) {
       authorized = true;
     } else if (existingRequest.toTeam) {
-      const userTeam = await getUserTeam(existingRequest.projectId, user.id);
-      if (userTeam === existingRequest.toTeam) {
+      const myTeams = await getUserTeams(existingRequest.orgId, user.id);
+      if (myTeams.includes(existingRequest.toTeam)) {
         authorized = true;
       }
     }

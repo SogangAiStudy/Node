@@ -250,13 +250,25 @@ export async function POST(request: NextRequest) {
       });
 
       // Create ProjectTeam entries for ALL selected teams
-      await tx.projectTeam.createMany({
-        data: validated.teamIds.map(teamId => ({
+      if (validated.teamIds.length > 0) {
+        await tx.projectTeam.createMany({
+          data: validated.teamIds.map((teamId: string) => ({
+            orgId: orgMember.orgId,
+            projectId: newProject.id,
+            teamId: teamId,
+            role: teamId === primaryTeamId ? "PROJECT_ADMIN" : "EDITOR",
+          })),
+        });
+      }
+
+      // [NEW] Add creator as ProjectMember (OWNER)
+      await tx.projectMember.create({
+        data: {
           orgId: orgMember.orgId,
           projectId: newProject.id,
-          teamId: teamId,
-          role: teamId === primaryTeamId ? "PROJECT_ADMIN" : "EDITOR",
-        })),
+          userId: user.id,
+          role: "OWNER",
+        },
       });
 
       // Log activity

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { requireAuth, requireProjectMembership } from "@/lib/utils/auth";
+import { requireAuth } from "@/lib/utils/auth";
+import { requireProjectView } from "@/lib/utils/permissions";
 import { createActivityLog } from "@/lib/utils/activity-log";
 import { z } from "zod";
 
@@ -27,7 +28,7 @@ export async function POST(
     const user = await requireAuth();
     const { projectId } = await params;
 
-    await requireProjectMembership(projectId, user.id);
+    await requireProjectView(projectId, user.id);
 
     const body = await request.json();
     const validated = CreateRequestSchema.parse(body);
@@ -56,7 +57,7 @@ export async function POST(
 
     // If toUserId provided, verify they are a project member
     if (validated.toUserId) {
-      await requireProjectMembership(projectId, validated.toUserId);
+      await requireProjectView(projectId, validated.toUserId);
     }
 
     // If toTeam provided, verify at least one team member exists and team has access

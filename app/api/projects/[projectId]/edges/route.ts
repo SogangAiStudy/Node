@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { requireAuth, requireProjectMembership } from "@/lib/utils/auth";
+import { requireAuth } from "@/lib/utils/auth";
+import { requireProjectView } from "@/lib/utils/permissions";
 import { createActivityLog } from "@/lib/utils/activity-log";
 import { wouldCreateCycle, findCyclePath } from "@/lib/status/cycle-detection";
 import { z } from "zod";
@@ -21,7 +22,7 @@ export async function POST(
     const user = await requireAuth();
     const { projectId } = await params;
 
-    await requireProjectMembership(projectId, user.id);
+    await requireProjectView(projectId, user.id);
 
     const body = await request.json();
     const validated = CreateEdgeSchema.parse(body);

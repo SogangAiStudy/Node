@@ -1,48 +1,39 @@
-
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/auth";
-import { google } from "@ai-sdk/google";
-import { generateObject } from "ai";
-import { z } from "zod";
 import { prisma } from "@/lib/db/prisma";
-import { getBlockingDetails, isNodeBlocked } from "@/lib/node-status";
+import { requireAuth } from "@/lib/utils/auth";
+import { requireProjectView } from "@/lib/utils/permissions";
+import { isOrgPro } from "@/lib/subscription";
+import {
+    getOpenAIClient,
+    checkRateLimit,
+    getCachedBlockAnalysis,
+    setCachedBlockAnalysis,
+    BlockAnalysisResult,
+} from "@/lib/ai/openai";
+import { z } from "zod";
+import { getBlockingDetails } from "@/lib/node-status";
 
-// Simple in-memory rate limit: UserId -> Timestamp
-const rateLimit = new Map<string, number>();
-const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
-const MAX_REQUESTS = 10; // 10 requests per minute
+const AnalyzeBlockSchema = z.object({
+    nodeId: z.string(),
+});
 
-// Simple Cache: NodeId -> { timestamp, data }
+// Simple in-memory cache for quick lookups
 const analysisCache = new Map<string, { timestamp: number; data: any }>();
-const CACHE_TTL = 30 * 1000; // 30 seconds cache (short enough to be fresh, long enough to prevent spam)
+const CACHE_TTL = 60 * 1000; // 1 minute
 
 export async function POST(req: NextRequest) {
     try {
-        const session = await auth();
-        if (!session?.user?.id) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-        }
-
+        const user = await requireAuth();
         const body = await req.json();
-        const { nodeId } = z.object({ nodeId: z.string() }).parse(body);
+        const { nodeId } = AnalyzeBlockSchema.parse(body);
 
-        // 1. Rate Limit
-        const lastRequest = rateLimit.get(session.user.id);
-        if (lastRequest && Date.now() - lastRequest < (RATE_LIMIT_WINDOW / MAX_REQUESTS)) {
-            // Allow burst but throttle simply
-        }
-        rateLimit.set(session.user.id, Date.now());
-
-
-        // 2. Fetch Node Data (Simplified)
+        // Fetch Node Data
         const node = await prisma.node.findUnique({
             where: { id: nodeId },
             include: {
-                project: true,      // Fetch project basic info
-                organization: true, // Fetch org basic info
-                nodeOwners: { include: { user: true } },
-                nodeTeams: { include: { team: true } },
-
+                project: { select: { id: true, name: true, orgId: true } },
+                nodeOwners: { include: { user: { select: { id: true, name: true } } } },
+                nodeTeams: { include: { team: { select: { id: true, name: true } } } },
                 edgesFrom: {
                     include: {
                         toNode: {
@@ -50,49 +41,53 @@ export async function POST(req: NextRequest) {
                                 id: true,
                                 title: true,
                                 manualStatus: true,
-                                // Simplify: Don't fetch owners of dependencies for now to avoid P2022 recursion issues
-                            }
-                        }
-                    }
+                                nodeOwners: { include: { user: { select: { id: true, name: true } } } },
+                            },
+                        },
+                    },
                 },
                 linkedRequests: {
                     where: { status: { in: ["OPEN", "RESPONDED"] } },
-                    include: {
-                        toUser: true,
-                    }
-                }
-            }
+                    include: { toUser: { select: { id: true, name: true } } },
+                },
+            },
         });
 
         if (!node) {
             return NextResponse.json({ error: "Node not found" }, { status: 404 });
         }
 
-        // 3. Permission Check (Separate Queries)
-        const [isOrgMember, isProjectMember] = await Promise.all([
-            prisma.orgMember.count({
-                where: { orgId: node.orgId, userId: session.user.id }
-            }),
-            prisma.projectMember.count({
-                where: { projectId: node.projectId, userId: session.user.id }
-            })
-        ]);
+        // Permission Check
+        await requireProjectView(node.projectId, user.id);
 
-        if (isOrgMember === 0 && isProjectMember === 0) {
-            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        // Pro Subscription Check
+        const isPro = await isOrgPro(node.project.orgId);
+        if (!isPro) {
+            return NextResponse.json(
+                { error: "AI features require a Pro subscription" },
+                { status: 403 }
+            );
         }
 
-        // 4. Check Cache
-        const cached = analysisCache.get(nodeId);
-        if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
-            return NextResponse.json(cached.data);
+        // Rate Limit Check
+        if (!checkRateLimit(user.id)) {
+            return NextResponse.json(
+                { error: "Rate limit exceeded. Please try again in a minute." },
+                { status: 429 }
+            );
         }
 
-        // 5. Prepare Context for AI
+        // Check Cache
+        const cached = getCachedBlockAnalysis(nodeId, node.updatedAt.toISOString());
+        if (cached) {
+            return NextResponse.json(cached);
+        }
+
+        // Build context for AI
         const blockedDetails = getBlockingDetails(node as any);
 
-        // Helper to formatting owners
-        const formatOwners = (owners: any[]) => owners.map(o => o.user.name).join(", ");
+        const formatOwners = (owners: any[]) =>
+            owners.map((o) => ({ id: o.user.id, name: o.user.name }));
 
         const context = {
             node: {
@@ -100,74 +95,85 @@ export async function POST(req: NextRequest) {
                 description: node.description?.slice(0, 200),
                 status: node.manualStatus,
                 owners: formatOwners(node.nodeOwners),
-                team: node.nodeTeams.map((t: any) => t.team.name).join(", ")
+                teams: node.nodeTeams.map((t) => ({ id: t.team.id, name: t.team.name })),
             },
-            blockers: blockedDetails.map(d => {
-                if (d.type === 'DEPENDENCY' && d.nodeId) {
+            blockers: blockedDetails.map((d: any) => {
+                if (d.type === "DEPENDENCY" && d.nodeId) {
                     return {
                         type: "DEPENDENCY",
-                        title: (d.nodeId as any).title,
-                        status: (d.nodeId as any).manualStatus,
-                        // Removed owner details for stability
-                    }
+                        title: d.nodeId.title || "Unknown",
+                        status: d.nodeId.manualStatus || "TODO",
+                    };
                 }
-                if (d.type === 'APPROVAL') {
+                if (d.type === "APPROVAL") {
                     return {
                         type: "APPROVAL",
-                        title: (d.nodeId as any).title,
-                        status: (d.nodeId as any).manualStatus,
-                    }
+                        title: d.nodeId?.title || "Unknown",
+                    };
                 }
-                if (d.type === 'REQUEST') {
+                if (d.type === "REQUEST") {
+                    const req = node.linkedRequests.find((r: any) => r.id === d.requestId);
                     return {
-                        type: 'REQUEST',
-                        status: (d as any).status,
-                        question: node.linkedRequests.find((r: any) => r.id === (d as any).requestId)?.question
+                        type: "REQUEST",
+                        question: req?.question?.slice(0, 100),
+                        toUser: req?.toUser ? { id: req.toUser.id, name: req.toUser.name } : null,
                     };
                 }
                 return d;
-            })
+            }),
         };
 
-        // 5. Call Gemini
-        const { object } = await generateObject({
-            model: google("models/gemini-1.5-flash-latest"),
-            schema: z.object({
-                summary: z.string().describe("Why is this node blocked? 1 sentence."),
-                blockingReasons: z.array(z.object({
-                    type: z.enum(["DEPENDENCY", "APPROVAL", "REQUEST", "OTHER"]),
-                    targetTitle: z.string().describe("Title of the blocking item"),
-                    actionNeeded: z.string().describe("What needs to happen? e.g. 'John needs to approve'")
-                })),
-                whoShouldAct: z.array(z.object({
-                    name: z.string(),
-                    role: z.string().optional(),
-                    nextStep: z.string()
-                })),
-                suggestedRequests: z.array(z.object({
-                    recipient: z.string(),
-                    draftMessage: z.string()
-                })).optional()
-            }),
-            prompt: `
-        Analyze why this task is blocked.
-        Context: ${JSON.stringify(context, null, 2)}
-        
-        Rules:
-        - Be concise.
-        - Identify WHO is holding this up.
-        - If it's a dependency, say who owns that dependency.
-        - If it's a request, say who needs to answer.
-      `,
+        // Call OpenAI (ChatGPT)
+        const openai = getOpenAIClient();
+        const completion = await openai.chat.completions.create({
+            model: "gpt-4o-mini",
+            messages: [
+                {
+                    role: "system",
+                    content: `You are a project management assistant. Analyze why a task is blocked and provide actionable guidance.
+Always respond with valid JSON in this format:
+{
+  "summary": "Brief 1-sentence explanation of why blocked",
+  "blockingReasons": [{"type": "DEPENDENCY|APPROVAL|REQUEST|OTHER", "targetTitle": "...", "actionNeeded": "..."}],
+  "whoShouldAct": [{"name": "...", "role": "...", "nextStep": "..."}],
+  "suggestedRequests": [{"recipient": "...", "draftMessage": "..."}]
+}`,
+                },
+                {
+                    role: "user",
+                    content: `Analyze why this task is blocked:\n${JSON.stringify(context, null, 2)}`,
+                },
+            ],
+            response_format: { type: "json_object" },
+            temperature: 0.7,
+            max_tokens: 600,
         });
 
-        // 6. Update Cache
-        analysisCache.set(nodeId, { timestamp: Date.now(), data: object });
+        const responseText = completion.choices[0]?.message?.content || "{}";
+        let result;
 
-        return NextResponse.json(object);
+        try {
+            result = JSON.parse(responseText);
+        } catch {
+            result = {
+                summary: "Unable to analyze - please try again",
+                blockingReasons: [],
+                whoShouldAct: [],
+                suggestedRequests: [],
+            };
+        }
 
+        // Cache result
+        setCachedBlockAnalysis(nodeId, node.updatedAt.toISOString(), result);
+
+        return NextResponse.json(result);
     } catch (error) {
         console.error("AI Analysis Error:", error);
+
+        if (error instanceof z.ZodError) {
+            return NextResponse.json({ error: "Invalid input" }, { status: 400 });
+        }
+
         return NextResponse.json({ error: "Failed to analyze" }, { status: 500 });
     }
 }

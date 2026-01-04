@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { requireAuth, requireProjectMembership, isOrgMember } from "@/lib/utils/auth";
+import { requireAuth, isOrgMember } from "@/lib/utils/auth";
+import { requireProjectView } from "@/lib/utils/permissions";
 import { z } from "zod";
 
 const UpdateProjectSchema = z.object({
@@ -17,7 +18,7 @@ export async function GET(
     const user = await requireAuth();
     const { projectId } = await params;
 
-    await requireProjectMembership(projectId, user.id);
+    await requireProjectView(projectId, user.id);
 
     const project = await prisma.project.findUnique({
       where: { id: projectId },

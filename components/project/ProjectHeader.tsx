@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { SharePopover } from "@/components/project/SharePopover";
+import { ProjectSettingsDialog } from "@/components/project/ProjectSettingsDialog";
 import { Input } from "@/components/ui/input";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -165,21 +166,17 @@ export function ProjectHeader({
                         )}
                     </div>
 
-                    {/* Share Button with Popover */}
-                    <SharePopover
-                        projectId={projectId}
-                        orgId={orgId}
+                    {/* Share Button */}
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 px-3 hover:bg-accent"
+                        title="Share project"
+                        onClick={() => setShareOpen(true)}
                     >
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 px-3 hover:bg-accent"
-                            title="Share project"
-                        >
-                            <Share2 className="h-4 w-4 mr-1.5" />
-                            <span className="text-sm font-medium">Share</span>
-                        </Button>
-                    </SharePopover>
+                        <Share2 className="h-4 w-4 mr-1.5" />
+                        <span className="text-sm font-medium">Share</span>
+                    </Button>
 
                     {/* Favorite Toggle */}
                     <Button
@@ -212,7 +209,7 @@ export function ProjectHeader({
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-48">
-                            <DropdownMenuItem onClick={handleMemberManagement}>
+                            <DropdownMenuItem onClick={() => setShareOpen(true)}>
                                 <Users className="h-4 w-4 mr-2" />
                                 <span>Manage members</span>
                             </DropdownMenuItem>
@@ -233,6 +230,14 @@ export function ProjectHeader({
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
+
+                    <ProjectSettingsDialog
+                        projectId={projectId}
+                        orgId={orgId}
+                        open={shareOpen}
+                        onOpenChange={setShareOpen}
+                        defaultTab="members"
+                    />
                 </div>
             </div>
         </>
