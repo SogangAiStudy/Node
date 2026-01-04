@@ -1,0 +1,271 @@
+
+"use client";
+
+import { useState, useEffect } from "react";
+import { NodeDTO, ManualStatus } from "@/types";
+import {
+    Sheet,
+    SheetContent,
+    SheetHeader,
+    SheetTitle,
+    SheetDescription,
+    SheetFooter,
+} from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+    Loader2,
+    Calendar,
+    Clock,
+    CheckCircle2,
+    PlayCircle,
+    User,
+    Sparkles,
+    MessageSquarePlus
+} from "lucide-react";
+import { toast } from "sonner";
+import { CreateRequestDialog } from "./CreateRequestDialog";
+import { cn } from "@/lib/utils";
+
+interface NodeDetailSheetProps {
+    node: NodeDTO | null;
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    projectId: string;
+    orgId: string;
+    onDataChange: () => void;
+}
+
+export function NodeDetailSheet({
+    node,
+    open,
+    onOpenChange,
+    projectId,
+    orgId,
+    onDataChange,
+}: NodeDetailSheetProps) {
+    const [title, setTitle] = useState("");
+    const [description, setDescription] = useState("");
+    const [isEditing, setIsEditing] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
+    const [requestDialogOpen, setRequestDialogOpen] = useState(false);
+
+    // Sync local state when node changes
+    useEffect(() => {
+        if (node) {
+            setTitle(node.title);
+            setDescription(node.description || "");
+        }
+    }, [node]);
+
+    if (!node) return null;
+
+    const updateNode = async (updates: Partial<NodeDTO>) => {
+        setIsSaving(true);
+        try {
+            const res = await fetch(`/api/nodes/${node.id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(updates),
+            });
+            if (!res.ok) throw new Error("Failed to update node");
+            onDataChange();
+            // toast.success("Updated");
+        } catch (error) {
+            toast.error("Failed to update node");
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleSaveDetails = async () => {
+        await updateNode({ title, description });
+        setIsEditing(false);
+    };
+
+    const handleStatusChange = async (newStatus: ManualStatus) => {
+        if (newStatus === node.manualStatus) return;
+        await updateNode({ manualStatus: newStatus });
+    };
+
+    const getInitials = (name: string) => {
+        return name
+            .split(" ")
+            .map((n) => n[0])
+            .join("")
+            .toUpperCase()
+            .slice(0, 2);
+    };
+
+    const primaryOwner = node.owners?.[0];
+
+    return (
+        <>
+            <Sheet open={open} onOpenChange={onOpenChange}>
+                <SheetContent className="w-[400px] sm:w-[540px] overflow-y-auto">
+                    <SheetHeader className="space-y-4">
+                        <div className="flex items-start justify-between">
+                            <div className="space-y-1 flex-1">
+                                {isEditing ? (
+                                    <Input
+                                        value={title}
+                                        onChange={(e) => setTitle(e.target.value)}
+                                        className="font-bold text-lg"
+                                        placeholder="Task Title"
+                                    />
+                                ) : (
+                                    <SheetTitle className="text-xl font-bold leading-tight">
+                                        {node.title}
+                                    </SheetTitle>
+                                )}
+                            </div>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => isEditing ? handleSaveDetails() : setIsEditing(true)}
+                            >
+                                {isEditing ? "Save" : "Edit"}
+                            </Button>
+                        </div>
+
+                        {/* Status Toggles */}
+                        <div className="flex p-1 bg-slate-100 rounded-lg w-fit">
+                            {(["TODO", "DOING", "DONE"] as ManualStatus[]).map((status) => (
+                                <button
+                                    key={status}
+                                    onClick={() => handleStatusChange(status)}
+                                    className={cn(
+                                        "px-4 py-1.5 text-xs font-medium rounded-md transition-all flex items-center gap-2",
+                                        node.manualStatus === status
+                                            ? "bg-white text-slate-900 shadow-sm"
+                                            : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
+                                    )}
+                                >
+                                    {status === "TODO" && <Clock className="w-3.5 h-3.5" />}
+                                    {status === "DOING" && <PlayCircle className="w-3.5 h-3.5" />}
+                                    {status === "DONE" && <CheckCircle2 className="w-3.5 h-3.5" />}
+                                    {status}
+                                </button>
+                            ))}
+                        </div>
+                    </SheetHeader>
+
+                    <div className="py-6 space-y-8">
+                        {/* Description */}
+                        <div className="space-y-3">
+                            <h4 className="text-sm font-medium text-slate-500 uppercase tracking-wider">Description</h4>
+                            {isEditing ? (
+                                <Textarea
+                                    value={description}
+                                    onChange={(e) => setDescription(e.target.value)}
+                                    placeholder="Add a more detailed description..."
+                                    className="min-h-[120px]"
+                                />
+                            ) : (
+                                <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+                                    {node.description || <span className="text-slate-400 italic">No description provided.</span>}
+                                </p>
+                            )}
+                        </div>
+
+                        {/* Metadata Grid */}
+                        <div className="grid grid-cols-2 gap-6">
+                            <div className="space-y-3">
+                                <h4 className="text-sm font-medium text-slate-500 uppercase tracking-wider">Owner</h4>
+                                {primaryOwner ? (
+                                    <div className="flex items-center gap-3">
+                                        <Avatar className="h-8 w-8">
+                                            <AvatarFallback className="bg-blue-100 text-blue-700 text-xs">
+                                                {getInitials(primaryOwner.name)}
+                                            </AvatarFallback>
+                                        </Avatar>
+                                        <div className="flex flex-col">
+                                            <span className="text-sm font-medium text-slate-900">{primaryOwner.name}</span>
+                                            <span className="text-xs text-slate-500">Primary Owner</span>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center gap-2 text-slate-400">
+                                        <div className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center">
+                                            <User className="w-4 h-4" />
+                                        </div>
+                                        <span className="text-sm">Unassigned</span>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="space-y-3">
+                                <h4 className="text-sm font-medium text-slate-500 uppercase tracking-wider">Due Date</h4>
+                                {node.dueAt ? (
+                                    <div className="flex items-center gap-2 text-sm text-slate-700">
+                                        <Calendar className="w-4 h-4 text-slate-400" />
+                                        <span>{new Date(node.dueAt).toLocaleDateString()}</span>
+                                    </div>
+                                ) : (
+                                    <span className="text-sm text-slate-400 italic">No due date</span>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Computed Status (ReadOnly) */}
+                        <div className="p-4 rounded-lg bg-slate-50 border border-slate-100 space-y-2">
+                            <div className="flex items-center justify-between">
+                                <h4 className="text-xs font-bold text-slate-500 uppercase">System Status</h4>
+                                <Badge variant="outline" className={cn(
+                                    "text-xs",
+                                    node.computedStatus === "BLOCKED" && "bg-red-50 text-red-600 border-red-200",
+                                    node.computedStatus === "WAITING" && "bg-yellow-50 text-yellow-600 border-yellow-200",
+                                    node.computedStatus === "DOING" && "bg-blue-50 text-blue-600 border-blue-200"
+                                )}>
+                                    {node.computedStatus}
+                                </Badge>
+                            </div>
+                            <p className="text-xs text-slate-500">
+                                {node.computedStatus === "BLOCKED" && "This task cannot proceed because it depends on incomplete upstream tasks."}
+                                {node.computedStatus === "WAITING" && "This task is waiting for external dependencies or approvals."}
+                                {node.computedStatus === "DOING" && "All dependencies are met. This task is ready to be worked on."}
+                                {node.computedStatus === "TODO" && "Ready to start."}
+                                {node.computedStatus === "DONE" && "Completed."}
+                            </p>
+                            {node.computedStatus === "BLOCKED" && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="w-full mt-2 text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                                    onClick={() => setRequestDialogOpen(true)}
+                                >
+                                    <Sparkles className="w-3 h-3 mr-2" />
+                                    Ask AI to Resolve Blockers
+                                </Button>
+                            )}
+                        </div>
+                    </div>
+
+                    <SheetFooter className="flex-col sm:justify-start gap-2 pt-4 border-t">
+                        <Button
+                            className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white"
+                            onClick={() => setRequestDialogOpen(true)}
+                        >
+                            <MessageSquarePlus className="w-4 h-4 mr-2" />
+                            New Request / Question
+                        </Button>
+                    </SheetFooter>
+                </SheetContent>
+            </Sheet>
+
+            <CreateRequestDialog
+                projectId={projectId}
+                linkedNodeId={node.id}
+                open={requestDialogOpen}
+                onOpenChange={setRequestDialogOpen}
+                onSuccess={() => {
+                    setRequestDialogOpen(false);
+                    toast.success("Request Sent!");
+                }}
+            />
+        </>
+    );
+}

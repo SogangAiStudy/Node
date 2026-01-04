@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import ReactFlow, {
   Node,
   Edge,
@@ -20,6 +21,7 @@ import { ActionCenterBar } from "./ActionCenterBar";
 import { Toolbar } from "./Toolbar";
 import { CanvasContextMenu, ContextMenuPosition } from "./CanvasContextMenu";
 import { AddNodeDialog } from "./AddNodeDialog";
+import { NodeDetailSheet } from "./NodeDetailSheet";
 import { useSession } from "next-auth/react";
 import {
   Dialog,
@@ -99,6 +101,7 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
   const [addNodeOpen, setAddNodeOpen] = useState(false);
   const [addNodePosition, setAddNodePosition] = useState<{ x: number; y: number } | null>(null);
   const [layoutDirection, setLayoutDirection] = useState<"LR" | "TB">("LR");
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 
   const { layoutedNodes, layoutedEdges } = useMemo(() => {
     const initialNodes: Node[] = data.nodes.map((node) => {
@@ -323,8 +326,23 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
     setRelation(edge.data?.originalEdge?.relation || "DEPENDS_ON");
   }, []);
 
+  const queryClient = useQueryClient();
+
   const onNodeDragStop: NodeDragHandler = useCallback(
     async (_event, node) => {
+      // Optimistically update the cache to avoid snap-back
+      queryClient.setQueryData<GraphData>(["graph", projectId], (old: GraphData | undefined) => {
+        if (!old) return old;
+        return {
+          ...old,
+          nodes: old.nodes.map((n) =>
+            n.id === node.id
+              ? { ...n, positionX: Math.round(node.position.x), positionY: Math.round(node.position.y) }
+              : n
+          ),
+        };
+      });
+
       // Persist node position to database
       try {
         const res = await fetch(`/api/nodes/${node.id}`, {
@@ -337,17 +355,19 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
         });
 
         if (res.ok) {
-          toast.success("Position saved", { duration: 1000 });
-          onDataChange();
+          // toast.success("Position saved", { duration: 1000 });
+          // No need to refetch everything!
         } else {
           throw new Error("Failed to save position");
         }
       } catch (error) {
         console.error("Failed to save node position:", error);
         toast.error("Failed to save position");
+        // Revert cache on error (optional, but good practice - skipped for brevity or add if needed)
+        onDataChange(); // Refetch to restore correct state
       }
     },
-    [onDataChange]
+    [projectId, queryClient, onDataChange]
   );
 
   const handleLayoutChange = useCallback((clusters: any[], layout: string) => {
@@ -371,6 +391,7 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
         edges={data.edges}
         userId={useSession().data?.user?.id || ""}
         onNodeClick={(nodeId) => {
+          setSelectedNodeId(nodeId);
           setNodes((nds) =>
             nds.map((node) => ({
               ...node,
@@ -402,6 +423,7 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           onEdgeClick={onEdgeClick}
+          onNodeClick={(_event, node) => setSelectedNodeId(node.id)}
           onNodeDragStop={onNodeDragStop}
           nodeTypes={nodeTypes}
           fitView
@@ -416,7 +438,10 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
               canvasY: event.clientY,
             });
           }}
-          onPaneClick={() => setContextMenu(null)}
+          onPaneClick={() => {
+            setContextMenu(null);
+            setSelectedNodeId(null);
+          }}
         >
           <Background color="#f1f5f9" gap={15} />
           <Controls />
@@ -565,6 +590,16 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Node Detail Sheet */}
+      <NodeDetailSheet
+        node={data.nodes.find(n => n.id === selectedNodeId) || null}
+        open={!!selectedNodeId}
+        onOpenChange={(open: boolean) => !open && setSelectedNodeId(null)}
+        projectId={projectId}
+        orgId={orgId}
+        onDataChange={onDataChange}
+      />
     </div>
   );
 }

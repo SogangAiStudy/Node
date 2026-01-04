@@ -95,8 +95,10 @@ export async function GET(request: NextRequest) {
 
         const memberDTOs = members.map((om: any) => ({
             userId: om.userId,
-            userName: om.user.name,
-            userEmail: om.user.email,
+            name: om.user.name,
+            userName: om.user.name, // Keep for backward compatibility if needed, or remove
+            email: om.user.email,
+            userEmail: om.user.email, // Keep for backward compatibility
             userImage: om.user.image,
             role: om.role,
             status: om.status,
