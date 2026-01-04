@@ -15,6 +15,8 @@ interface BillingPageClientProps {
     isOrgPro: boolean;
     nodeCount: number;
     stripeCustomerId: string | null;
+    sessionId?: string;
+    showSuccess?: boolean;
 }
 
 export default function BillingPageClient({
@@ -22,19 +24,55 @@ export default function BillingPageClient({
     isOrgPro,
     nodeCount = 0,
     stripeCustomerId,
+    sessionId,
+    showSuccess = false,
 }: BillingPageClientProps) {
     const [loading, setLoading] = useState(false);
     const NODE_LIMIT = 20;
     const searchParams = useSearchParams();
     const router = useRouter();
     const [showSuccessDialog, setShowSuccessDialog] = useState(false);
+    const [isVerifying, setIsVerifying] = useState(false);
 
+    // Verify session on mount if sessionId is present
     useEffect(() => {
-        if (searchParams.get("success") === "1") {
+        const verifySession = async () => {
+            if (!sessionId || isVerifying) return;
+
+            setIsVerifying(true);
+            try {
+                const res = await fetch("/api/stripe/verify-session", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ sessionId, orgId }),
+                });
+
+                if (res.ok) {
+                    // Successful verification - show success dialog
+                    setShowSuccessDialog(true);
+                    // Remove session_id from URL
+                    router.replace(`/org/${orgId}/billing?success=1`);
+                } else {
+                    console.error("Session verification failed");
+                    toast.error("Failed to verify payment. Please contact support.");
+                }
+            } catch (error) {
+                console.error("Session verification error:", error);
+                toast.error("Failed to verify payment");
+            } finally {
+                setIsVerifying(false);
+            }
+        };
+
+        verifySession();
+    }, [sessionId, orgId, router]);
+
+    // Show success dialog if showSuccess flag is set (for returning from checkout)
+    useEffect(() => {
+        if (showSuccess && !sessionId) {
             setShowSuccessDialog(true);
-            // Confetti effect can be added here if a library is installed
         }
-    }, [searchParams]);
+    }, [showSuccess, sessionId]);
 
     const handleUpgrade = async () => {
         setLoading(true);

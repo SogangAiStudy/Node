@@ -6,12 +6,14 @@ import BillingPageClient from "./page-client";
 
 export default async function BillingPage({
     params,
+    searchParams,
 }: {
     params: Promise<{ orgId: string }>;
+    searchParams: Promise<{ session_id?: string; success?: string }>;
 }) {
     const user = await requireAuth();
-
     const { orgId } = await params;
+    const { session_id, success } = await searchParams;
 
     // Verify user is a member of this organization
     const org = await prisma.organization.findFirst({
@@ -38,6 +40,9 @@ export default async function BillingPage({
         redirect("/");
     }
 
+    // If session_id is present, verify the session (client will handle via API)
+    const shouldVerifySession = !!session_id;
+
     const isPro = await isOrgPro(orgId);
 
     // Count nodes in this organization
@@ -55,6 +60,8 @@ export default async function BillingPage({
             isOrgPro={isPro}
             nodeCount={nodeCount}
             stripeCustomerId={org.stripeCustomerId}
+            sessionId={session_id}
+            showSuccess={success === "1" || shouldVerifySession}
         />
     );
 }
