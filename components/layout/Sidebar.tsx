@@ -326,7 +326,18 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
             {workspaces?.map((w) => (
               <DropdownMenuItem
                 key={w.orgId}
-                onSelect={() => router.push(`/org/${w.orgId}/projects`)}
+                onSelect={() => {
+                  // Preserve navigation context when switching workspace
+                  let targetPath = `/org/${w.orgId}/home`;
+                  if (pathname?.includes("/inbox")) {
+                    targetPath = `/org/${w.orgId}/inbox`;
+                  } else if (pathname?.includes("/projects")) {
+                    targetPath = `/org/${w.orgId}/projects`;
+                  } else if (pathname?.includes("/home")) {
+                    targetPath = `/org/${w.orgId}/home`;
+                  }
+                  router.push(targetPath);
+                }}
                 className="gap-2 focus:bg-[#2c2d31] focus:text-white cursor-pointer"
               >
                 <div className="flex h-5 w-5 items-center justify-center rounded bg-zinc-700 text-[10px]">
@@ -372,6 +383,12 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
               label="Inbox"
               active={pathname?.includes("/inbox")}
               hasIndicator={currentWorkspace?.hasUnreadInbox}
+            />
+            <NavItem
+              href={`/org/${currentOrgId}/projects`}
+              icon={FolderKanban}
+              label="Projects"
+              active={pathname?.includes("/projects")}
             />
           </div>
 
