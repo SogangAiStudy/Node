@@ -10,7 +10,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { UserCircle, Mail, ShieldCheck, CreditCard, Crown } from "lucide-react";
+import { UserCircle, Mail, ShieldCheck, CreditCard, Crown, ArrowLeft } from "lucide-react";
 
 interface ProfilePageClientProps {
     user: {
@@ -45,8 +45,23 @@ export default function ProfilePageClient({ user, organization }: ProfilePageCli
         }
     };
 
+    const handleBack = () => {
+        if (organization) {
+            router.push(`/org/${organization.id}/home`);
+        } else {
+            router.push("/");
+        }
+    };
+
     return (
         <div className="max-w-2xl mx-auto py-12 px-6">
+            <div className="mb-6">
+                <Button variant="ghost" onClick={handleBack} className="gap-2 pl-0 hover:bg-transparent hover:text-primary">
+                    <ArrowLeft className="h-4 w-4" />
+                    Back to Dashboard
+                </Button>
+            </div>
+
             <div className="mb-10 text-center">
                 <Avatar className="h-24 w-24 mx-auto mb-4 border-4 border-white shadow-xl">
                     <AvatarImage src={user.image || undefined} />

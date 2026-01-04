@@ -6,6 +6,9 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, CreditCard, ArrowRight } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { useSearchParams, useRouter } from "next/navigation";
+import { useEffect } from "react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 interface BillingPageClientProps {
     orgId: string;
@@ -22,6 +25,16 @@ export default function BillingPageClient({
 }: BillingPageClientProps) {
     const [loading, setLoading] = useState(false);
     const NODE_LIMIT = 20;
+    const searchParams = useSearchParams();
+    const router = useRouter();
+    const [showSuccessDialog, setShowSuccessDialog] = useState(false);
+
+    useEffect(() => {
+        if (searchParams.get("success") === "1") {
+            setShowSuccessDialog(true);
+            // Confetti effect can be added here if a library is installed
+        }
+    }, [searchParams]);
 
     const handleUpgrade = async () => {
         setLoading(true);
@@ -73,8 +86,37 @@ export default function BillingPageClient({
         }
     };
 
+    const handleGoToProfile = () => {
+        setShowSuccessDialog(false);
+        router.push("/settings/profile");
+    }
+
     return (
         <div className="space-y-6">
+            <Dialog open={showSuccessDialog} onOpenChange={setShowSuccessDialog}>
+                <DialogContent showCloseButton={false} className="sm:max-w-md">
+                    <DialogHeader>
+                        <div className="flex items-center justify-center mb-4">
+                            <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
+                                <span className="text-2xl">🎉</span>
+                            </div>
+                        </div>
+                        <DialogTitle className="text-center text-xl">Congratulations!</DialogTitle>
+                        <DialogDescription className="text-center text-base pt-2">
+                            You have successfully upgraded to the Pro plan.
+                            <br />
+                            Enjoy unlimited nodes and priority support.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="flex justify-center mt-4">
+                        <Button onClick={handleGoToProfile} className="w-full sm:w-auto">
+                            Go to Profile & Check Subscription
+                            <ArrowRight className="ml-2 h-4 w-4" />
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
             <div>
                 <h1 className="text-3xl font-bold">Billing</h1>
                 <p className="text-muted-foreground mt-2">
@@ -101,7 +143,7 @@ export default function BillingPageClient({
                         <div className="flex items-center justify-between mb-2">
                             <span className="text-sm font-medium">Node Usage</span>
                             <span className="text-sm text-muted-foreground">
-                                {nodeCount} / {isOrgPro ? "Unlimited" : NODE_LIMIT}
+                                {isOrgPro ? "Unlimited" : `${nodeCount} / ${NODE_LIMIT}`}
                             </span>
                         </div>
                         <div className="relative h-2 bg-secondary rounded-full overflow-hidden">
@@ -166,30 +208,28 @@ export default function BillingPageClient({
                 </CardContent>
             </Card>
 
-            {!isOrgPro && (
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Pro Plan Benefits</CardTitle>
-                        <CardDescription>Unlock the full potential of your organization</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <ul className="space-y-2">
-                            <li className="flex items-start">
-                                <span className="text-green-500 mr-2">✓</span>
-                                <span className="text-sm">Unlimited nodes across all projects</span>
-                            </li>
-                            <li className="flex items-start">
-                                <span className="text-green-500 mr-2">✓</span>
-                                <span className="text-sm">Priority support</span>
-                            </li>
-                            <li className="flex items-start">
-                                <span className="text-green-500 mr-2">✓</span>
-                                <span className="text-sm">Advanced analytics (coming soon)</span>
-                            </li>
-                        </ul>
-                    </CardContent>
-                </Card>
-            )}
+            <Card>
+                <CardHeader>
+                    <CardTitle>Pro Plan Benefits</CardTitle>
+                    <CardDescription>Unlock the full potential of your organization</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <ul className="space-y-2">
+                        <li className="flex items-start">
+                            <span className="text-green-500 mr-2">✓</span>
+                            <span className="text-sm">Unlimited nodes across all projects</span>
+                        </li>
+                        <li className="flex items-start">
+                            <span className="text-green-500 mr-2">✓</span>
+                            <span className="text-sm">Priority support</span>
+                        </li>
+                        <li className="flex items-start">
+                            <span className="text-green-500 mr-2">✓</span>
+                            <span className="text-sm">Advanced analytics (coming soon)</span>
+                        </li>
+                    </ul>
+                </CardContent>
+            </Card>
         </div>
     );
 }
