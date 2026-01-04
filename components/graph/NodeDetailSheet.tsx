@@ -84,7 +84,7 @@ export function NodeDetailSheet({
 
     if (!node) return null;
 
-    const updateNode = async (updates: Partial<NodeDTO>) => {
+    const updateNode = async (updates: Partial<NodeDTO> & { ownerIds?: string[] }) => {
         setIsSaving(true);
         try {
             const res = await fetch(`/api/nodes/${node.id}`, {
