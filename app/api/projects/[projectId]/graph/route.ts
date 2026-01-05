@@ -160,6 +160,7 @@ export async function GET(
         updatedAt: node.updatedAt.toISOString(),
         positionX: node.positionX,
         positionY: node.positionY,
+        phase: node.phase || null,
       };
     });
 
