@@ -102,7 +102,7 @@ export async function GET(
 
     // 4. Transform to DTOs using maps
     const nodeDTOs: NodeDTO[] = baseNodes.map((node: any) => {
-      const computedStatus = statusMap.get(node.id)!;
+      const computedStatus = statusMap.get(node.id) || (node.manualStatus as any) || "TODO";
 
       // Calculate blocking count
       // Find edges where this node is the 'to' (dependency) and the 'from' (dependent) is BLOCKED

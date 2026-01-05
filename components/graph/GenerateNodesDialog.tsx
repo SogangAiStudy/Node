@@ -102,7 +102,7 @@ export function GenerateNodesDialog({
             const res = await fetch(`/api/projects/${projectId}/teams`);
             if (!res.ok) throw new Error("Failed to fetch teams");
             const data = await res.json();
-            return data.teams as TeamDTO[];
+            return (data.teams || []) as TeamDTO[];
         },
         enabled: !!projectId && open,
     });

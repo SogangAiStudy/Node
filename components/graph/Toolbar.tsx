@@ -76,7 +76,7 @@ export function Toolbar({
       const res = await fetch(`/api/projects/${projectId}/teams`);
       if (!res.ok) throw new Error("Failed to fetch project teams");
       const data = await res.json();
-      return data.teams as TeamDTO[];
+      return (data.teams || []) as TeamDTO[];
     },
     enabled: !!projectId,
   });
