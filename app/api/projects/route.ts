@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth, getUserTeams, isOrgAdmin } from "@/lib/utils/auth";
 import { createActivityLog } from "@/lib/utils/activity-log";
+import { triggerProjectAssignmentNotifications } from "@/lib/utils/notifications";
 import { z } from "zod";
 
 const CreateProjectSchema = z.object({
@@ -286,6 +287,16 @@ export async function POST(request: NextRequest) {
 
       return newProject;
     });
+
+    // Trigger project assignment notifications for teams
+    if (validated.teamIds.length > 0) {
+      await triggerProjectAssignmentNotifications({
+        projectId: project.id,
+        projectName: project.name,
+        orgId: project.orgId,
+        teamIds: validated.teamIds,
+      });
+    }
 
     return NextResponse.json(
       {

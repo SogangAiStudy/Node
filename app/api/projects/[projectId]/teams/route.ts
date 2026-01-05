@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/utils/auth";
 import { isProjectAdmin } from "@/lib/utils/permissions";
+import { triggerProjectAssignmentNotifications } from "@/lib/utils/notifications";
 import { z } from "zod";
 
 const AddTeamSchema = z.object({
@@ -103,6 +104,14 @@ export async function POST(
                 teamId: validated.teamId,
                 role: validated.role,
             },
+        });
+
+        // Trigger project assignment notification
+        await triggerProjectAssignmentNotifications({
+            projectId,
+            projectName: project.name,
+            orgId: project.orgId,
+            teamIds: [validated.teamId],
         });
 
         return NextResponse.json(projectTeam);

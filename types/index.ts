@@ -7,6 +7,9 @@ import {
   OrgMemberStatus,
   TeamRole,
   ProjectRole,
+  NotificationType,
+  NotificationTargetType,
+  ProjectInviteStatus,
 } from "@prisma/client";
 
 // Export Prisma types for convenience
@@ -19,6 +22,9 @@ export {
   OrgMemberStatus,
   TeamRole,
   ProjectRole,
+  NotificationType,
+  NotificationTargetType,
+  ProjectInviteStatus,
 };
 
 // Computed status (derived from graph state)
@@ -158,6 +164,45 @@ export interface RequestDTO {
   claimedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+// Notification DTO
+export interface NotificationDTO {
+  id: string;
+  userId: string | null;
+  orgId: string;
+  type: NotificationType;
+  targetType: NotificationTargetType;
+  targetTeamId: string | null;
+  title: string;
+  message: string | null;
+  entityId: string | null;
+  isRead: boolean;
+  createdAt: string;
+}
+
+// Project Invite DTO
+export interface ProjectInviteDTO {
+  id: string;
+  orgId: string;
+  projectId: string;
+  projectName: string;
+  invitedByUserId: string;
+  invitedByUserName: string;
+  targetUserId: string;
+  status: ProjectInviteStatus;
+  createdAt: string;
+}
+
+// Unified Inbox Item
+export type InboxItem =
+  | { type: "REQUEST"; data: RequestDTO }
+  | { type: "INVITE"; data: ProjectInviteDTO }
+  | { type: "NOTIFICATION"; data: NotificationDTO }
+  | { type: "JOIN_REQUEST"; data: OrgMemberDTO };
+
+export interface UnifiedInboxDTO {
+  items: InboxItem[];
 }
 
 // Graph data response

@@ -5,6 +5,7 @@ import { requireProjectView } from "@/lib/utils/permissions";
 import { createActivityLog } from "@/lib/utils/activity-log";
 import { z } from "zod";
 import { NodeType, ManualStatus } from "@/types";
+import { triggerUnblockedNotifications, createNotification, triggerNodeAssignmentNotifications } from "@/lib/utils/notifications";
 
 const UpdateNodeSchema = z.object({
   title: z.string().min(1).max(200).optional(),
@@ -34,9 +35,13 @@ export async function PATCH(
     console.log(`PATCH /api/nodes/${nodeId} - body:`, body);
     const validated = UpdateNodeSchema.parse(body);
 
-    // Get existing node
+    // Get existing node with relations for comparison
     const existingNode = await prisma.node.findUnique({
       where: { id: nodeId },
+      include: {
+        nodeOwners: true,
+        nodeTeams: true,
+      },
     });
 
     if (!existingNode) {
@@ -100,6 +105,75 @@ export async function PATCH(
       entityId: node.id,
       details: validated,
     });
+
+    // --- Notifications logic ---
+
+    // 1. Trigger unblocked notifications if status changed to DONE
+    if (validated.manualStatus === "DONE" && existingNode.manualStatus !== "DONE") {
+      await triggerUnblockedNotifications(node.id, node.orgId);
+    }
+
+    // 2. Trigger assignment notifications for NEW assignees
+    const newOwnerIds = validated.ownerIds || (validated.ownerId ? [validated.ownerId] : []);
+    const oldOwnerIds = existingNode.nodeOwners.map(no => no.userId).concat(existingNode.ownerId ? [existingNode.ownerId] : []);
+    const trulyNewOwners = newOwnerIds.filter(id => !oldOwnerIds.includes(id) && id !== user.id);
+
+    const newTeamIds = validated.teamIds || (validated.teamId ? [validated.teamId] : []);
+    const oldTeamIds = existingNode.nodeTeams.map(nt => nt.teamId).concat(existingNode.teamId ? [existingNode.teamId] : []);
+    const trulyNewTeams = newTeamIds.filter(id => !oldTeamIds.includes(id));
+
+    if (trulyNewOwners.length > 0 || trulyNewTeams.length > 0) {
+      await triggerNodeAssignmentNotifications({
+        nodeId: node.id,
+        orgId: node.orgId,
+        title: node.title,
+        ownerIds: trulyNewOwners,
+        teamIds: trulyNewTeams,
+        isNew: false,
+      });
+    }
+
+    // 3. Trigger "Node Updated" notifications for existing assignees if title/status/priority changed
+    const significantChange =
+      (validated.title !== undefined && validated.title !== existingNode.title) ||
+      (validated.manualStatus !== undefined && validated.manualStatus !== existingNode.manualStatus) ||
+      (validated.priority !== undefined && validated.priority !== existingNode.priority);
+
+    if (significantChange) {
+      const currentAssignees = node.nodeOwners.map(no => no.userId);
+      const currentTeams = node.nodeTeams.map(nt => nt.teamId);
+
+      // Notify users (excluding current actor and those we just notified for assignment)
+      for (const userId of currentAssignees) {
+        if (userId !== user.id && !trulyNewOwners.includes(userId)) {
+          await createNotification({
+            userId,
+            orgId: node.orgId,
+            type: "NODE_UPDATED",
+            title: "Node Updated",
+            message: `The node "${node.title}" has been updated.`,
+            entityId: node.id,
+            dedupeKey: `NODE_UPDATE:${node.id}:${userId}:${Date.now() / (1000 * 60 * 5) | 0}`, // 5 min dedupe
+          });
+        }
+      }
+
+      // Notify teams (excluding those we just notified for assignment)
+      for (const teamId of currentTeams) {
+        if (!trulyNewTeams.includes(teamId)) {
+          await createNotification({
+            orgId: node.orgId,
+            type: "NODE_UPDATED",
+            targetType: "TEAM",
+            targetTeamId: teamId,
+            title: "Node Updated",
+            message: `The node "${node.title}" assigned to your team has been updated.`,
+            entityId: node.id,
+            dedupeKey: `NODE_UPDATE_TEAM:${node.id}:${teamId}:${Date.now() / (1000 * 60 * 5) | 0}`, // 5 min dedupe
+          });
+        }
+      }
+    }
 
     return NextResponse.json({
       id: node.id,

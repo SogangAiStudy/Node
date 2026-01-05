@@ -8,9 +8,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { RequestDTO } from "@/types";
+import { ExternalLink, Clock, Inbox as InboxIcon, MoreHorizontal, Bell, UserPlus, CheckCircle2, XCircle, Shield } from "lucide-react";
+import { RequestDTO, NotificationDTO, ProjectInviteDTO, OrgMemberDTO, InboxItem } from "@/types";
 import { toast } from "sonner";
-import { ExternalLink, Clock, Inbox as InboxIcon, MoreHorizontal } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,6 +18,231 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+
+function NotificationCard({
+  notification,
+  onAction,
+}: {
+  notification: NotificationDTO;
+  onAction: () => void;
+}) {
+  const router = useRouter();
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleRead = async () => {
+    setIsLoading(true);
+    try {
+      const res = await fetch(`/api/notifications/${notification.id}/read`, {
+        method: "PATCH",
+      });
+      if (!res.ok) throw new Error("Failed to mark as read");
+      onAction();
+    } catch (error) {
+      toast.error("Failed to dismiss notification");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleNavigate = () => {
+    if (notification.entityId) {
+      router.push(`/org/${notification.orgId}/graph?nodeId=${notification.entityId}`);
+    }
+  };
+
+  const getIcon = () => {
+    switch (notification.type) {
+      case "NODE_UNBLOCKED":
+        return <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />;
+      case "PROJECT_ASSIGNED":
+        return <Shield className="h-4 w-4 text-purple-600 dark:text-purple-400" />;
+      case "TEAM_ASSIGNED":
+        return <UserPlus className="h-4 w-4 text-purple-600 dark:text-purple-400" />;
+      case "NODE_ASSIGNED":
+        return <Bell className="h-4 w-4 text-blue-600 dark:text-blue-400" />;
+      case "NODE_UPDATED":
+        return <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400" />;
+      default:
+        return <Bell className="h-4 w-4 text-blue-600 dark:text-blue-400" />;
+    }
+  };
+
+  const getBadgeColor = () => {
+    switch (notification.type) {
+      case "NODE_UNBLOCKED":
+        return "bg-green-100 dark:bg-green-900/30";
+      case "PROJECT_ASSIGNED":
+      case "TEAM_ASSIGNED":
+        return "bg-purple-100 dark:bg-purple-900/30";
+      case "NODE_UPDATED":
+        return "bg-amber-100 dark:bg-amber-900/30";
+      default:
+        return "bg-blue-100 dark:bg-blue-900/30";
+    }
+  };
+
+  const borderCol = notification.targetType === "TEAM" ? "border-l-purple-500" : "border-l-blue-500";
+
+  return (
+    <Card className={`overflow-hidden border-l-4 ${borderCol} shadow-sm`}>
+      <div className="flex items-start justify-between p-4 gap-4">
+        <div className="flex gap-3">
+          <div className={`mt-1 ${getBadgeColor()} p-2 rounded-full`}>
+            {getIcon()}
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold">{notification.title}</h3>
+              {notification.targetType === "TEAM" && (
+                <Badge variant="outline" className="text-[10px] h-4 px-1 uppercase tracking-wider text-purple-600 border-purple-200">Team</Badge>
+              )}
+            </div>
+            <p className="text-sm text-muted-foreground">{notification.message}</p>
+            <div className="flex items-center gap-2 mt-2">
+              <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
+                {notification.type.replace("_", " ")}
+              </span>
+              <span className="text-muted-foreground">•</span>
+              <span className="text-[10px] text-muted-foreground">{new Date(notification.createdAt).toLocaleTimeString()}</span>
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          {notification.entityId && (
+            <Button size="sm" variant="ghost" onClick={handleNavigate}>
+              View
+            </Button>
+          )}
+          <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={handleRead} disabled={isLoading}>
+            <XCircle className="h-4 w-4 text-muted-foreground" />
+          </Button>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function InviteCard({
+  invite,
+  onAction,
+}: {
+  invite: ProjectInviteDTO;
+  onAction: () => void;
+}) {
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleResponse = async (accept: boolean) => {
+    setIsLoading(true);
+    try {
+      const res = await fetch(`/api/projects/${invite.projectId}/invites/${invite.id}/respond`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accept }),
+      });
+      if (!res.ok) throw new Error("Failed to respond");
+      toast.success(accept ? "Invite accepted" : "Invite declined");
+      onAction();
+    } catch (error) {
+      toast.error("Failed to respond to invite");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <Card className="overflow-hidden border-l-4 border-l-purple-500 shadow-sm">
+      <div className="flex items-start justify-between p-4 gap-4">
+        <div className="flex gap-3">
+          <div className="mt-1 bg-purple-100 dark:bg-purple-900/30 p-2 rounded-full">
+            <UserPlus className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold">Project Invitation</h3>
+            <p className="text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">{invite.invitedByUserName}</span> invited you to join{" "}
+              <span className="font-medium text-foreground">{invite.projectName}</span>
+            </p>
+            <div className="flex items-center gap-2 mt-2">
+              <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Invite</span>
+              <span className="text-muted-foreground">•</span>
+              <span className="text-[10px] text-muted-foreground">{new Date(invite.createdAt).toLocaleDateString()}</span>
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <Button size="sm" className="bg-purple-600 hover:bg-purple-700 text-white" onClick={() => handleResponse(true)} disabled={isLoading}>
+            Accept
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => handleResponse(false)} disabled={isLoading}>
+            Decline
+          </Button>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function JoinRequestCard({
+  member,
+  onAction,
+}: {
+  member: OrgMemberDTO;
+  onAction: () => void;
+}) {
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleAction = async (approve: boolean) => {
+    setIsLoading(true);
+    try {
+      const res = await fetch(`/api/organizations/members/${member.userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orgId: member.orgId,
+          status: approve ? "ACTIVE" : "DEACTIVATED"
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to approve/decline");
+      toast.success(approve ? "Member approved" : "Member declined");
+      onAction();
+    } catch (error) {
+      toast.error("An error occurred");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <Card className="overflow-hidden border-l-4 border-l-amber-500 shadow-sm">
+      <div className="flex items-start justify-between p-4 gap-4">
+        <div className="flex gap-3">
+          <div className="mt-1 bg-amber-100 dark:bg-amber-900/30 p-2 rounded-full">
+            <Shield className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold">Join Request</h3>
+            <p className="text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">{member.userName || member.userEmail}</span> wants to join the workspace.
+            </p>
+            <div className="flex items-center gap-2 mt-2">
+              <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Admin Approval</span>
+              <span className="text-muted-foreground">•</span>
+              <span className="text-[10px] text-muted-foreground">{new Date(member.createdAt).toLocaleDateString()}</span>
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white" onClick={() => handleAction(true)} disabled={isLoading}>
+            Approve
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => handleAction(false)} disabled={isLoading}>
+            Decline
+          </Button>
+        </div>
+      </div>
+    </Card>
+  );
+}
 
 function RequestCard({
   request,
@@ -219,18 +444,44 @@ function RequestCard({
 export default function OrgInboxPage() {
   const params = useParams();
   const orgId = params.orgId as string;
-  const [activeTab, setActiveTab] = useState("mine");
+  const [activeTab, setActiveTab] = useState("me");
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ["org-inbox", orgId, activeTab],
+    queryKey: ["org-inbox-unified", orgId, activeTab],
     queryFn: async () => {
-      const mode = activeTab === "archived" ? "mine" : activeTab;
-      const archived = activeTab === "archived";
-      const res = await fetch(`/api/requests/org-inbox?orgId=${orgId}&mode=${mode}&archived=${archived}`);
+      if (activeTab === "archived") {
+        const res = await fetch(`/api/requests/org-inbox?orgId=${orgId}&mode=mine&archived=true`);
+        if (!res.ok) throw new Error("Failed to fetch inbox");
+        const json = await res.json();
+        return { items: json.requests.map((r: any) => ({ type: "REQUEST", data: r })) };
+      }
+
+      const res = await fetch(`/api/inbox/unified?orgId=${orgId}`);
       if (!res.ok) throw new Error("Failed to fetch inbox");
-      return res.json() as Promise<{ requests: RequestDTO[] }>;
+      return res.json() as Promise<{ items: InboxItem[] }>;
     },
+    refetchInterval: 10000,
   });
+
+  // Client-side filtering for tabs
+  const filteredItems = data?.items.filter((item: InboxItem) => {
+    if (activeTab === "archived") return true; // Already filtered by API
+
+    if (activeTab === "me") {
+      if (item.type === "INVITE" || item.type === "JOIN_REQUEST") return true;
+      if (item.type === "NOTIFICATION" && item.data.targetType === "USER") return true;
+      if (item.type === "REQUEST" && !!item.data.toUserId) return true;
+      return false;
+    }
+
+    if (activeTab === "team") {
+      if (item.type === "NOTIFICATION" && item.data.targetType === "TEAM") return true;
+      if (item.type === "REQUEST" && !!item.data.toTeam) return true;
+      return false;
+    }
+
+    return true;
+  }) || [];
 
   // Mark inbox as seen when page loads
   useEffect(() => {
@@ -246,30 +497,55 @@ export default function OrgInboxPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Inbox</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold">Inbox</h1>
+        <Badge variant="outline" className="text-xs text-muted-foreground">
+          {data?.items.length || 0} ITEMS
+        </Badge>
+      </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="mine">To Me</TabsTrigger>
+        <TabsList className="bg-muted/50 p-1">
+          <TabsTrigger value="me" className="data-[state=active]:bg-background">To Me</TabsTrigger>
           <TabsTrigger value="team">To My Team</TabsTrigger>
           <TabsTrigger value="archived">Archived</TabsTrigger>
         </TabsList>
       </Tabs>
 
       {isLoading ? (
-        <div className="text-center text-muted-foreground">Loading...</div>
-      ) : data?.requests.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center text-muted-foreground">
-            <InboxIcon className="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <p>No requests in this inbox</p>
+        <div className="flex flex-col items-center justify-center py-20 animate-pulse">
+          <div className="h-8 w-8 bg-muted rounded-full mb-4"></div>
+          <div className="h-4 w-32 bg-muted rounded"></div>
+        </div>
+      ) : filteredItems.length === 0 ? (
+        <Card className="border-dashed">
+          <CardContent className="py-20 text-center text-muted-foreground">
+            <InboxIcon className="h-12 w-12 mx-auto mb-4 opacity-20" />
+            <p className="text-lg font-medium">Nothing here yet</p>
+            <p className="text-sm max-w-[200px] mx-auto">
+              {activeTab === "me" ? "Your personal updates will appear here." :
+                activeTab === "team" ? "Updates for your teams will appear here." :
+                  "Archived items will appear here."}
+            </p>
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-4">
-          {data?.requests.map((request) => (
-            <RequestCard key={request.id} request={request} onAction={refetch} orgId={orgId} />
-          ))}
+          {filteredItems.map((item: InboxItem) => {
+            if (item.type === "REQUEST") {
+              return <RequestCard key={item.data.id} request={item.data} onAction={refetch} orgId={orgId} />;
+            }
+            if (item.type === "NOTIFICATION") {
+              return <NotificationCard key={item.data.id} notification={item.data} onAction={refetch} />;
+            }
+            if (item.type === "INVITE") {
+              return <InviteCard key={item.data.id} invite={item.data} onAction={refetch} />;
+            }
+            if (item.type === "JOIN_REQUEST") {
+              return <JoinRequestCard key={item.data.id} member={item.data} onAction={refetch} />;
+            }
+            return null;
+          })}
         </div>
       )}
     </div>

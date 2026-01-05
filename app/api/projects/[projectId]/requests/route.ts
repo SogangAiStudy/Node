@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/utils/auth";
 import { requireProjectView } from "@/lib/utils/permissions";
 import { createActivityLog } from "@/lib/utils/activity-log";
+import { createNotification } from "@/lib/utils/notifications";
 import { z } from "zod";
 
 const CreateRequestSchema = z
@@ -140,6 +141,44 @@ export async function POST(
         toTeam: req.toTeam,
       },
     });
+
+    // --- Create Notifications ---
+    try {
+      if (validated.toUserId && validated.toUserId !== user.id) {
+        await createNotification({
+          userId: validated.toUserId,
+          orgId: project.orgId,
+          type: "NODE_ASSIGNED", // Re-using for now
+          title: "New Request",
+          message: `${user.name || "A user"} sent you a request for "${req.linkedNode.title}"`,
+          entityId: req.id,
+        });
+      }
+
+      if (validated.toTeam) {
+        const team = await prisma.team.findFirst({
+          where: { orgId: project.orgId, name: validated.toTeam },
+          include: { members: true }
+        });
+
+        if (team) {
+          for (const member of team.members) {
+            if (member.userId !== user.id) {
+              await createNotification({
+                userId: member.userId,
+                orgId: project.orgId,
+                type: "NODE_ASSIGNED",
+                title: "Team Request",
+                message: `A request was sent to your team for "${req.linkedNode.title}"`,
+                entityId: req.id,
+              });
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Failed to create request notifications:", err);
+    }
 
     return NextResponse.json(
       {

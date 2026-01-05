@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/utils/auth";
+import { assignToDefaultTeam } from "@/lib/utils/teams";
 import { z } from "zod";
 
 const joinOrgSchema = z.object({
@@ -62,9 +63,14 @@ export async function POST(request: NextRequest) {
                 orgId,
                 userId: user.id,
                 role: "MEMBER",
-                status: autoApprove ? "PENDING_TEAM_ASSIGNMENT" : "PENDING_APPROVAL",
+                status: autoApprove ? "ACTIVE" : "PENDING_APPROVAL",
             },
         });
+
+        // Automatically assign to default team if approved
+        if (autoApprove) {
+            await assignToDefaultTeam(orgId, user.id);
+        }
 
         return NextResponse.json({
             message: "Join request submitted successfully",

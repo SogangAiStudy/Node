@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/utils/auth";
 import { requireProjectView } from "@/lib/utils/permissions";
 import { createActivityLog } from "@/lib/utils/activity-log";
+import { triggerNodeAssignmentNotifications } from "@/lib/utils/notifications";
 import { assertWithinNodeLimit } from "@/lib/subscription";
 import { z } from "zod";
 import { NodeType, ManualStatus } from "@/types";
@@ -113,6 +114,16 @@ export async function POST(
       });
 
       return newNode;
+    });
+
+    // Trigger assignment notifications
+    await triggerNodeAssignmentNotifications({
+      nodeId: node.id,
+      orgId: node.orgId,
+      title: node.title,
+      ownerIds: validated.ownerIds || (ownerId ? [ownerId] : []),
+      teamIds: validated.teamIds || (teamId ? [teamId] : []),
+      isNew: true,
     });
 
     // Log activity

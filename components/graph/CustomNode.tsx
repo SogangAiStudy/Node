@@ -42,6 +42,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { useUpdateNode } from "@/hooks/use-node-mutations";
 
 interface Member {
   userId: string;
@@ -97,7 +98,7 @@ function getInitials(name: string | null) {
 export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
   const { node, projectId, onDataChange, blockedBy, blocking, isFaded } = data;
   const [createRequestOpen, setCreateRequestOpen] = useState(false);
-  const [isUpdating, setIsUpdating] = useState(false);
+  const updateNodeMutation = useUpdateNode();
 
   // Editing state
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -157,37 +158,15 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
     }
   }, [selected, hasLoadedMetadata]);
 
-  // Optimistic State
-  const [optimisticStatus, setOptimisticStatus] = useState(node.manualStatus);
-
-  useEffect(() => {
-    setOptimisticStatus(node.manualStatus);
-  }, [node.manualStatus]);
 
   // Updating Logic
-  const updateNode = async (updates: Partial<NodeDTO>, e?: React.MouseEvent | React.FocusEvent | React.KeyboardEvent) => {
+  const updateNode = async (updates: Partial<NodeDTO> & { ownerIds?: string[] }, e?: React.MouseEvent | React.FocusEvent | React.KeyboardEvent) => {
     if (e) e.stopPropagation();
-    setIsUpdating(true);
-
-    // Optimistic Update
-    if (updates.manualStatus) {
-      setOptimisticStatus(updates.manualStatus);
-    }
-
-    try {
-      await fetch(`/api/nodes/${node.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updates),
-      });
-      onDataChange();
-    } catch (err) {
-      // Revert on error
-      setOptimisticStatus(node.manualStatus);
-      console.error(err);
-    } finally {
-      setIsUpdating(false);
-    }
+    updateNodeMutation.mutate({
+      nodeId: node.id,
+      projectId,
+      updates
+    });
   };
 
   const handleTitleSave = async () => {
@@ -371,34 +350,23 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
                     e.stopPropagation();
                     updateNode({ manualStatus: 'DOING' });
                   }}
-                  className="px-3 py-1 text-[10px] font-semibold rounded bg-blue-500 text-white hover:bg-blue-600 transition-colors flex items-center gap-1"
+                  className="nodrag px-3 py-1 text-[10px] font-semibold rounded bg-blue-500 text-white hover:bg-blue-600 transition-colors flex items-center gap-1"
                 >
                   <PlayCircle className="w-3 h-3" />
                   Start
                 </button>
               )}
               {node.manualStatus === 'DOING' && (
-                <>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      updateNode({ manualStatus: 'DONE' });
-                    }}
-                    className="px-3 py-1 text-[10px] font-semibold rounded bg-green-500 text-white hover:bg-green-600 transition-colors flex items-center gap-1"
-                  >
-                    <CheckCircle2 className="w-3 h-3" />
-                    Done
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      updateNode({ manualStatus: 'TODO' });
-                    }}
-                    className="px-2 py-1 text-[10px] font-medium rounded border border-slate-200 text-slate-500 hover:bg-slate-100 transition-colors"
-                  >
-                    Stop
-                  </button>
-                </>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    updateNode({ manualStatus: 'DONE' });
+                  }}
+                  className="nodrag px-3 py-1 text-[10px] font-semibold rounded bg-green-500 text-white hover:bg-green-600 transition-colors flex items-center gap-1"
+                >
+                  <CheckCircle2 className="w-3 h-3" />
+                  Done
+                </button>
               )}
               {node.manualStatus === 'DONE' && (
                 <button
@@ -406,7 +374,7 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
                     e.stopPropagation();
                     updateNode({ manualStatus: 'TODO' });
                   }}
-                  className="px-3 py-1 text-[10px] font-medium rounded border border-slate-200 text-slate-500 hover:bg-slate-100 transition-colors flex items-center gap-1"
+                  className="nodrag px-3 py-1 text-[10px] font-medium rounded border border-slate-200 text-slate-500 hover:bg-slate-100 transition-colors flex items-center gap-1"
                 >
                   <Clock className="w-3 h-3" />
                   Reopen
@@ -419,7 +387,7 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
                   e.stopPropagation();
                   setCreateRequestOpen(true);
                 }}
-                className="px-2 py-1 text-[10px] font-medium rounded border border-slate-200 text-slate-500 hover:bg-slate-100 transition-colors flex items-center gap-1"
+                className="nodrag px-2 py-1 text-[10px] font-medium rounded border border-slate-200 text-slate-500 hover:bg-slate-100 transition-colors flex items-center gap-1"
               >
                 <MessageSquarePlus className="w-3 h-3" />
                 Request
@@ -429,7 +397,7 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
               <button
                 onClick={(e) => { e.stopPropagation(); analyzeBlock(); }}
                 disabled={isAnalyzing}
-                className="px-2 py-1 text-[10px] font-medium rounded border border-purple-200 text-purple-600 hover:bg-purple-50 transition-colors flex items-center gap-1 disabled:opacity-50"
+                className="nodrag px-2 py-1 text-[10px] font-medium rounded border border-purple-200 text-purple-600 hover:bg-purple-50 transition-colors flex items-center gap-1 disabled:opacity-50"
               >
                 {isAnalyzing ? (
                   <Loader2 className="w-3 h-3 animate-spin" />
@@ -518,6 +486,18 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
           "!w-2 !h-4 !rounded-sm !bg-slate-300 hover:!bg-primary transition-colors border-none",
           isBlocked && "!bg-red-300"
         )}
+      />
+
+      <CreateRequestDialog
+        projectId={projectId}
+        linkedNodeId={node.id}
+        open={createRequestOpen}
+        onOpenChange={setCreateRequestOpen}
+        onSuccess={() => {
+          setCreateRequestOpen(false);
+          // Optional: trigger refetch if needed, but requests are separate API from nodes
+          onDataChange();
+        }}
       />
     </div>
   );

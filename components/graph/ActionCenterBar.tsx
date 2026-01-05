@@ -25,24 +25,47 @@ interface ActionCategory {
 export function ActionCenterBar({ nodes, edges, userId, onNodeClick }: ActionCenterBarProps) {
     const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
 
+    const isOwner = (node: NodeDTO) => {
+        return node.ownerId === userId || node.owners?.some((o: any) => o.id === userId);
+    };
+
     // Actionable: Nodes ready to proceed (TODO/DOING & !BLOCKED & !WAITING)
     const actionable = useMemo(() => {
         return nodes.filter(n =>
+            isOwner(n) &&
             (n.manualStatus === "TODO" || n.manualStatus === "DOING") &&
             n.computedStatus !== "BLOCKED" &&
             n.computedStatus !== "WAITING"
         );
-    }, [nodes]);
+    }, [nodes, userId]);
 
-    // Waiting: Nodes in WAITING state
+    // Waiting: Nodes I own that are in WAITING or BLOCKED state
     const waiting = useMemo(() => {
-        return nodes.filter(n => n.computedStatus === "WAITING");
-    }, [nodes]);
+        return nodes.filter(n =>
+            isOwner(n) &&
+            (n.computedStatus === "WAITING" || n.computedStatus === "BLOCKED")
+        );
+    }, [nodes, userId]);
 
-    // Blocking: Nodes blocking downstream nodes
+    // Blocking: Nodes I own that are blocking downstream nodes owned by OTHERS
     const blocking = useMemo(() => {
-        return nodes.filter(n => (n.blocksCount || 0) > 0);
-    }, [nodes]);
+        return nodes.filter(myNode => {
+            if (!isOwner(myNode) || myNode.manualStatus === "DONE") return false;
+
+            // Find if any node depending on this one is owned by someone else
+            const hasDependentOther = edges.some(edge => {
+                if (edge.toNodeId !== myNode.id || edge.relation !== "DEPENDS_ON") return false;
+                const blockedNode = nodes.find(n => n.id === edge.fromNodeId);
+                // Only count if blocking SOMEONE ELSE (not myself) and they actually have an owner
+                const isBlockedNodeOwnedByMe = blockedNode && isOwner(blockedNode);
+                const hasOwner = blockedNode && (blockedNode.ownerId || (blockedNode.owners && blockedNode.owners.length > 0));
+
+                return blockedNode && !isBlockedNodeOwnedByMe && hasOwner;
+            });
+
+            return hasDependentOther;
+        });
+    }, [nodes, edges, userId]);
 
     const categories: ActionCategory[] = [
         {
@@ -139,7 +162,19 @@ export function ActionCenterBar({ nodes, edges, userId, onNodeClick }: ActionCen
                                         className="flex items-center justify-between px-3 py-2 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-b-0 transition-colors"
                                     >
                                         <div className="flex items-center gap-2 flex-1 min-w-0">
-                                            <span className="font-medium text-sm text-slate-800 truncate">{item.title}</span>
+                                            <div className="flex flex-col min-w-0">
+                                                <span className="font-medium text-sm text-slate-800 truncate">{item.title}</span>
+                                                {item.waitingReason && (
+                                                    <span className="text-[10px] text-muted-foreground truncate">
+                                                        {item.waitingReason}
+                                                    </span>
+                                                )}
+                                                {expandedCategory === "blocking" && (item.blocksCount || 0) > 0 && (
+                                                    <span className="text-[10px] text-red-500 font-medium whitespace-nowrap">
+                                                        Blocks {item.blocksCount} item{item.blocksCount !== 1 ? 's' : ''}
+                                                    </span>
+                                                )}
+                                            </div>
                                             {/* OWNER/TEAM Badges */}
                                             {isOwner && (
                                                 <span className="text-[9px] bg-blue-600 text-white px-1.5 py-0.5 rounded font-bold uppercase flex-shrink-0">
@@ -152,7 +187,10 @@ export function ActionCenterBar({ nodes, edges, userId, onNodeClick }: ActionCen
                                                 </span>
                                             ))}
                                         </div>
-                                        <Badge variant="outline" className="text-[9px] uppercase ml-2 flex-shrink-0">
+                                        <Badge
+                                            variant={item.computedStatus === "BLOCKED" ? "destructive" : "outline"}
+                                            className="text-[9px] uppercase ml-2 flex-shrink-0"
+                                        >
                                             {item.computedStatus}
                                         </Badge>
                                     </div>

@@ -29,6 +29,7 @@ model User {
   orgInboxStates     OrgInboxState[]
   sentInvites        ProjectInvite[] @relation("InvitedBy")
   receivedInvites    ProjectInvite[] @relation("TargetUser")
+  notifications      Notification[]
 
   @@map("users")
 }
@@ -100,6 +101,7 @@ model Organization {
   folders      Folder[]
   inboxStates  OrgInboxState[]
   invites      ProjectInvite[]
+  notifications Notification[]
 
   @@index([ownerId])
   @@map("organizations")
@@ -438,6 +440,44 @@ enum RequestStatus {
   RESPONDED
   APPROVED
   CLOSED
+}
+
+model Notification {
+  id           String           @id @default(cuid())
+  userId       String?          // Null if targeted at a team
+  orgId        String
+  type         NotificationType
+  targetType   NotificationTargetType @default(USER)
+  targetTeamId String?          // ID of the team if targetType is TEAM
+  title        String
+  message      String?
+  entityId     String?          // ID of the related object (Node, Project, etc.)
+  isRead       Boolean          @default(false)
+  dedupeKey    String?          @unique
+  createdAt    DateTime         @default(now())
+  
+  user         User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@index([orgId])
+  @@index([targetTeamId])
+  @@map("notifications")
+}
+
+enum NotificationType {
+  NODE_UNBLOCKED
+  NODE_ASSIGNED
+  NODE_UPDATED
+  PROJECT_ASSIGNED
+  TEAM_ASSIGNED
+  MENTION
+  SYSTEM
+}
+
+enum NotificationTargetType {
+  USER
+  TEAM
 }
 
 model Folder {

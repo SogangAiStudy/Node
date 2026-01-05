@@ -30,6 +30,7 @@ import { toast } from "sonner";
 import { CreateRequestDialog } from "./CreateRequestDialog";
 import { MultiSelectSearch, SelectItem } from "@/components/ui/multi-select-search";
 import { cn } from "@/lib/utils";
+import { useUpdateNode } from "@/hooks/use-node-mutations";
 
 interface NodeDetailSheetProps {
     node: NodeDTO | null;
@@ -54,7 +55,7 @@ export function NodeDetailSheet({
     const [isSaving, setIsSaving] = useState(false);
     const [requestDialogOpen, setRequestDialogOpen] = useState(false);
     const [members, setMembers] = useState<SelectItem[]>([]);
-    const [optimisticStatus, setOptimisticStatus] = useState<ManualStatus | null>(null);
+    const updateNodeMutation = useUpdateNode();
 
     // Sync local state when node changes
     useEffect(() => {
@@ -83,29 +84,14 @@ export function NodeDetailSheet({
         }
     }, [open, projectId]);
 
-    // Reset optimistic status when node changes
-    useEffect(() => {
-        setOptimisticStatus(null);
-    }, [node]);
-
     if (!node) return null;
 
     const updateNode = async (updates: Partial<NodeDTO> & { ownerIds?: string[] }) => {
-        setIsSaving(true);
-        try {
-            const res = await fetch(`/api/nodes/${node.id}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(updates),
-            });
-            if (!res.ok) throw new Error("Failed to update node");
-            onDataChange();
-            // toast.success("Updated");
-        } catch (error) {
-            toast.error("Failed to update node");
-        } finally {
-            setIsSaving(false);
-        }
+        updateNodeMutation.mutate({
+            nodeId: node.id,
+            projectId,
+            updates
+        });
     };
 
     const handleSaveDetails = async () => {
@@ -113,20 +99,11 @@ export function NodeDetailSheet({
         setIsEditing(false);
     };
 
-    const currentStatus = optimisticStatus || node.manualStatus;
+    const currentStatus = node.manualStatus;
 
     const handleStatusChange = async (newStatus: ManualStatus) => {
         if (newStatus === currentStatus) return;
-
-        // Optimistic update
-        setOptimisticStatus(newStatus);
-
-        try {
-            await updateNode({ manualStatus: newStatus });
-        } catch (error) {
-            // Revert on error
-            setOptimisticStatus(null);
-        }
+        updateNode({ manualStatus: newStatus });
     };
 
     const getInitials = (name: string) => {

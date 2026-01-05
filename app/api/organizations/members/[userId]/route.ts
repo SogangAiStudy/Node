@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth, isOrgAdmin } from "@/lib/utils/auth";
+import { assignToDefaultTeam } from "@/lib/utils/teams";
+import { createNotification } from "@/lib/utils/notifications";
 import { z } from "zod";
 
 const UpdateMemberSchema = z.object({
@@ -108,6 +110,21 @@ export async function PATCH(
                             role: "MEMBER", // Default to regular member for now
                         })),
                     });
+
+                    // Trigger TEAM_ASSIGNED notifications for new teams
+                    const existingTeamIds = targetOrgMember ? [] : []; // Placeholder if we wanted to compare
+                    // But we just deleted all, so let's notify for all new ones
+                    for (const teamId of teamIds) {
+                        const team = await tx.team.findUnique({ where: { id: teamId }, select: { name: true } });
+                        await createNotification({
+                            userId: targetUserId,
+                            orgId,
+                            type: "TEAM_ASSIGNED",
+                            title: "Added to Team",
+                            message: `You have been added to the team "${team?.name || "Unknown"}".`,
+                            dedupeKey: `TEAM_JOIN:${teamId}:${targetUserId}`,
+                        });
+                    }
                 } else if (!finalStatus && targetOrgMember.status === "ACTIVE") {
                     // If all teams removed and no status provided, maybe set back to PENDING?
                     // Let's stick to the manual logic: status tracker whether user has been assigned to any team
@@ -125,6 +142,25 @@ export async function PATCH(
                 }
             }
         });
+
+        // If status was changed to ACTIVE, ensure they are in the default team
+        if (finalStatus === "ACTIVE") {
+            await assignToDefaultTeam(orgId, targetUserId);
+
+            // Notify user of approval
+            try {
+                const org = await prisma.organization.findUnique({ where: { id: orgId }, select: { name: true } });
+                await createNotification({
+                    userId: targetUserId,
+                    orgId,
+                    type: "SYSTEM",
+                    title: "Access Approved",
+                    message: `You have been approved to join ${org?.name || "the organization"}.`,
+                });
+            } catch (err) {
+                console.error("Failed to notify user of approval:", err);
+            }
+        }
 
         return NextResponse.json({ message: "Member updated successfully" });
     } catch (error) {
