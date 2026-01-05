@@ -13,12 +13,13 @@ import {
 import { toast } from "sonner";
 import { Loader2, ArrowRight, ArrowDown, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { calculateGridLayout, LayoutNode, LayoutEdge } from "@/lib/utils/graph-layout-utils";
 import dagre from "dagre";
 
 interface OrganizeDialogProps {
     projectId: string;
-    nodes: Array<{ id: string; title: string }>;
-    edges: Array<{ id: string; source: string; target: string }>;
+    nodes: Array<LayoutNode>;
+    edges: Array<LayoutEdge>;
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onApply: (positions: Array<{ nodeId: string; x: number; y: number }>) => void;
@@ -27,7 +28,7 @@ interface OrganizeDialogProps {
 const nodeWidth = 240;
 const nodeHeight = 120;
 
-type LayoutDirection = "LR" | "TB";
+type LayoutDirection = "LR" | "TB" | "GRID";
 
 export function OrganizeDialog({
     projectId,
@@ -38,9 +39,13 @@ export function OrganizeDialog({
     onApply,
 }: OrganizeDialogProps) {
     const [isApplying, setIsApplying] = useState(false);
-    const [selectedDirection, setSelectedDirection] = useState<LayoutDirection>("LR");
+    const [selectedDirection, setSelectedDirection] = useState<LayoutDirection>("GRID");
 
     const calculateLayout = (direction: LayoutDirection) => {
+        if (direction === "GRID") {
+            return calculateGridLayout(nodes, edges);
+        }
+
         const dagreGraph = new dagre.graphlib.Graph();
         dagreGraph.setDefaultEdgeLabel(() => ({}));
 
@@ -126,15 +131,44 @@ export function OrganizeDialog({
                         Organize Graph
                     </DialogTitle>
                     <DialogDescription>
-                        Automatically arrange {nodes.length} nodes to minimize edge crossings.
+                        Automatically arrange {nodes.length} nodes for maximum clarity.
                     </DialogDescription>
                 </DialogHeader>
 
                 <div className="py-6">
                     <div className="text-sm font-medium text-slate-700 mb-3">
-                        Choose Layout Direction
+                        Choose Layout Strategy
                     </div>
                     <div className="grid grid-cols-2 gap-3">
+                        {/* Grid Layout (Mixed) */}
+                        <button
+                            onClick={() => setSelectedDirection("GRID")}
+                            className={cn(
+                                "p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 col-span-2",
+                                selectedDirection === "GRID"
+                                    ? "border-blue-500 bg-blue-50 ring-2 ring-blue-200"
+                                    : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                            )}
+                        >
+                            <div className="flex flex-col gap-1.5 items-center text-slate-500">
+                                <div className="flex gap-1.5">
+                                    <div className="w-3 h-3 rounded bg-slate-400" />
+                                    <div className="w-3 h-3 rounded bg-slate-400" />
+                                    <div className="w-3 h-3 rounded bg-slate-400" />
+                                </div>
+                                <div className="flex gap-1.5">
+                                    <div className="w-3 h-3 rounded bg-slate-300" />
+                                    <div className="w-3 h-3 rounded bg-slate-300" />
+                                </div>
+                            </div>
+                            <span className={cn(
+                                "text-sm font-medium",
+                                selectedDirection === "GRID" ? "text-blue-700" : "text-slate-600"
+                            )}>
+                                Mixed (Grid)
+                            </span>
+                        </button>
+
                         {/* Horizontal Layout */}
                         <button
                             onClick={() => setSelectedDirection("LR")}
@@ -146,8 +180,6 @@ export function OrganizeDialog({
                             )}
                         >
                             <div className="flex items-center gap-1 text-slate-500">
-                                <div className="w-4 h-4 rounded bg-slate-300" />
-                                <ArrowRight className="w-4 h-4" />
                                 <div className="w-4 h-4 rounded bg-slate-300" />
                                 <ArrowRight className="w-4 h-4" />
                                 <div className="w-4 h-4 rounded bg-slate-300" />
@@ -174,8 +206,6 @@ export function OrganizeDialog({
                                 <div className="w-4 h-4 rounded bg-slate-300" />
                                 <ArrowDown className="w-4 h-4" />
                                 <div className="w-4 h-4 rounded bg-slate-300" />
-                                <ArrowDown className="w-4 h-4" />
-                                <div className="w-4 h-4 rounded bg-slate-300" />
                             </div>
                             <span className={cn(
                                 "text-sm font-medium",
@@ -187,10 +217,9 @@ export function OrganizeDialog({
                     </div>
 
                     <p className="text-xs text-muted-foreground mt-4 text-center">
-                        {selectedDirection === "LR"
-                            ? "Nodes flow from left to right based on dependencies"
-                            : "Nodes flow from top to bottom based on dependencies"
-                        }
+                        {selectedDirection === "GRID" && "Topological grid (5 columns). Best for most projects."}
+                        {selectedDirection === "LR" && "Strict left-to-right dependency flow."}
+                        {selectedDirection === "TB" && "Strict top-to-bottom dependency flow."}
                     </p>
                 </div>
 

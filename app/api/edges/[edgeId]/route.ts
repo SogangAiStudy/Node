@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/utils/auth";
-import { requireProjectView } from "@/lib/utils/permissions";
+import { requireProjectView, requireProjectEdit } from "@/lib/utils/permissions";
 import { createActivityLog } from "@/lib/utils/activity-log";
 import { z } from "zod";
 import { EdgeRelation } from "@/types";
@@ -32,7 +32,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Edge not found" }, { status: 404 });
     }
 
-    await requireProjectView(existingEdge.projectId, user.id);
+    await requireProjectEdit(existingEdge.projectId, user.id);
 
     // Delete edge
     await prisma.edge.delete({
@@ -92,7 +92,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Edge not found" }, { status: 404 });
     }
 
-    await requireProjectView(existingEdge.projectId, user.id);
+    await requireProjectEdit(existingEdge.projectId, user.id);
 
     const body = await request.json();
     const validated = UpdateEdgeSchema.parse(body);

@@ -80,285 +80,111 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    // AUTO-PROVISIONING: If user has no workspaces, create a personal one (Notion style)
+    // AUTO-PROVISIONING: If user has no workspaces, join the "👋 Getting Started" workspace
     if (orgMemberships.length === 0) {
-      console.log(`[DEBUG] No workspaces found for ${user.email}. Creating personal workspace...`);
+      console.log(`[DEBUG] No workspaces found for ${user.email}. Attaching to "Getting Started" onboarding workspace...`);
 
-      let dbUser = await prisma.user.findUnique({
-        where: { id: user.id },
-      });
+      const validUserId = user.id;
+      const demoOrgId = "demo-org-id";
 
-      if (!dbUser) {
-        console.log(`[DEBUG] User ${user.email} not found by ID: ${user.id}. Checking by email...`);
-        const existingByEmail = await prisma.user.findUnique({
-          where: { email: user.email! },
+      try {
+        await prisma.$transaction(async (tx: any) => {
+          // 1. Join the "Getting Started" Organization
+          await tx.orgMember.upsert({
+            where: {
+              orgId_userId: {
+                orgId: demoOrgId,
+                userId: validUserId,
+              },
+            },
+            update: { status: "ACTIVE" },
+            create: {
+              orgId: demoOrgId,
+              userId: validUserId,
+              role: "MEMBER",
+              status: "ACTIVE",
+            },
+          });
+
+          // 2. Create Inbox State
+          await tx.orgInboxState.upsert({
+            where: {
+              orgId_userId: {
+                orgId: demoOrgId,
+                userId: validUserId,
+              },
+            },
+            update: {},
+            create: {
+              orgId: demoOrgId,
+              userId: validUserId,
+            },
+          });
+
+          // 3. Join Frontend Team (Frontend Studio)
+          await tx.teamMember.upsert({
+            where: {
+              orgId_teamId_userId: {
+                orgId: demoOrgId,
+                teamId: "team-frontend",
+                userId: validUserId,
+              },
+            },
+            update: { role: "MEMBER" },
+            create: {
+              orgId: demoOrgId,
+              teamId: "team-frontend",
+              userId: validUserId,
+              role: "MEMBER",
+            },
+          });
+
+          // 4. Join the Onboarding Project
+          await tx.projectMember.upsert({
+            where: {
+              projectId_userId: {
+                projectId: "onboarding-project-id",
+                userId: validUserId,
+              },
+            },
+            update: { role: "PROJECT_ADMIN" },
+            create: {
+              orgId: demoOrgId,
+              projectId: "onboarding-project-id",
+              userId: validUserId,
+              role: "PROJECT_ADMIN",
+            },
+          });
+
+          // 5. Assign to QA Node (node-7-qa)
+          await tx.nodeOwner.upsert({
+            where: {
+              nodeId_userId: {
+                nodeId: "node-7-qa",
+                userId: validUserId,
+              },
+            },
+            update: {},
+            create: {
+              nodeId: "node-7-qa",
+              userId: validUserId,
+            },
+          });
         });
 
-        if (existingByEmail) {
-          const oldId = existingByEmail.id;
-          const newId = user.id;
-          console.log(`[DEBUG] Found user by email with different ID: ${oldId}. Re-syncing ID to ${newId}...`);
-
-          try {
-            // STRATEGY: Create New -> Move Relations -> Delete Old
-            // We cannot update ID directly due to FK constraints on many tables.
-            // 1. Rename old user's email to free it up
-            const tempEmail = `temp-${oldId}-${Date.now()}@migration.local`;
-            await prisma.user.update({
-              where: { id: oldId },
-              data: { email: tempEmail },
-            });
-
-            // 2. Create the new user with the correct ID and Email
-            dbUser = await prisma.user.create({
-              data: {
-                id: newId,
-                email: user.email!,
-                name: user.name || existingByEmail.name,
-                image: user.image || existingByEmail.image,
-              },
-            });
-
-            // 3. Move all related records to the new ID
-            // Org Ownership
-            await prisma.organization.updateMany({
-              where: { ownerId: oldId },
-              data: { ownerId: newId },
-            });
-
-            // Org Memberships
-            await prisma.orgMember.updateMany({
-              where: { userId: oldId },
-              data: { userId: newId },
-            });
-
-            // Team Memberships
-            await prisma.teamMember.updateMany({
-              where: { userId: oldId },
-              data: { userId: newId },
-            });
-
-            // Project Ownership
-            await prisma.project.updateMany({
-              where: { ownerId: oldId },
-              data: { ownerId: newId },
-            });
-
-            // Project Memberships
-            await prisma.projectMember.updateMany({
-              where: { userId: oldId },
-              data: { userId: newId },
-            });
-
-            // Project Invites (Invited By & Target)
-            await prisma.projectInvite.updateMany({
-              where: { invitedByUserId: oldId },
-              data: { invitedByUserId: newId },
-            });
-            await prisma.projectInvite.updateMany({
-              where: { targetUserId: oldId },
-              data: { targetUserId: newId },
-            });
-
-            // Node Ownership & Requests
-            await prisma.node.updateMany({
-              where: { ownerId: oldId },
-              data: { ownerId: newId },
-            });
-
-            await prisma.nodeOwner.updateMany({
-              where: { userId: oldId },
-              data: { userId: newId },
-            });
-
-            await prisma.request.updateMany({
-              where: { fromUserId: oldId },
-              data: { fromUserId: newId },
-            });
-            await prisma.request.updateMany({
-              where: { toUserId: oldId },
-              data: { toUserId: newId },
-            });
-            await prisma.request.updateMany({
-              where: { approvedById: oldId },
-              data: { approvedById: newId },
-            });
-
-            // Logs & Inbox
-            await prisma.activityLog.updateMany({
-              where: { userId: oldId },
-              data: { userId: newId },
-            });
-
-            await prisma.orgInboxState.updateMany({
-              where: { userId: oldId },
-              data: { userId: newId },
-            });
-
-            console.log(`[DEBUG] Migrated all data from ${oldId} to ${newId}`);
-
-            // 4. Delete the old user
-            await prisma.user.delete({
-              where: { id: oldId },
-            });
-
-            console.log(`[DEBUG] Sync complete. Old user ${oldId} deleted.`);
-
-            // CRITICAL: Re-check memberships after sync
-            const syncedMemberships = await prisma.orgMember.findMany({
-              where: {
-                userId: newId,
-                status: { in: ["ACTIVE", "PENDING_TEAM_ASSIGNMENT"] },
-              },
-              include: {
-                organization: {
-                  select: { id: true, name: true },
-                },
-              },
-            });
-
-            if (syncedMemberships.length > 0) {
-              const workspaces = await Promise.all(
-                syncedMemberships.map(async (m) => {
-                  const hasUnread = await checkHasUnreadInbox(m.orgId, newId);
-                  return {
-                    orgId: m.orgId,
-                    name: m.organization.name,
-                    status: m.status,
-                    hasUnreadInbox: hasUnread,
-                  };
-                })
-              );
-              return NextResponse.json(workspaces);
-            }
-
-          } catch (syncError) {
-            console.error("[DEBUG] Failed to re-sync user ID, using existing record as fallback:", syncError);
-            // Fallback: use the existing user (old ID)
-            dbUser = existingByEmail;
-
-            // Revert email change if needed (best effort)
-            try {
-              // If we created the new user but failed later, effectively we have a partial state?
-              // This is risky without a transaction. 
-              // However, since we returned dbUser = existingByEmail, we should try to restore email if possible or just proceed.
-              // If we changed the email to temp, subsequent logins will fail lookup by email.
-              // Critical: We must revert the email change if we didn't delete the user.
-              await prisma.user.update({
-                where: { id: oldId },
-                data: { email: user.email! }
-              }).catch(() => { });
-            } catch (e) { }
-          }
-        } else {
-          console.log(`[DEBUG] User ${user.email} not found. Attempting to create...`);
-          try {
-            dbUser = await prisma.user.create({
-              data: {
-                id: user.id,
-                name: user.name || null,
-                email: user.email!,
-                image: user.image || null,
-              },
-            });
-          } catch (createError) {
-            console.error("[DEBUG] Failed to auto-create user:", createError);
-            return NextResponse.json(
-              { error: "User not found and could not be created." },
-              { status: 500 }
-            );
-          }
-        }
+        // Re-fetch memberships
+        orgMemberships = await prisma.orgMember.findMany({
+          where: { userId: user.id },
+          include: {
+            organization: {
+              select: { id: true, name: true },
+            },
+          },
+        });
+      } catch (err) {
+        console.error("Failed to auto-join onboarding workspace:", err);
+        // Fallback or error
       }
-
-      // Ensure we have a valid dbUser before proceeding
-      const validUserId = dbUser?.id || user.id;
-
-      const personalOrg = await prisma.$transaction(async (tx: any) => {
-        // 1. Create the Personal Workspace (Organization) with invite code
-        const org = await tx.organization.create({
-          data: {
-            name: `${user.name || "Personal"}'s Space`,
-            ownerId: validUserId, // Use the VALID database ID
-            inviteCode: crypto.randomUUID(),
-          },
-        });
-
-        // 2. Create the Admin Membership
-        await tx.orgMember.create({
-          data: {
-            orgId: org.id,
-            userId: validUserId,
-            role: "ADMIN",
-            status: "ACTIVE",
-          },
-        });
-
-        // 3. Create a Default 'Personal' Team
-        const team = await tx.team.create({
-          data: {
-            orgId: org.id,
-            name: "Personal",
-            description: "Your private space",
-          },
-        });
-
-        // 4. Join the team
-        await tx.teamMember.create({
-          data: {
-            orgId: org.id,
-            teamId: team.id,
-            userId: user.id,
-            role: "LEAD",
-          },
-        });
-
-        // 5. Create a 'Getting Started' Project
-        const project = await tx.project.create({
-          data: {
-            orgId: org.id,
-            ownerId: user.id,
-            name: "👋 Getting Started",
-            description: "A quick guide to using Node",
-            primaryTeamId: team.id,
-          },
-        });
-
-        // 6. Link project to team
-        await tx.projectTeam.create({
-          data: {
-            orgId: org.id,
-            projectId: project.id,
-            teamId: team.id,
-            role: "PROJECT_ADMIN",
-          },
-        });
-
-        // 7. Add dummy content
-        await tx.node.create({
-          data: {
-            orgId: org.id,
-            projectId: project.id,
-            title: "Explore Graph View",
-            description: "Welcome to your new workspace! Click on the 'Graph' tab to see your project structure.",
-            type: "TASK",
-            manualStatus: "TODO",
-            teamId: team.id,
-          },
-        });
-
-        return org;
-      });
-
-      // Re-fetch memberships to include the new one
-      orgMemberships = await prisma.orgMember.findMany({
-        where: { userId: user.id },
-        include: {
-          organization: {
-            select: { id: true, name: true },
-          },
-        },
-      });
     }
 
     console.log(`[DEBUG] GET /api/workspaces - Found ${orgMemberships.length} memberships`);

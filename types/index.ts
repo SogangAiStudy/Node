@@ -123,6 +123,7 @@ export interface NodeDTO {
   waitingReason?: string; // Reason for WAITING/BLOCKED status
   priority: number;
   dueAt: string | null;
+  phase: string | null;
   createdAt: string;
   updatedAt: string;
 

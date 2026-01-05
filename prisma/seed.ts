@@ -14,310 +14,304 @@ async function main() {
   const dbHost = dbUrl.split("@")[1]?.split("/")[0] || "unknown";
 
   console.log("-----------------------------------------");
-  console.log(`Starting seed against: ${dbHost}`);
-  if (dbHost.includes("supabase") || dbHost.includes("pooler")) {
-    console.log("⚠️ WARNING: Running seed against REMOTE database!");
-  }
+  console.log(`Starting onboarding seed against: ${dbHost}`);
   console.log("-----------------------------------------");
 
-  // 1. Create test users
-  const user1 = await prisma.user.upsert({
-    where: { email: "alice@example.com" },
+  // 1. Create/Find AI bot or system user
+  const systemUser = await prisma.user.upsert({
+    where: { email: "assistant@node.ai" },
     update: {},
     create: {
-      email: "alice@example.com",
-      name: "Alice Johnson",
+      email: "assistant@node.ai",
+      name: "Node AI Assistant",
     },
   });
 
-  const user2 = await prisma.user.upsert({
-    where: { email: "bob@example.com" },
-    update: {},
-    create: {
-      email: "bob@example.com",
-      name: "Bob Smith",
-    },
-  });
+  // 1.1 Create Fake Users
+  const fakeUsersData = [
+    { email: "alice@node.ai", name: "Alice (Designer)" },
+    { email: "bob@node.ai", name: "Bob (Backend)" },
+    { email: "charlie@node.ai", name: "Charlie (Frontend)" },
+    { email: "dana@node.ai", name: "Dana (Marketing)" },
+  ];
 
-  const user3 = await prisma.user.upsert({
-    where: { email: "charlie@example.com" },
-    update: {},
-    create: {
-      email: "charlie@example.com",
-      name: "Charlie Brown",
-    },
-  });
+  const fakeUsers: Record<string, any> = {};
+  for (const u of fakeUsersData) {
+    fakeUsers[u.email] = await prisma.user.upsert({
+      where: { email: u.email },
+      update: { name: u.name },
+      create: { email: u.email, name: u.name },
+    });
+  }
 
-  console.log("Created users:", { user1, user2, user3 });
-
-  // 2. Create an organization
+  // 2. Create the "Getting Started" Organization
   const org = await prisma.organization.upsert({
-    where: { id: "demo-org-id" }, // Using a fixed ID for seed stability
+    where: { id: "demo-org-id" },
     update: {
-      name: "Demo Organization",
+      name: "👋 Getting Started",
+      inviteCode: "GETTING_STARTED",
     },
     create: {
       id: "demo-org-id",
-      name: "Demo Organization",
-      ownerId: user1.id,
-      members: {
-        create: [
-          { userId: user1.id, role: "ADMIN", status: "ACTIVE" },
-          { userId: user2.id, role: "MEMBER", status: "ACTIVE" },
-          { userId: user3.id, role: "MEMBER", status: "ACTIVE" },
-        ]
-      }
+      name: "👋 Getting Started",
+      ownerId: systemUser.id,
+      inviteCode: "GETTING_STARTED",
     },
   });
 
-  console.log("Using organization:", org.name);
+  // 2.1 Add Fake Users to Org
+  for (const email of Object.keys(fakeUsers)) {
+    await prisma.orgMember.upsert({
+      where: {
+        orgId_userId: {
+          orgId: org.id,
+          userId: fakeUsers[email].id,
+        },
+      },
+      update: { role: "MEMBER", status: "ACTIVE" },
+      create: {
+        orgId: org.id,
+        userId: fakeUsers[email].id,
+        role: "MEMBER",
+        status: "ACTIVE",
+      },
+    });
 
-  // 3. Create a project
+    // Also create inbox state for them
+    await prisma.orgInboxState.upsert({
+      where: {
+        orgId_userId: {
+          orgId: org.id,
+          userId: fakeUsers[email].id,
+        },
+      },
+      update: {},
+      create: {
+        orgId: org.id,
+        userId: fakeUsers[email].id,
+      },
+    });
+  }
+
+  console.log("Created Organization and Mock Members");
+
+  // 3. Create Teams
+  const teamsData = [
+    { id: "team-design", name: "🎨 Product Design", description: "UI/UX and Brand Design", members: ["alice@node.ai"] },
+    { id: "team-backend", name: "⚙️ Backend Engine", description: "API, Database, and Infrastructure", members: ["bob@node.ai"] },
+    { id: "team-frontend", name: "💻 Frontend Studio", description: "Web and Mobile App Development", members: ["charlie@node.ai"] },
+    { id: "team-marketing", name: "🚀 Growth Marketing", description: "User acquisition and Retention", members: ["dana@node.ai"] },
+  ];
+
+  for (const t of teamsData) {
+    const team = await prisma.team.upsert({
+      where: { id: t.id },
+      update: { name: t.name, description: t.description },
+      create: {
+        id: t.id,
+        orgId: org.id,
+        name: t.name,
+        description: t.description,
+      },
+    });
+
+    // Add members to team
+    for (const email of t.members) {
+      await prisma.teamMember.upsert({
+        where: {
+          orgId_teamId_userId: {
+            orgId: org.id,
+            teamId: team.id,
+            userId: fakeUsers[email].id,
+          },
+        },
+        update: { role: "MEMBER" },
+        create: {
+          orgId: org.id,
+          teamId: team.id,
+          userId: fakeUsers[email].id,
+          role: "MEMBER",
+        },
+      });
+    }
+  }
+
+  // 4. Create "Project: New Feature Launch"
   const project = await prisma.project.upsert({
-    where: { id: "demo-project-id" },
-    update: {
-      name: "Product Launch Q1",
-    },
+    where: { id: "onboarding-project-id" },
+    update: { name: "🚀 New Feature Launch" },
     create: {
-      id: "demo-project-id",
-      name: "Product Launch Q1",
+      id: "onboarding-project-id",
+      name: "🚀 New Feature Launch",
       orgId: org.id,
-      ownerId: user1.id,
+      ownerId: systemUser.id,
+      description: "A comprehensive project showing how Node manages complex dependencies.",
     },
   });
 
-  console.log("Using project:", project.name);
+  console.log("Created Onboarding Project and Team Memberships");
 
-  // 3b. Create project members
-  await prisma.projectMember.deleteMany({ where: { projectId: project.id } }); // Clear existing
-
-  await prisma.projectMember.createMany({
-    data: [
-      { projectId: project.id, userId: user1.id, orgId: org.id },
-      { projectId: project.id, userId: user2.id, orgId: org.id },
-      { projectId: project.id, userId: user3.id, orgId: org.id },
-    ],
-    skipDuplicates: true,
-  });
-
-  // 4. Create nodes
-  const designMockups = await prisma.node.upsert({
-    where: { id: "node-design-mockups" },
-    update: { manualStatus: ManualStatus.DONE },
-    create: {
-      id: "node-design-mockups",
-      projectId: project.id,
-      orgId: org.id,
-      title: "Create Design Mockups",
-      description: "Design the UI/UX mockups for the new feature",
+  // 5. Create Nodes demonstrating a clear workflow
+  const nodes = [
+    {
+      id: "node-1-research",
+      title: "Market Research",
       type: NodeType.TASK,
-      manualStatus: ManualStatus.DONE,
-      ownerId: user2.id,
-      priority: 1,
+      status: ManualStatus.DONE,
+      teamId: "team-marketing",
+      ownerId: fakeUsers["dana@node.ai"].id,
+      participantIds: [fakeUsers["alice@node.ai"].id],
+      x: 1590, y: 150
     },
-  });
-
-  const buildUI = await prisma.node.upsert({
-    where: { id: "node-build-ui" },
-    update: { manualStatus: ManualStatus.DOING },
-    create: {
-      id: "node-build-ui",
-      projectId: project.id,
-      orgId: org.id,
-      title: "Build UI Components",
-      description: "Implement the UI based on approved mockups",
+    {
+      id: "node-2-specs",
+      title: "Product Specs",
       type: NodeType.TASK,
-      manualStatus: ManualStatus.DOING,
-      ownerId: user1.id,
-      priority: 1,
+      status: ManualStatus.DONE,
+      teamId: "team-design",
+      ownerId: fakeUsers["alice@node.ai"].id,
+      participantIds: [],
+      x: 360, y: 195
     },
-  });
-
-  const buildBackend = await prisma.node.upsert({
-    where: { id: "node-build-backend" },
-    update: {},
-    create: {
-      id: "node-build-backend",
-      projectId: project.id,
-      orgId: org.id,
-      title: "Build Backend API",
-      description: "Create REST API endpoints",
+    {
+      id: "node-3-ui",
+      title: "UI Design",
       type: NodeType.TASK,
-      manualStatus: ManualStatus.TODO,
-      ownerId: user1.id,
-      priority: 1,
+      status: ManualStatus.DOING,
+      teamId: "team-design",
+      ownerId: fakeUsers["alice@node.ai"].id,
+      participantIds: [],
+      x: 0, y: -120
     },
-  });
-
-  const testing = await prisma.node.upsert({
-    where: { id: "node-testing" },
-    update: {},
-    create: {
-      id: "node-testing",
-      projectId: project.id,
-      orgId: org.id,
-      title: "QA Testing",
-      description: "Test all features before launch",
+    {
+      id: "node-4-api",
+      title: "API Design",
       type: NodeType.TASK,
-      manualStatus: ManualStatus.TODO,
-      ownerId: user1.id,
-      priority: 2,
+      status: ManualStatus.DOING,
+      teamId: "team-backend",
+      ownerId: fakeUsers["bob@node.ai"].id,
+      participantIds: [],
+      x: -15, y: 375
     },
-  });
-
-  const marketingCopy = await prisma.node.upsert({
-    where: { id: "node-marketing-copy" },
-    update: {},
-    create: {
-      id: "node-marketing-copy",
-      projectId: project.id,
-      orgId: org.id,
-      title: "Write Marketing Copy",
-      description: "Prepare marketing materials",
+    {
+      id: "node-5-frontend",
+      title: "Frontend Dev",
       type: NodeType.TASK,
-      manualStatus: ManualStatus.TODO,
-      ownerId: user3.id,
-      priority: 2,
+      status: ManualStatus.TODO,
+      teamId: "team-frontend",
+      ownerId: fakeUsers["charlie@node.ai"].id,
+      participantIds: [],
+      x: 1275, y: -135
     },
-  });
-
-  const legalApproval = await prisma.node.upsert({
-    where: { id: "node-legal-approval" },
-    update: {},
-    create: {
-      id: "node-legal-approval",
-      projectId: project.id,
-      orgId: org.id,
-      title: "Legal Approval",
-      description: "Get legal sign-off on terms and conditions",
+    {
+      id: "node-6-backend",
+      title: "Backend Dev",
+      type: NodeType.TASK,
+      status: ManualStatus.TODO,
+      teamId: "team-backend",
+      ownerId: fakeUsers["bob@node.ai"].id,
+      participantIds: [],
+      x: 1275, y: 345
+    },
+    {
+      id: "node-7-qa",
+      title: "QA & Bug Fixes",
+      type: NodeType.TASK,
+      status: ManualStatus.TODO,
+      teamId: "team-frontend",
+      ownerId: fakeUsers["charlie@node.ai"].id,
+      participantIds: [fakeUsers["bob@node.ai"].id],
+      x: 690, y: 45
+    },
+    {
+      id: "node-8-launch-choice",
+      title: "Launch Go/No-Go?",
       type: NodeType.DECISION,
-      manualStatus: ManualStatus.TODO,
-      priority: 1,
+      status: ManualStatus.TODO,
+      teamId: "team-marketing",
+      ownerId: fakeUsers["dana@node.ai"].id,
+      participantIds: [fakeUsers["alice@node.ai"].id],
+      x: -15, y: 75
     },
-  });
+  ];
 
-  const launch = await prisma.node.upsert({
-    where: { id: "node-launch" },
-    update: { dueAt: new Date("2025-03-01") },
-    create: {
-      id: "node-launch",
-      projectId: project.id,
-      orgId: org.id,
-      title: "Product Launch",
-      description: "Go live with the new feature",
-      type: NodeType.TASK,
-      manualStatus: ManualStatus.TODO,
-      ownerId: user3.id,
-      priority: 1,
-      dueAt: new Date("2025-03-01"),
-    },
-  });
+  for (const n of nodes) {
+    const node = await prisma.node.upsert({
+      where: { id: n.id },
+      update: {
+        title: n.title,
+        manualStatus: n.status,
+        teamId: n.teamId,
+        ownerId: n.ownerId,
+        positionX: n.x,
+        positionY: n.y
+      },
+      create: {
+        id: n.id,
+        projectId: project.id,
+        orgId: org.id,
+        title: n.title,
+        type: n.type,
+        manualStatus: n.status,
+        teamId: n.teamId,
+        ownerId: n.ownerId,
+        positionX: n.x,
+        positionY: n.y
+      },
+    });
 
-  console.log("Created nodes");
+    // Set participants (owners in many-to-many table)
+    // Clear existing
+    await prisma.nodeOwner.deleteMany({ where: { nodeId: node.id } });
 
-  // 5. Create edges (dependencies)
-  // delete existing edges to avoid unique constraint violations
+    // Create new ones including the primary owner
+    const allOwners = Array.from(new Set([n.ownerId, ...n.participantIds]));
+    for (const oid of allOwners) {
+      await prisma.nodeOwner.create({
+        data: {
+          nodeId: node.id,
+          userId: oid,
+        },
+      });
+    }
+
+    // Set node teams
+    await prisma.nodeTeam.deleteMany({ where: { nodeId: node.id } });
+    if (n.teamId) {
+      await prisma.nodeTeam.create({
+        data: {
+          nodeId: node.id,
+          teamId: n.teamId,
+        },
+      });
+    }
+  }
+
+  // 6. Create Edges
   await prisma.edge.deleteMany({ where: { projectId: project.id } });
+  const edges = [
+    { from: "node-1-research", to: "node-2-specs", rel: EdgeRelation.DEPENDS_ON },
+    { from: "node-2-specs", to: "node-3-ui", rel: EdgeRelation.DEPENDS_ON },
+    { from: "node-2-specs", to: "node-4-api", rel: EdgeRelation.DEPENDS_ON },
+    { from: "node-3-ui", to: "node-5-frontend", rel: EdgeRelation.HANDOFF_TO },
+    { from: "node-4-api", to: "node-6-backend", rel: EdgeRelation.HANDOFF_TO },
+    { from: "node-5-frontend", to: "node-7-qa", rel: EdgeRelation.DEPENDS_ON },
+    { from: "node-6-backend", to: "node-7-qa", rel: EdgeRelation.DEPENDS_ON },
+    { from: "node-7-qa", to: "node-8-launch-choice", rel: EdgeRelation.APPROVAL_BY },
+  ];
 
   await prisma.edge.createMany({
-    data: [
-      {
-        projectId: project.id,
-        orgId: org.id,
-        fromNodeId: buildUI.id,
-        toNodeId: designMockups.id,
-        relation: EdgeRelation.DEPENDS_ON,
-      },
-      {
-        projectId: project.id,
-        orgId: org.id,
-        fromNodeId: testing.id,
-        toNodeId: buildUI.id,
-        relation: EdgeRelation.DEPENDS_ON,
-      },
-      {
-        projectId: project.id,
-        orgId: org.id,
-        fromNodeId: testing.id,
-        toNodeId: buildBackend.id,
-        relation: EdgeRelation.DEPENDS_ON,
-      },
-      {
-        projectId: project.id,
-        orgId: org.id,
-        fromNodeId: launch.id,
-        toNodeId: testing.id,
-        relation: EdgeRelation.DEPENDS_ON,
-      },
-      {
-        projectId: project.id,
-        orgId: org.id,
-        fromNodeId: launch.id,
-        toNodeId: marketingCopy.id,
-        relation: EdgeRelation.DEPENDS_ON,
-      },
-      {
-        projectId: project.id,
-        orgId: org.id,
-        fromNodeId: launch.id,
-        toNodeId: legalApproval.id,
-        relation: EdgeRelation.APPROVAL_BY,
-      },
-    ],
-  });
-
-  console.log("Created edges");
-
-  // 6. Create requests
-  await prisma.request.upsert({
-    where: { id: "req-legal-review" },
-    update: {},
-    create: {
-      id: "req-legal-review",
+    data: edges.map(e => ({
       projectId: project.id,
       orgId: org.id,
-      linkedNodeId: legalApproval.id,
-      question: "Can you review the terms and conditions for legal compliance?",
-      fromUserId: user1.id,
-      toTeam: "Legal",
-    },
+      fromNodeId: e.from,
+      toNodeId: e.to,
+      relation: e.rel
+    }))
   });
 
-  await prisma.request.upsert({
-    where: { id: "req-ui-color" },
-    update: {},
-    create: {
-      id: "req-ui-color",
-      projectId: project.id,
-      orgId: org.id,
-      linkedNodeId: buildUI.id,
-      question: "What color scheme should we use for the primary buttons?",
-      fromUserId: user1.id,
-      toUserId: user2.id,
-      status: "RESPONDED",
-      responseDraft: "Use #3B82F6 (blue-500) for primary buttons",
-    },
-  });
-
-  console.log("Created requests");
-
-  // 7. Create activity logs
-  await prisma.activityLog.createMany({
-    data: [
-      {
-        projectId: project.id,
-        orgId: org.id,
-        userId: user1.id,
-        action: "CREATE_PROJECT",
-        entityType: "PROJECT",
-        entityId: project.id,
-        details: { name: project.name },
-      },
-    ],
-  });
-
-  console.log("Created activity logs");
-  console.log("Seed completed successfully!");
+  console.log("Created Nodes, Edges and Assignments for Onboarding");
+  console.log("✅ Onboarding seed complete!");
 }
 
 main()

@@ -10,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Node, Edge } from "reactflow";
 import { cn } from "@/lib/utils";
 import { TeamDTO, NodeDTO } from "@/types";
 import {
@@ -46,8 +47,8 @@ interface ToolbarProps {
   searchQuery: string;
   onSearchChange: (query: string) => void;
   onDataChange: () => void;
-  nodes: NodeDTO[];
-  edges: Array<{ id: string; fromNodeId: string; toNodeId: string }>;
+  nodes: Node[];
+  edges: Edge[];
   onOrganizeApply: (positions: Array<{ nodeId: string; x: number; y: number }>) => void;
 }
 
@@ -247,8 +248,14 @@ export function Toolbar({
 
       <OrganizeDialog
         projectId={projectId}
-        nodes={nodes.map(n => ({ id: n.id, title: n.title }))}
-        edges={edges.map(e => ({ id: e.id, source: e.fromNodeId, target: e.toNodeId }))}
+        nodes={nodes.map(n => ({
+          id: n.id,
+          title: n.data.node.title,
+          phase: n.data.node.phase,
+          width: n.width || n.data.width,
+          height: n.height || n.data.height
+        }))}
+        edges={edges.map(e => ({ id: e.id, source: e.source, target: e.target }))}
         open={autoOrganizeOpen}
         onOpenChange={setAutoOrganizeOpen}
         onApply={onOrganizeApply}

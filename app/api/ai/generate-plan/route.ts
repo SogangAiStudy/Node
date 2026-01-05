@@ -64,16 +64,27 @@ export async function POST(req: NextRequest) {
         // Permission Check
         await requireProjectView(projectId, user.id);
 
-        // Pro Subscription Check
+        // Subscription & Limit Check
         const isPro = await isOrgPro(project.orgId);
-        if (!isPro) {
+
+        // Count generations in the last 24h for this user
+        const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const dailyUsageCount = await prisma.activityLog.count({
+            where: {
+                userId: user.id,
+                action: "GENERATE_PLAN",
+                createdAt: { gte: twentyFourHoursAgo },
+            },
+        });
+
+        if (!isPro && dailyUsageCount >= 99) {
             return NextResponse.json(
-                { error: "AI features require a Pro subscription" },
+                { error: "Free plan is limited to 99 AI generations per day. Upgrade to Pro for unlimited access." },
                 { status: 403 }
             );
         }
 
-        // Rate Limit Check
+        // Rate Limit Check (Short term bursts)
         if (!checkRateLimit(user.id)) {
             return NextResponse.json(
                 { error: "Rate limit exceeded. Please try again in a minute." },
@@ -98,9 +109,9 @@ export async function POST(req: NextRequest) {
         const systemPrompt = `You are a project planning assistant. Your task is to analyze user input and create a structured implementation plan as a series of connected nodes.
 
 INPUT TYPES:
-1. "keyword": Short words or ideas (e.g., "모바일 앱 출시", "웹사이트 리뉴얼")
+1. "keyword": Short words or ideas (e.g., "Mobile app launch", "Website renewal")
    - Generate a comprehensive step-by-step plan to achieve the goal
-   - Create logical phases (기획, 디자인, 개발, 테스트, 배포 등)
+   - Create logical phases (Planning, Design, Development, Testing, Deployment, etc.)
    
 2. "outline": Brief topic outlines or bullet points
    - Expand each point into actionable tasks
@@ -117,7 +128,7 @@ ${teamListStr}
 RESPONSE FORMAT (JSON):
 {
   "inputType": "keyword" | "outline" | "meeting_notes",
-  "summary": "Brief summary of the generated plan in Korean",
+  "summary": "Brief summary of the generated plan in English",
   "nodes": [
     {
       "tempId": "temp_1",
@@ -125,7 +136,7 @@ RESPONSE FORMAT (JSON):
       "description": "Brief description",
       "type": "TASK" | "DECISION" | "BLOCKER" | "INFOREQ",
       "suggestedTeamIds": ["team_id_1"],
-      "phase": "Optional phase name like '1단계: 기획'"
+      "phase": "Optional phase name like 'Phase 1: Planning'"
     }
   ],
   "edges": [
@@ -144,7 +155,7 @@ RULES:
 - Assign teams based on task type and team descriptions
 - If no suitable team, leave suggestedTeamIds empty
 - Create 5-15 nodes for keywords, follow content closely for meeting notes
-- Write all content in Korean`;
+- Write all content in English`;
 
         const userPrompt = feedback
             ? `Previous input: ${text}\n\nUser feedback for regeneration:\n${feedback}`
@@ -192,6 +203,19 @@ RULES:
                 summary: "Failed to parse response",
             };
         }
+
+        // Log the successful generation
+        await prisma.activityLog.create({
+            data: {
+                projectId,
+                orgId: project.orgId,
+                userId: user.id,
+                action: "GENERATE_PLAN",
+                entityType: "PROJECT",
+                entityId: projectId,
+                details: { inputType: result.inputType, nodeCount: result.nodes.length },
+            },
+        });
 
         return NextResponse.json(result);
     } catch (error) {

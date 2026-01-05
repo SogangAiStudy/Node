@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/utils/auth";
-import { requireProjectView } from "@/lib/utils/permissions";
+import { requireProjectView, requireProjectEdit } from "@/lib/utils/permissions";
 import { createActivityLog } from "@/lib/utils/activity-log";
 import { triggerNodeAssignmentNotifications } from "@/lib/utils/notifications";
 import { assertWithinNodeLimit } from "@/lib/subscription";
@@ -13,12 +13,13 @@ const CreateNodeSchema = z.object({
   description: z.string().optional().nullable(),
   type: z.nativeEnum(NodeType).default(NodeType.TASK),
   manualStatus: z.nativeEnum(ManualStatus).default(ManualStatus.TODO),
-  ownerId: z.string().optional(),
+  ownerId: z.string().optional().nullable(),
   ownerIds: z.array(z.string()).optional(),
-  team: z.string().optional(),
+  team: z.string().optional().nullable(),
   teamIds: z.array(z.string()).optional(),
   priority: z.number().int().min(1).max(5).default(3),
   dueAt: z.string().datetime().optional().nullable(),
+  phase: z.string().optional().nullable(),
 });
 
 // POST /api/projects/[projectId]/nodes - Create new node
@@ -30,7 +31,7 @@ export async function POST(
     const user = await requireAuth();
     const { projectId } = await params;
 
-    await requireProjectView(projectId, user.id);
+    await requireProjectEdit(projectId, user.id);
 
     const body = await request.json();
     const validated = CreateNodeSchema.parse(body);
@@ -90,6 +91,7 @@ export async function POST(
           teamId,
           priority: validated.priority,
           dueAt: validated.dueAt ? new Date(validated.dueAt) : null,
+          phase: validated.phase,
           positionX: initialX,
           positionY: initialY,
           nodeTeams: {
@@ -155,6 +157,7 @@ export async function POST(
         owners: node.nodeOwners.map((no: any) => ({ id: no.user.id, name: no.user.name })),
         priority: node.priority,
         dueAt: node.dueAt?.toISOString() || null,
+        phase: node.phase,
         createdAt: node.createdAt.toISOString(),
         updatedAt: node.updatedAt.toISOString(),
       },

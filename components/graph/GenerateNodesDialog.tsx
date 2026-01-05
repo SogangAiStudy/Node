@@ -234,6 +234,7 @@ export function GenerateNodesDialog({
                         type: node.type,
                         ownerIds: [],
                         teamIds: node.suggestedTeamIds,
+                        phase: node.phase,
                     }),
                 });
 
@@ -266,6 +267,40 @@ export function GenerateNodesDialog({
                         });
                     }
                 }
+            }
+
+            // AUTO-ORGANIZE: Apply Grid Layout automatically using shared utility
+            // Use setTimeout to ensure React has finished updating state
+            const layoutNodes = selectedNodes
+                .filter(node => tempIdToRealId.has(node.tempId))
+                .map(node => ({
+                    id: tempIdToRealId.get(node.tempId)!,
+                    title: node.title,
+                    phase: node.phase,
+                }));
+
+            const layoutEdges = plan.edges
+                .filter(e =>
+                    selectedTempIds.has(e.fromTempId) &&
+                    selectedTempIds.has(e.toTempId) &&
+                    tempIdToRealId.has(e.fromTempId) &&
+                    tempIdToRealId.has(e.toTempId)
+                )
+                .map(e => ({
+                    id: `${e.fromTempId}-${e.toTempId}`,
+                    source: tempIdToRealId.get(e.fromTempId)!,
+                    target: tempIdToRealId.get(e.toTempId)!,
+                }));
+
+            const { calculateGridLayout } = await import("@/lib/utils/graph-layout-utils");
+            const autoPositions = calculateGridLayout(layoutNodes, layoutEdges);
+
+            if (autoPositions.length > 0) {
+                await fetch(`/api/projects/${projectId}/nodes/batch-positions`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ positions: autoPositions }),
+                });
             }
 
             toast.success(
@@ -321,11 +356,11 @@ export function GenerateNodesDialog({
     const getInputTypeLabel = (type: string) => {
         switch (type) {
             case "keyword":
-                return "키워드/아이디어";
+                return "Keyword/Idea";
             case "outline":
-                return "개요";
+                return "Outline";
             case "meeting_notes":
-                return "회의록";
+                return "Meeting Notes";
             default:
                 return type;
         }
@@ -381,7 +416,7 @@ export function GenerateNodesDialog({
                                 id="textInput"
                                 value={text}
                                 onChange={(e) => setText(e.target.value)}
-                                placeholder={`Examples:\n• Short idea: "모바일 앱 출시"\n• Brief outline: "1. 기획 2. 디자인 3. 개발"\n• Meeting notes: "다음 주까지 API 완성, 프론트 개발은 그 이후..."`}
+                                placeholder={`Examples:\n• Short idea: "Mobile app launch"\n• Brief outline: "1. Planning 2. Design 3. Development"\n• Meeting notes: "Complete API by next week, frontend dev starts after..."`}
                                 className="mt-2 min-h-[250px] max-h-[50vh] resize-none flex-1"
                             />
                             <p className="text-xs text-muted-foreground mt-2">

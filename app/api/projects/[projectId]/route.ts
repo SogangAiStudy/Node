@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth, isOrgMember } from "@/lib/utils/auth";
-import { requireProjectView } from "@/lib/utils/permissions";
+import { requireProjectView, requireProjectEdit } from "@/lib/utils/permissions";
 import { z } from "zod";
 
 const UpdateProjectSchema = z.object({
@@ -102,9 +102,9 @@ export async function PATCH(
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
 
-    if (!(await isOrgMember(project.orgId, user.id))) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    // Use requireProjectEdit to enforce proper mutation rights
+    // (This also handles the onboarding project override)
+    await requireProjectEdit(projectId, user.id);
 
     // Check for name conflicts if renaming
     if (validated.name && validated.name !== project.name) {
@@ -163,10 +163,8 @@ export async function DELETE(
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
 
-    // Only org members can delete, and preferably the owner
-    if (!(await isOrgMember(project.orgId, user.id))) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    // Use requireProjectEdit for deletion
+    await requireProjectEdit(projectId, user.id);
 
     await prisma.project.delete({
       where: { id: projectId },
