@@ -57,80 +57,29 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ projects: [] });
     }
 
-    // Check if user is org admin
-    const isAdmin = await isOrgAdmin(orgMember.orgId, user.id);
-
-    let projects;
-
-    if (isAdmin) {
-      // ADMIN sees all projects in the org
-      projects = await prisma.project.findMany({
-        where: {
-          orgId: orgMember.orgId,
-        },
-        include: {
-          _count: {
-            select: {
-              projectTeams: true,
-            },
-          },
-          primaryTeam: {
-            select: {
-              name: true,
-            },
+    // Check if user is org member (we already verified membership above)
+    // NEW POLICY: Everyone sees all projects in the org
+    const projects = await prisma.project.findMany({
+      where: {
+        orgId: orgMember.orgId,
+      },
+      include: {
+        _count: {
+          select: {
+            projectTeams: true,
           },
         },
-        orderBy: [
-          { sortOrder: "asc" },
-          { createdAt: "desc" },
-        ],
-      });
-    } else {
-      // MEMBER sees:
-      // 1. Projects they own
-      // 2. Projects they are an explicit member of
-      // 3. Projects their teams have access to
-      const myTeams = await getUserTeams(orgMember.orgId, user.id);
-
-      projects = await prisma.project.findMany({
-        where: {
-          orgId: orgMember.orgId,
-          OR: [
-            { ownerId: user.id },
-            {
-              members: {
-                some: { userId: user.id }
-              }
-            },
-            {
-              projectTeams: {
-                some: {
-                  teamId: {
-                    in: myTeams,
-                  },
-                },
-              },
-            }
-          ]
-        },
-        include: {
-          _count: {
-            select: {
-              projectTeams: true,
-            },
-          },
-          primaryTeam: {
-            select: {
-              name: true,
-            },
+        primaryTeam: {
+          select: {
+            name: true,
           },
         },
-        orderBy: [
-          { sortOrder: "asc" },
-          { createdAt: "desc" },
-        ],
-      });
-    }
+      },
+      orderBy: [
+        { sortOrder: "asc" },
+        { createdAt: "desc" },
+      ],
+    });
 
     const projectDTOs = projects.map((project: any) => ({
       id: project.id,

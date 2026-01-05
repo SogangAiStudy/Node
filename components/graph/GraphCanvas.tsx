@@ -151,7 +151,9 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
           id: edge.id,
           source: isForward ? edge.fromNodeId : edge.toNodeId,
           target: isForward ? edge.toNodeId : edge.fromNodeId,
+          type: "smoothstep",
           label: edge.relation.replace(/_/g, " "),
+          pathOptions: { borderRadius: 12 },
           markerEnd: {
             type: MarkerType.ArrowClosed,
             color: "#64748b",
@@ -439,8 +441,8 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           onDataChange={onDataChange}
-          nodes={data.nodes}
-          edges={data.edges}
+          nodes={nodes}
+          edges={edges}
           onOrganizeApply={handleOrganizeApply}
         />
         <ReactFlow

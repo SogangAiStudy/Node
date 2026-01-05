@@ -141,25 +141,9 @@ export async function canViewProject(projectId: string, userId: string): Promise
         return true;
     }
 
-    // 4. Check team-based access
-    const myTeams = await getUserTeams(project.orgId, userId);
-
-    if (myTeams.length > 0) {
-        const projectTeams = await prisma.projectTeam.findMany({
-            where: {
-                projectId,
-                teamId: {
-                    in: myTeams,
-                },
-            },
-            select: {
-                teamId: true,
-            },
-        });
-
-        if (projectTeams.length > 0) {
-            return true;
-        }
+    // 4. [NEW POLICY] Any active member of the organization can view any project
+    if (await isOrgMember(project.orgId, userId)) {
+        return true;
     }
 
     return false;
@@ -199,40 +183,8 @@ export async function canEditProject(projectId: string, userId: string): Promise
         return true;
     }
 
-    // 3. Check team-based access
-    const myTeams = await getUserTeams(project.orgId, userId);
-
-    if (myTeams.length > 0) {
-        // Get teams with EDITOR, PROJECT_ADMIN, or OWNER (if supported) access
-        const projectTeams = await prisma.projectTeam.findMany({
-            where: {
-                projectId,
-                teamId: {
-                    in: myTeams,
-                },
-                role: {
-                    in: ([ProjectRole.EDITOR, ProjectRole.PROJECT_ADMIN, ProjectRole.OWNER] as ProjectRole[]),
-                },
-            },
-        });
-
-        if (projectTeams.length > 0) {
-            return true;
-        }
-    }
-
-    // 4. Check explicit membership (EDITOR or higher)
-    const projectMember = await prisma.projectMember.findUnique({
-        where: {
-            projectId_userId: {
-                projectId,
-                userId,
-            },
-        },
-        select: { role: true },
-    });
-
-    if (projectMember && ([ProjectRole.EDITOR, ProjectRole.PROJECT_ADMIN, ProjectRole.OWNER] as ProjectRole[]).includes(projectMember.role)) {
+    // 4. [NEW POLICY] Any active member of the organization can edit the ONBOARDING project
+    if (projectId === "onboarding-project-id" && await isOrgMember(project.orgId, userId)) {
         return true;
     }
 
@@ -289,7 +241,21 @@ export async function getUserProjectRole(
 
     let highestRole: ProjectRole | null = projectMember ? projectMember.role : null;
 
-    // 4. Check team-based roles
+    // 4. [NEW POLICY] Onboarding project gives PROJECT_ADMIN to all org members
+    if (projectId === "onboarding-project-id") {
+        if (await isOrgMember(project.orgId, userId)) {
+            return ProjectRole.PROJECT_ADMIN;
+        }
+    }
+
+    // 5. [NEW POLICY] Any org member is at least a VIEWER
+    if (!highestRole) {
+        if (await isOrgMember(project.orgId, userId)) {
+            highestRole = ProjectRole.VIEWER;
+        }
+    }
+
+    // 6. Check team-based roles
     const myTeams = await getUserTeams(project.orgId, userId);
 
     if (myTeams.length > 0) {

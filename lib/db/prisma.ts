@@ -4,7 +4,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 
 const globalForPrisma = globalThis as unknown as {
-  prisma_fresh: PrismaClient | undefined;
+  prisma_v3: PrismaClient | undefined;
 };
 
 const createPrismaClient = () => {
@@ -18,6 +18,6 @@ const createPrismaClient = () => {
   });
 };
 
-export const prisma = globalForPrisma.prisma_fresh ?? createPrismaClient();
+export const prisma = globalForPrisma.prisma_v3 ?? createPrismaClient();
 
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma_fresh = prisma;
+if (process.env.NODE_ENV !== "production") globalForPrisma.prisma_v3 = prisma;

@@ -249,6 +249,7 @@ model Node {
   ownerId        String?
   priority       Int          @default(3)
   dueAt          DateTime?
+  phase          String?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
   orgId          String
