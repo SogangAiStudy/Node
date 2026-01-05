@@ -205,13 +205,13 @@ export function Toolbar({
                 <div className="flex items-center gap-2">
                   <Users2 className="h-3.5 w-3.5 text-slate-500" />
                   <SelectValue placeholder="All People">
-                    {selectedUserIds.length === 0 ? "All People" : selectedUserIds.length === 1 ? members.find(m => m.id === selectedUserIds[0])?.name : `${selectedUserIds.length} people`}
+                    {selectedUserIds.length === 0 ? "All People" : selectedUserIds.length === 1 ? members.find((m: { id: string; name: string }) => m.id === selectedUserIds[0])?.name : `${selectedUserIds.length} people`}
                   </SelectValue>
                 </div>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">All People</SelectItem>
-                {members.map((member) => (
+                {members.map((member: { id: string; name: string }) => (
                   <SelectItem key={member.id} value={member.id}>
                     {member.name}
                   </SelectItem>
