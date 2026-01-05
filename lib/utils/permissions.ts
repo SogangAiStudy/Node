@@ -183,7 +183,53 @@ export async function canEditProject(projectId: string, userId: string): Promise
         return true;
     }
 
-    // 4. [NEW POLICY] Any active member of the organization can edit the ONBOARDING project
+    // 3. Check if user is an explicit project member with EDITOR or higher role
+    const projectMember = await prisma.projectMember.findUnique({
+        where: {
+            projectId_userId: {
+                projectId,
+                userId,
+            },
+        },
+        select: { role: true },
+    });
+
+    if (projectMember && (
+        projectMember.role === ProjectRole.EDITOR ||
+        projectMember.role === ProjectRole.PROJECT_ADMIN ||
+        projectMember.role === ProjectRole.OWNER
+    )) {
+        return true;
+    }
+
+    // 4. Check team-based roles
+    const myTeams = await getUserTeams(project.orgId, userId);
+
+    if (myTeams.length > 0) {
+        const projectTeams = await prisma.projectTeam.findMany({
+            where: {
+                projectId,
+                teamId: {
+                    in: myTeams,
+                },
+            },
+            select: {
+                role: true,
+            },
+        });
+
+        const hasEditRole = projectTeams.some((pt: any) =>
+            pt.role === ProjectRole.EDITOR ||
+            pt.role === ProjectRole.PROJECT_ADMIN ||
+            pt.role === ProjectRole.OWNER
+        );
+
+        if (hasEditRole) {
+            return true;
+        }
+    }
+
+    // 5. [SPECIAL POLICY] Any active member of the organization can edit the ONBOARDING project
     if (projectId === "onboarding-project-id" && await isOrgMember(project.orgId, userId)) {
         return true;
     }

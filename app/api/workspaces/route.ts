@@ -5,9 +5,9 @@ import { requireAuth } from "@/lib/utils/auth";
 export const dynamic = "force-dynamic";
 
 /**
- * Check if an organization has unread inbox items for a user
+ * Check if an organization has unread inbox items for a user and return the count
  */
-async function checkHasUnreadInbox(orgId: string, userId: string): Promise<boolean> {
+async function getUnreadInboxCount(orgId: string, userId: string): Promise<number> {
   const inboxState = await prisma.orgInboxState.findUnique({
     where: {
       orgId_userId: {
@@ -26,37 +26,54 @@ async function checkHasUnreadInbox(orgId: string, userId: string): Promise<boole
       userId,
     },
     select: {
+      teamId: true,
       team: {
         select: {
+          id: true,
           name: true,
         },
       },
     },
   });
 
-  const teamNames = userTeams.map((tm: any) => tm.team.name);
+  const teamNames = userTeams.map((tm: any) => tm.team?.name).filter((name): name is string => !!name);
+  const userTeamIds = userTeams.map((tm: any) => tm.teamId).filter((id): id is string => !!id);
 
-  // Check for unread requests
-  const unreadCount = await prisma.request.findMany({
-    where: {
-      orgId,
-      OR: [
-        { toUserId: userId },
-        { toTeam: { in: teamNames } },
-      ],
-      status: {
-        not: "CLOSED",
+  // Count unread requests, notifications, and invites
+  // Note: We don't filter by lastSeenAt here because we want to count ALL unread items
+  const [unreadRequests, unreadNotifications, unreadInvites] = await Promise.all([
+    prisma.request.count({
+      where: {
+        orgId,
+        OR: [
+          { toUserId: userId },
+          { toTeam: { in: teamNames } },
+        ],
+        status: {
+          not: "CLOSED",
+        },
       },
-      createdAt: {
-        gt: lastSeenAt,
+    }),
+    prisma.notification.count({
+      where: {
+        orgId,
+        OR: [
+          { userId, targetType: "USER" },
+          { targetType: "TEAM", targetTeamId: { in: userTeamIds } }
+        ],
+        isRead: false,
       },
-    },
-    select: {
-      id: true,
-    },
-  });
+    }),
+    prisma.projectInvite.count({
+      where: {
+        orgId,
+        targetUserId: userId,
+        status: "PENDING",
+      },
+    }),
+  ]);
 
-  return unreadCount.length > 0;
+  return unreadRequests + unreadNotifications + unreadInvites;
 }
 
 // GET /api/workspaces - Get all user's workspaces with unread inbox indicator
@@ -189,18 +206,19 @@ export async function GET(request: NextRequest) {
 
     console.log(`[DEBUG] GET /api/workspaces - Found ${orgMemberships.length} memberships`);
 
-    // For each org, check if there are unread inbox items
+    // For each org, check unread inbox count
     const workspaces = await Promise.all(
       orgMemberships.map(async (m: any) => {
-        let hasUnreadInbox = false;
+        let unreadCount = 0;
         if (["ACTIVE", "PENDING_TEAM_ASSIGNMENT"].includes(m.status)) {
-          hasUnreadInbox = await checkHasUnreadInbox(m.orgId, user.id);
+          unreadCount = await getUnreadInboxCount(m.orgId, user.id);
         }
         return {
           orgId: m.orgId,
           name: m.organization.name,
           status: m.status,
-          hasUnreadInbox,
+          hasUnreadInbox: unreadCount > 0,
+          unreadCount,
         };
       })
     );

@@ -39,6 +39,7 @@ interface Workspace {
   orgId: string;
   name: string;
   hasUnreadInbox: boolean;
+  unreadCount?: number;
   status?: string;
 }
 
@@ -55,6 +56,8 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
   const [targetParentId, setTargetParentId] = useState<string | undefined>(undefined);
+  const [sidebarWidth, setSidebarWidth] = useState(280); // Default: 280px (increased from 256px)
+  const [isResizing, setIsResizing] = useState(false);
 
   const initials = session?.user?.name
     ?.split("")
@@ -100,6 +103,40 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
     document.addEventListener("keydown", down);
     return () => document.removeEventListener("keydown", down);
   }, []);
+
+  // Load sidebar width from localStorage
+  useEffect(() => {
+    const stored = localStorage.getItem('sidebarWidth');
+    if (stored) {
+      const width = parseInt(stored);
+      if (width >= 200 && width <= 400) {
+        setSidebarWidth(width);
+      }
+    }
+  }, []);
+
+  // Handle sidebar resize
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const newWidth = Math.min(400, Math.max(200, e.clientX));
+      setSidebarWidth(newWidth);
+      localStorage.setItem('sidebarWidth', newWidth.toString());
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing]);
 
   const handleCreateFolder = async (name: string) => {
     try {
@@ -283,7 +320,7 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
 
   const currentWorkspace = workspaces?.find((w) => w.orgId === currentOrgId);
 
-  const NavItem = ({ href, icon: Icon, label, active, hasIndicator }: any) => (
+  const NavItem = ({ href, icon: Icon, label, active, count }: any) => (
     <Link
       href={href}
       className={cn(
@@ -295,14 +332,16 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
     >
       <Icon className="h-4 w-4" />
       <span className="flex-1 truncate">{label}</span>
-      {hasIndicator && (
-        <span className="h-2 w-2 rounded-full bg-blue-500" />
+      {count !== undefined && count > 0 && (
+        <span className="px-1.5 py-0.5 min-w-[1.25rem] text-center text-xs font-semibold rounded-full bg-blue-500 text-white">
+          {count > 99 ? '99+' : count}
+        </span>
       )}
     </Link>
   );
 
   return (
-    <div className="flex h-screen w-64 flex-col border-r border-[#2c2d31] bg-[#1a1b1e]">
+    <div className="relative flex h-screen flex-col border-r border-[#2c2d31] bg-[#1a1b1e]" style={{ width: `${sidebarWidth}px` }}>
       {/* Workspace Header */}
       <div className="h-14 flex items-center px-4 border-b border-[#2c2d31]">
         <DropdownMenu>
@@ -382,7 +421,7 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
               icon={Inbox}
               label="Inbox"
               active={pathname?.includes("/inbox")}
-              hasIndicator={currentWorkspace?.hasUnreadInbox}
+              count={currentWorkspace?.unreadCount}
             />
             <NavItem
               href={`/org/${currentOrgId}/projects`}
@@ -556,6 +595,20 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
         orgId={currentOrgId}
         onSelect={() => { }}
       />
+
+      {/* Resize Handle */}
+      <div
+        className={cn(
+          "absolute top-0 right-0 bottom-0 w-1 cursor-ew-resize hover:bg-blue-500/50 transition-colors group",
+          isResizing && "bg-blue-500"
+        )}
+        onMouseDown={(e) => {
+          e.preventDefault();
+          setIsResizing(true);
+        }}
+      >
+        <div className="absolute top-1/2 right-0 -translate-y-1/2 w-1 h-12 bg-slate-600 rounded-l opacity-0 group-hover:opacity-100 transition-opacity" />
+      </div>
     </div>
   );
 }

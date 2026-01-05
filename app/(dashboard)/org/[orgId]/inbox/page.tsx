@@ -108,13 +108,8 @@ function NotificationCard({
           </div>
         </div>
         <div className="flex gap-2">
-          {notification.entityId && (
-            <Button size="sm" variant="ghost" onClick={handleNavigate}>
-              View
-            </Button>
-          )}
-          <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={handleRead} disabled={isLoading}>
-            <XCircle className="h-4 w-4 text-muted-foreground" />
+          <Button size="sm" variant="default" onClick={handleRead} disabled={isLoading}>
+            Check as Read
           </Button>
         </div>
       </div>

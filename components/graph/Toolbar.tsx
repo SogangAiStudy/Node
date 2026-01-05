@@ -44,6 +44,8 @@ interface ToolbarProps {
   onFilterChange: (status: string) => void;
   selectedTeamIds: string[];
   onTeamFilterChange: (ids: string[]) => void;
+  selectedUserIds: string[];
+  onUserFilterChange: (ids: string[]) => void;
   searchQuery: string;
   onSearchChange: (query: string) => void;
   onDataChange: () => void;
@@ -59,6 +61,8 @@ export function Toolbar({
   onFilterChange,
   selectedTeamIds,
   onTeamFilterChange,
+  selectedUserIds,
+  onUserFilterChange,
   searchQuery,
   onSearchChange,
   onDataChange,
@@ -82,7 +86,19 @@ export function Toolbar({
     enabled: !!projectId,
   });
 
+  const { data: membersData } = useQuery({
+    queryKey: ["project-members", projectId],
+    queryFn: async () => {
+      const res = await fetch(`/api/projects/${projectId}/members`);
+      if (!res.ok) throw new Error("Failed to fetch project members");
+      const data = await res.json();
+      return (data.members || []).map((m: any) => ({ id: m.userId, name: m.userName }));
+    },
+    enabled: !!projectId,
+  });
+
   const teams = teamsData || [];
+  const members = membersData || [];
 
   const toggleTeamFilter = (teamId: string) => {
     if (selectedTeamIds.includes(teamId)) {
@@ -92,8 +108,17 @@ export function Toolbar({
     }
   };
 
+  const toggleUserFilter = (userId: string) => {
+    if (selectedUserIds.includes(userId)) {
+      onUserFilterChange(selectedUserIds.filter((id) => id !== userId));
+    } else {
+      onUserFilterChange([...selectedUserIds, userId]);
+    }
+  };
+
   const clearAllFilters = () => {
     onTeamFilterChange([]);
+    onUserFilterChange([]);
     onFilterChange("ALL");
     onSearchChange("");
   };
@@ -163,8 +188,38 @@ export function Toolbar({
 
         {/* Right Side: All Filters */}
         <div className="flex flex-col gap-2 items-end">
-          {/* Top: Status Filter + Clear */}
+          {/* Top: Person Filter + Status Filter + Clear */}
           <div className="flex items-center gap-2">
+            {/* Person Filter */}
+            <Select
+              value={selectedUserIds.length === 1 ? selectedUserIds[0] : selectedUserIds.length > 0 ? "MULTIPLE" : "ALL"}
+              onValueChange={(value) => {
+                if (value === "ALL") {
+                  onUserFilterChange([]);
+                } else if (value !== "MULTIPLE") {
+                  toggleUserFilter(value);
+                }
+              }}
+            >
+              <SelectTrigger className="h-8 w-[140px] bg-slate-50 border-transparent transition-all hover:bg-slate-100">
+                <div className="flex items-center gap-2">
+                  <Users2 className="h-3.5 w-3.5 text-slate-500" />
+                  <SelectValue placeholder="All People">
+                    {selectedUserIds.length === 0 ? "All People" : selectedUserIds.length === 1 ? members.find(m => m.id === selectedUserIds[0])?.name : `${selectedUserIds.length} people`}
+                  </SelectValue>
+                </div>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All People</SelectItem>
+                {members.map((member) => (
+                  <SelectItem key={member.id} value={member.id}>
+                    {member.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* Status Filter */}
             <Select value={filterStatus} onValueChange={onFilterChange}>
               <SelectTrigger className="h-8 w-[130px] bg-slate-50 border-transparent transition-all hover:bg-slate-100">
                 <div className="flex items-center gap-2">
@@ -197,7 +252,7 @@ export function Toolbar({
               </SelectContent>
             </Select>
 
-            {(selectedTeamIds.length > 0 || filterStatus !== "ALL" || searchQuery) && (
+            {(selectedUserIds.length > 0 || selectedTeamIds.length > 0 || filterStatus !== "ALL" || searchQuery) && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -209,6 +264,28 @@ export function Toolbar({
               </Button>
             )}
           </div>
+
+          {/* Bottom: Person/Team Filter Badges */}
+          {teams.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 justify-end max-w-[400px]">
+              {teams.map((team) => (
+                <Badge
+                  key={team.id}
+                  variant={selectedTeamIds.includes(team.id) ? "default" : "outline"}
+                  className={cn(
+                    "cursor-pointer text-xs h-6 transition-all",
+                    selectedTeamIds.includes(team.id)
+                      ? "bg-purple-600 hover:bg-purple-700 text-white"
+                      : "border-slate-200 hover:border-purple-400 hover:bg-purple-50 text-slate-600"
+                  )}
+                  onClick={() => toggleTeamFilter(team.id)}
+                >
+                  <Users2 className="h-3 w-3 mr-1" />
+                  {team.name}
+                </Badge>
+              ))}
+            </div>
+          )}
 
         </div>
       </div>

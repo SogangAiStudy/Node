@@ -51,7 +51,6 @@ export function NodeDetailSheet({
 }: NodeDetailSheetProps) {
     const [title, setTitle] = useState("");
     const [description, setDescription] = useState("");
-    const [isEditing, setIsEditing] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [requestDialogOpen, setRequestDialogOpen] = useState(false);
     const [members, setMembers] = useState<SelectItem[]>([]);
@@ -95,8 +94,15 @@ export function NodeDetailSheet({
     };
 
     const handleSaveDetails = async () => {
-        await updateNode({ title, description });
-        setIsEditing(false);
+        setIsSaving(true);
+        try {
+            await updateNode({ title, description });
+            toast.success("Saved successfully");
+        } catch (error) {
+            toast.error("Failed to save");
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const currentStatus = node.manualStatus;
@@ -124,25 +130,27 @@ export function NodeDetailSheet({
                     <SheetHeader className="space-y-4 mb-6">
                         <div className="flex items-start justify-between pr-8">
                             <div className="space-y-1 flex-1 mr-4">
-                                {isEditing ? (
-                                    <Input
-                                        value={title}
-                                        onChange={(e) => setTitle(e.target.value)}
-                                        className="font-bold text-lg"
-                                        placeholder="Task Title"
-                                    />
-                                ) : (
-                                    <SheetTitle className="text-xl font-bold leading-tight">
-                                        {node.title}
-                                    </SheetTitle>
-                                )}
+                                <Input
+                                    value={title}
+                                    onChange={(e) => setTitle(e.target.value)}
+                                    className="font-bold text-lg"
+                                    placeholder="Task Title"
+                                />
                             </div>
                             <Button
-                                variant="ghost"
+                                variant="default"
                                 size="sm"
-                                onClick={() => isEditing ? handleSaveDetails() : setIsEditing(true)}
+                                onClick={handleSaveDetails}
+                                disabled={isSaving}
                             >
-                                {isEditing ? "Save" : "Edit"}
+                                {isSaving ? (
+                                    <>
+                                        <Loader2 className="w-3 h-3 mr-2 animate-spin" />
+                                        Saving...
+                                    </>
+                                ) : (
+                                    "Save"
+                                )}
                             </Button>
                         </div>
 
@@ -172,22 +180,56 @@ export function NodeDetailSheet({
                         {/* Description */}
                         <div className="space-y-3">
                             <h4 className="text-sm font-medium text-slate-500 uppercase tracking-wider">Description</h4>
-                            {isEditing ? (
-                                <Textarea
-                                    value={description}
-                                    onChange={(e) => setDescription(e.target.value)}
-                                    placeholder="Add a more detailed description..."
-                                    className="min-h-[120px]"
-                                />
-                            ) : (
-                                <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
-                                    {node.description || <span className="text-slate-400 italic">No description provided.</span>}
-                                </p>
-                            )}
+                            <Textarea
+                                value={description}
+                                onChange={(e) => setDescription(e.target.value)}
+                                placeholder="Add a more detailed description..."
+                                className="min-h-[120px]"
+                            />
                         </div>
 
                         {/* Metadata Grid */}
                         <div className="grid grid-cols-1 gap-6">
+                            {/* Node Owner */}
+                            <div className="space-y-3">
+                                <h4 className="text-sm font-medium text-slate-500 uppercase tracking-wider">Node Owner</h4>
+                                <div className="relative">
+                                    <select
+                                        value={node.owners && node.owners.length > 0 ? node.owners[0].id : ""}
+                                        onChange={(e) => {
+                                            const selectedId = e.target.value;
+                                            if (selectedId) {
+                                                // Keep all existing owners but update the first one as primary
+                                                const currentIds = node.owners?.map((o: any) => o.id) || [];
+                                                const otherIds = currentIds.filter(id => id !== selectedId);
+                                                updateNode({ ownerIds: [selectedId, ...otherIds] });
+                                            }
+                                        }}
+                                        className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                                    >
+                                        <option value="">Select owner...</option>
+                                        {members.map((member) => (
+                                            <option key={member.id} value={member.id}>
+                                                {member.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {node.owners && node.owners.length > 0 && (
+                                        <div className="mt-2 flex items-center gap-3 p-3 rounded-lg bg-slate-50 border border-slate-200">
+                                            <Avatar className="h-8 w-8">
+                                                <AvatarFallback className="text-xs">
+                                                    {getInitials(node.owners[0].name)}
+                                                </AvatarFallback>
+                                            </Avatar>
+                                            <div>
+                                                <p className="text-sm font-medium text-slate-900">{node.owners[0].name}</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Engaging Team */}
                             <div className="space-y-3">
                                 <h4 className="text-sm font-medium text-slate-500 uppercase tracking-wider">Engaging Team</h4>
                                 <MultiSelectSearch

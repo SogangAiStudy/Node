@@ -104,6 +104,7 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
   const [filterStatus, setFilterStatus] = useState<string>("ALL");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([]);
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [pendingConnection, setPendingConnection] = useState<Connection | null>(null);
   const [editingEdge, setEditingEdge] = useState<Edge | null>(null);
   const [relation, setRelation] = useState<string>("DEPENDS_ON");
@@ -128,6 +129,12 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
       if (selectedTeamIds.length > 0) {
         const nodeTeamIds = node.teams.map((t) => t.id);
         const hasMatch = selectedTeamIds.some((id) => nodeTeamIds.includes(id));
+        if (!hasMatch) isFaded = true;
+      }
+
+      if (selectedUserIds.length > 0) {
+        const nodeOwnerIds = node.owners.map((o) => o.id);
+        const hasMatch = selectedUserIds.some((id) => nodeOwnerIds.includes(id));
         if (!hasMatch) isFaded = true;
       }
 
@@ -244,7 +251,7 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
     });
 
     return { layoutedNodes: nodesWithExtraData, layoutedEdges: edges };
-  }, [data.nodes, data.edges, filterStatus, searchQuery, selectedTeamIds, projectId, orgId, onDataChange, layoutDirection]);
+  }, [data.nodes, data.edges, filterStatus, searchQuery, selectedTeamIds, selectedUserIds, projectId, orgId, onDataChange, layoutDirection]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(layoutedNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(layoutedEdges);
@@ -376,11 +383,13 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
           // toast.success("Position saved", { duration: 1000 });
           // No need to refetch everything!
         } else {
-          throw new Error("Failed to save position");
+          const errorData = await res.json().catch(() => ({}));
+          console.error("Position save failed:", res.status, errorData);
+          throw new Error(errorData.error || `Failed to save position (${res.status})`);
         }
       } catch (error) {
         console.error("Failed to save node position:", error);
-        toast.error("Failed to save position");
+        toast.error(error instanceof Error ? error.message : "Failed to save position");
         // Revert cache on error (optional, but good practice - skipped for brevity or add if needed)
         onDataChange(); // Refetch to restore correct state
       }
@@ -438,6 +447,8 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
           onFilterChange={setFilterStatus}
           selectedTeamIds={selectedTeamIds}
           onTeamFilterChange={setSelectedTeamIds}
+          selectedUserIds={selectedUserIds}
+          onUserFilterChange={setSelectedUserIds}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           onDataChange={onDataChange}

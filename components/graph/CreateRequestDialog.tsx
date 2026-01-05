@@ -68,7 +68,10 @@ export function CreateRequestDialog({
         const membersRes = await fetch(`/api/projects/${projectId}/members`);
         if (membersRes.ok) {
           const data = await membersRes.json();
+          console.log('✅ Members loaded for request dialog:', data.members?.length, 'members');
           setMembers(data.members || []);
+        } else {
+          console.error('❌ Failed to load members:', membersRes.status);
         }
 
         // Fetch node data to get owners
@@ -87,6 +90,23 @@ export function CreateRequestDialog({
 
     fetchData();
   }, [open, projectId, linkedNodeId]);
+
+  // Auto-select first owner as default recipient
+  useEffect(() => {
+    if (nodeData?.owners && nodeData.owners.length > 0 && !toUserId) {
+      const firstOwner = nodeData.owners[0];
+      setToUserId(firstOwner.id);
+      console.log('✅ Auto-selected owner as recipient:', firstOwner.name);
+    }
+  }, [nodeData, toUserId]);
+
+  // Reset selection when dialog closes
+  useEffect(() => {
+    if (!open) {
+      setToUserId("");
+      setQuestion("");
+    }
+  }, [open]);
 
   const handleAutoDraft = async () => {
     if (!linkedNodeId) return;

@@ -26,6 +26,13 @@ export async function POST(req: NextRequest) {
             include: {
                 project: { select: { id: true, name: true, orgId: true } },
                 nodeOwners: { include: { user: { select: { id: true, name: true } } } },
+                linkedRequests: {
+                    select: {
+                        id: true,
+                        status: true,
+                        question: true,
+                    },
+                },
                 edgesFrom: {
                     include: {
                         toNode: {
