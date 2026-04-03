@@ -2,6 +2,8 @@ import { getCurrentUserWorkspaces } from "@/lib/workspaces";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+export const dynamic = "force-dynamic";
+
 export default async function DashboardPage() {
   try {
     const workspaces = await getCurrentUserWorkspaces();
