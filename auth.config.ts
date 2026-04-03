@@ -6,6 +6,16 @@ export const authConfig = {
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      // Avoid runtime OIDC discovery during sign-in; Vercel only needs to
+      // redirect directly to Google's auth endpoint.
+      authorization: {
+        url: "https://accounts.google.com/o/oauth2/v2/auth",
+        params: {
+          scope: "openid email profile",
+        },
+      },
+      token: "https://oauth2.googleapis.com/token",
+      userinfo: "https://openidconnect.googleapis.com/v1/userinfo",
       allowDangerousEmailAccountLinking: true,
     }),
   ],
