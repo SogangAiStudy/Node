@@ -1,6 +1,5 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db/prisma";
-import { OrgRole, ProjectRole } from "@/types";
 
 /**
  * Get the current authenticated user
@@ -15,10 +14,26 @@ export async function getCurrentUser() {
  */
 export async function requireAuth() {
   const user = await getCurrentUser();
-  if (!user?.id) {
-    throw new Error("Unauthorized");
+
+  if (user?.id) {
+    return user;
   }
-  return user;
+
+  if (user?.email) {
+    const dbUser = await prisma.user.findUnique({
+      where: { email: user.email },
+      select: { id: true },
+    });
+
+    if (dbUser) {
+      return {
+        ...user,
+        id: dbUser.id,
+      };
+    }
+  }
+
+  throw new Error("Unauthorized");
 }
 
 // ============================================================================

@@ -9,43 +9,30 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
   callbacks: {
     async session({ session, token }) {
-      if (token.sub && session.user) {
-        session.user.id = token.sub;
+      if (session.user) {
+        if (token.sub) {
+          session.user.id = token.sub;
+        } else if (session.user.email) {
+          const dbUser = await prisma.user.findUnique({
+            where: { email: session.user.email },
+            select: { id: true },
+          });
+
+          if (dbUser) {
+            session.user.id = dbUser.id;
+          }
+        }
       }
+
       return session;
     },
-    async jwt({ token }) {
+    async jwt({ token, user }) {
+      if (user?.id) {
+        token.sub = user.id;
+      }
+
       return token;
     },
     ...authConfig.callbacks,
-  },
-  events: {
-    async createUser({ user }) {
-      if (user.id) {
-        try {
-          // Auto-join the demo org
-          await prisma.orgMember.create({
-            data: {
-              orgId: "demo-org-id",
-              userId: user.id,
-              role: "MEMBER",
-              status: "ACTIVE",
-            },
-          });
-
-          // Create initial inbox state
-          await prisma.orgInboxState.create({
-            data: {
-              orgId: "demo-org-id",
-              userId: user.id,
-            },
-          });
-
-          console.log(`User ${user.id} auto-joined demo-org-id`);
-        } catch (err) {
-          console.error("Failed to auto-join demo organization:", err);
-        }
-      }
-    },
   },
 });
