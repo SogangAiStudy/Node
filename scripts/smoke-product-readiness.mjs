@@ -52,6 +52,10 @@ check("task workspace UI has files tab", includes("components/graph/NodeDetailSh
 check("task workspace UI has activity tab", includes("components/graph/NodeDetailSheet.tsx", "Activity"));
 check("graph supports parented child nodes", includes("components/graph/GraphCanvas.tsx", "parentNode"));
 check("graph supports dragging nodes into containers", includes("components/graph/GraphCanvas.tsx", "Moved inside"));
+check("graph creates new connections as default dependencies", includes("components/graph/GraphCanvas.tsx", "EdgeRelation.DEPENDS_ON"));
+check("graph no longer opens relation picker on new connection", !includes("components/graph/GraphCanvas.tsx", "Define Relationship"));
+check("graph warns before leaving with pending saves", includes("components/graph/GraphCanvas.tsx", "beforeunload"));
+check("node creation uses optimistic graph cache", includes("components/graph/AddNodeDialog.tsx", "Node added. Saving..."));
 
 check("Supabase URL env documented", includes(".env.example", "SUPABASE_URL"));
 check("Supabase service role env documented", includes(".env.example", "SUPABASE_SERVICE_ROLE_KEY"));

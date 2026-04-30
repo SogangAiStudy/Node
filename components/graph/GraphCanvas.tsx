@@ -15,7 +15,7 @@ import ReactFlow, {
 } from "reactflow";
 import dagre from "dagre";
 import "reactflow/dist/style.css";
-import { NodeDTO, GraphData } from "@/types";
+import { EdgeDTO, EdgeRelation, GraphData, NodeDTO } from "@/types";
 import { CustomNode } from "./CustomNode";
 import { ActionCenterBar } from "./ActionCenterBar";
 import { Toolbar } from "./Toolbar";
@@ -87,6 +87,10 @@ function isDescendantOf(nodeId: string, possibleAncestorId: string, nodeById: Ma
 
 function numberStyleValue(value: unknown) {
   return typeof value === "number" ? value : undefined;
+}
+
+function makeTempId(prefix: string) {
+  return `${prefix}-${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
 }
 
 function getFlowNodeDimensions(flowNode: Node) {
@@ -178,7 +182,6 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([]);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
-  const [pendingConnection, setPendingConnection] = useState<Connection | null>(null);
   const [editingEdge, setEditingEdge] = useState<Edge | null>(null);
   const [relation, setRelation] = useState<string>("DEPENDS_ON");
   const [isSyncing, setIsSyncing] = useState(false);
@@ -186,6 +189,7 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
   const [addNodeOpen, setAddNodeOpen] = useState(false);
   const [addNodeParent, setAddNodeParent] = useState<{ id: string; title: string } | null>(null);
   const [pendingDetachNodeId, setPendingDetachNodeId] = useState<string | null>(null);
+  const [pendingSaveCount, setPendingSaveCount] = useState(0);
   const [layoutDirection] = useState<"LR" | "TB">("LR");
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
@@ -400,6 +404,41 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
   const [nodes, setNodes, onNodesChange] = useNodesState(layoutedNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(layoutedEdges);
 
+  const changePendingSaveCount = useCallback((delta: number) => {
+    setPendingSaveCount((count) => Math.max(0, count + delta));
+  }, []);
+
+  useEffect(() => {
+    if (pendingSaveCount === 0) return;
+
+    const message = "You have unsaved graph changes. Leave anyway?";
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = message;
+      return message;
+    };
+    const onDocumentClick = (event: MouseEvent) => {
+      const target = event.target instanceof Element ? event.target.closest("a[href]") : null;
+      if (!(target instanceof HTMLAnchorElement)) return;
+      if (target.target === "_blank" || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+
+      const href = target.href;
+      if (!href || href === window.location.href) return;
+      if (window.confirm(message)) return;
+
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    };
+
+    window.addEventListener("beforeunload", onBeforeUnload);
+    document.addEventListener("click", onDocumentClick, true);
+
+    return () => {
+      window.removeEventListener("beforeunload", onBeforeUnload);
+      document.removeEventListener("click", onDocumentClick, true);
+    };
+  }, [pendingSaveCount]);
+
   useEffect(() => {
     if (!pendingDetachNodeId) return;
     const flowNode = nodes.find((node) => node.id === pendingDetachNodeId);
@@ -464,22 +503,34 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
     setEdges(layoutedEdges);
   }, [layoutedNodes, layoutedEdges, setNodes, setEdges]);
 
-  const onConnect = useCallback((params: Connection) => {
-    setPendingConnection(params);
-    setRelation("DEPENDS_ON");
-  }, []);
+  const onConnect = useCallback(async (params: Connection) => {
+    if (!params.source || !params.target) return;
 
-  const handleCreateEdge = async () => {
-    if (!pendingConnection) return;
-    setIsSyncing(true);
+    const tempId = makeTempId("temp-edge");
+    const fromNodeId = params.target;
+    const toNodeId = params.source;
+    const relation = EdgeRelation.DEPENDS_ON;
+    const optimisticEdge: EdgeDTO = {
+      id: tempId,
+      orgId: orgId,
+      projectId,
+      fromNodeId,
+      toNodeId,
+      relation,
+      createdAt: new Date().toISOString(),
+    };
+
+    changePendingSaveCount(1);
+    queryClient.setQueryData<GraphData>(["graph", projectId], (old) => {
+      if (!old) return old;
+      return {
+        ...old,
+        edges: [...old.edges, optimisticEdge],
+      };
+    });
+    toast.info("Connection added. Saving...");
+
     try {
-      // Determine logical from/to based on relation
-      // HANDOFF_TO: source -> target
-      // Others: target -> source (because handle source is right, target is left, and dependencies are on the left)
-      const isForward = relation === "HANDOFF_TO";
-      const fromNodeId = isForward ? pendingConnection.source : pendingConnection.target;
-      const toNodeId = isForward ? pendingConnection.target : pendingConnection.source;
-
       const res = await fetch(`/api/projects/${projectId}/edges`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -491,15 +542,34 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
         throw new Error(err.error || "Failed to create connection");
       }
 
-      toast.success("Connection created");
+      const savedEdge = await res.json() as Partial<EdgeDTO>;
+      queryClient.setQueryData<GraphData>(["graph", projectId], (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          edges: old.edges.map((edge) =>
+            edge.id === tempId
+              ? { ...optimisticEdge, ...savedEdge, id: savedEdge.id || tempId }
+              : edge
+          ),
+        };
+      });
+      toast.success("Connection saved");
       onDataChange();
-      setPendingConnection(null);
     } catch (error) {
+      queryClient.setQueryData<GraphData>(["graph", projectId], (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          edges: old.edges.filter((edge) => edge.id !== tempId),
+        };
+      });
       toast.error(error instanceof Error ? error.message : "Error creating connection");
+      onDataChange();
     } finally {
-      setIsSyncing(false);
+      changePendingSaveCount(-1);
     }
-  };
+  }, [changePendingSaveCount, onDataChange, orgId, projectId, queryClient]);
 
   const handleUpdateEdge = async () => {
     if (!editingEdge) return;
@@ -778,44 +848,8 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
           setAddNodeParent(null);
           setAddNodeOpen(false);
         }}
+        onPendingSaveChange={changePendingSaveCount}
       />
-
-      {/* Connection Picker Dialog */}
-      <Dialog open={!!pendingConnection} onOpenChange={() => setPendingConnection(null)}>
-        <DialogContent className="sm:max-w-[400px]">
-          <DialogHeader>
-            <DialogTitle>Define Relationship</DialogTitle>
-          </DialogHeader>
-          <div className="py-4 space-y-4">
-            <div className="space-y-2">
-              <Label>How are these nodes related?</Label>
-              <Select value={relation} onValueChange={setRelation}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="DEPENDS_ON">Depends On (Left depends on Right)</SelectItem>
-                  <SelectItem value="HANDOFF_TO">Handoff To (Left leads to Right)</SelectItem>
-                  <SelectItem value="NEEDS_INFO_FROM">Needs Info From</SelectItem>
-                  <SelectItem value="APPROVAL_BY">Approval By</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <p className="text-[11px] text-slate-500 italic bg-slate-50 p-3 rounded-md border border-slate-100">
-              {relation === "DEPENDS_ON" && "The right-side node must be completed before the left-side node can start."}
-              {relation === "HANDOFF_TO" && "Work flows directly from the left-side node to the right-side node."}
-              {relation === "NEEDS_INFO_FROM" && "The left-side node requires specific input from the right-side node."}
-              {relation === "APPROVAL_BY" && "The left-side node is waiting for a formal decision/approval from the right-side node."}
-            </p>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPendingConnection(null)}>Cancel</Button>
-            <Button onClick={handleCreateEdge} disabled={isSyncing}>
-              {isSyncing ? "Creating..." : "Create Connection"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Edge Edit Dialog */}
       <Dialog open={!!editingEdge} onOpenChange={() => setEditingEdge(null)}>

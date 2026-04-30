@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { LimitReachedDialog } from "@/components/dialogs/LimitReachedDialog";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { MultiSelectSearch, SelectItem as MultiSelectItem } from "@/components/ui/multi-select-search";
+import { GraphData, ManualStatus, NodeDTO, NodeType } from "@/types";
 
 interface AddNodeDialogProps {
   projectId: string;
@@ -32,6 +34,7 @@ interface AddNodeDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
+  onPendingSaveChange?: (delta: number) => void;
 }
 
 interface Member {
@@ -46,8 +49,13 @@ interface Team {
   name: string;
 }
 
-export function AddNodeDialog({ projectId, orgId, parentNodeId, parentNodeTitle, open, onOpenChange, onSuccess }: AddNodeDialogProps) {
+function makeTempId(prefix: string) {
+  return `${prefix}-${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
+}
+
+export function AddNodeDialog({ projectId, orgId, parentNodeId, parentNodeTitle, open, onOpenChange, onSuccess, onPendingSaveChange }: AddNodeDialogProps) {
   const { data: session } = useSession();
+  const queryClient = useQueryClient();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [type, setType] = useState("TASK");
@@ -102,8 +110,63 @@ export function AddNodeDialog({ projectId, orgId, parentNodeId, parentNodeTitle,
     const allOwnerIds = ownerId ? [ownerId, ...participantIds] : participantIds;
     // Remove duplicates just in case
     const uniqueOwnerIds = Array.from(new Set(allOwnerIds));
+    const tempId = makeTempId("temp-node");
+    const createdAt = new Date().toISOString();
+    const selectedOwner = members.find((member) => member.userId === ownerId);
+    const selectedOwners = uniqueOwnerIds
+      .map((id) => members.find((member) => member.userId === id))
+      .filter((member): member is Member => Boolean(member));
+    const selectedTeams = teamIds
+      .map((id) => teams.find((team) => team.id === id))
+      .filter((team): team is Team => Boolean(team));
+    const optimisticNode: NodeDTO = {
+      id: tempId,
+      orgId,
+      projectId,
+      parentNodeId: parentNodeId || null,
+      teamId: selectedTeams[0]?.id || null,
+      teamName: selectedTeams[0]?.name || null,
+      ownerId: ownerId || null,
+      ownerName: selectedOwner?.userName || null,
+      teams: selectedTeams.map((team) => ({ id: team.id, name: team.name })),
+      owners: selectedOwners.map((member) => ({ id: member.userId, name: member.userName || "Unknown" })),
+      title,
+      description: description || null,
+      type: type as NodeType,
+      manualStatus: ManualStatus.TODO,
+      computedStatus: "TODO",
+      priority: 3,
+      dueAt: dueAt ? new Date(dueAt).toISOString() : null,
+      phase: null,
+      createdAt,
+      updatedAt: createdAt,
+      commentCount: 0,
+      attachmentCount: 0,
+      childCount: 0,
+      positionX: parentNodeId ? 48 : Math.random() * 800,
+      positionY: parentNodeId ? 96 : Math.random() * 600,
+    };
 
     try {
+      onPendingSaveChange?.(1);
+      queryClient.setQueryData<GraphData>(["graph", projectId], (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          nodes: [
+            ...old.nodes.map((node) =>
+              node.id === parentNodeId
+                ? { ...node, childCount: (node.childCount || 0) + 1 }
+                : node
+            ),
+            optimisticNode,
+          ],
+        };
+      });
+      resetForm();
+      onOpenChange(false);
+      toast.info("Node added. Saving...");
+
       const res = await fetch(`/api/projects/${projectId}/nodes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -125,19 +188,57 @@ export function AddNodeDialog({ projectId, orgId, parentNodeId, parentNodeTitle,
         // Check if it's a limit error
         if (error.error === "LIMIT_REACHED") {
           setShowLimitDialog(true);
-          onOpenChange(false); // Close the add node dialog
+          queryClient.setQueryData<GraphData>(["graph", projectId], (old) => {
+            if (!old) return old;
+            return {
+              ...old,
+              nodes: old.nodes
+                .filter((node) => node.id !== tempId)
+                .map((node) =>
+                  node.id === parentNodeId
+                    ? { ...node, childCount: Math.max(0, (node.childCount || 0) - 1) }
+                    : node
+                ),
+            };
+          });
           return;
         }
 
         throw new Error(error.message || "Failed to create node");
       }
 
-      toast.success("Node created successfully");
-      resetForm();
+      const savedNode = await res.json() as Partial<NodeDTO>;
+      queryClient.setQueryData<GraphData>(["graph", projectId], (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          nodes: old.nodes.map((node) =>
+            node.id === tempId
+              ? { ...optimisticNode, ...savedNode, id: savedNode.id || tempId }
+              : node
+          ),
+        };
+      });
+      toast.success("Node saved");
       onSuccess();
     } catch (error) {
+      queryClient.setQueryData<GraphData>(["graph", projectId], (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          nodes: old.nodes
+            .filter((node) => node.id !== tempId)
+            .map((node) =>
+              node.id === parentNodeId
+                ? { ...node, childCount: Math.max(0, (node.childCount || 0) - 1) }
+                : node
+            ),
+        };
+      });
       toast.error(error instanceof Error ? error.message : "Failed to create node");
+      onSuccess();
     } finally {
+      onPendingSaveChange?.(-1);
       setIsLoading(false);
     }
   };

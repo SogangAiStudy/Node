@@ -17,6 +17,7 @@
 - `components/graph/NodeDetailSheet.tsx` is now the primary task workspace surface, with details, page, comments, files, and activity views.
 - Task file uploads are stored outside markdown through Supabase Storage using the `node-attachments` bucket by default.
 - Nodes can now form a hierarchy through `nodes.parent_node_id`; the graph UI renders parent nodes as container blocks and supports Scratch-like drag-in/drag-out nesting.
+- Graph node and edge creation uses optimistic UI updates first, then reconciles with the server; pending saves install browser/internal-link leave warnings.
 - Workspace admin/member management now lives canonically at `app/(dashboard)/org/[orgId]/settings/page.tsx`; the older `app/(dashboard)/organization/members/page.tsx` route is legacy.
 - Team-targeted requests now use stable `requests.targetTeamId` IDs with `toTeam` kept only as a backward-compatible display alias.
 - Default team identity is now a schema flag (`teams.isDefault`) instead of the literal name `"Default Team"`.
@@ -46,3 +47,4 @@
 - ESLint currently treats legacy `any`, unescaped text, and React compiler debt as warnings so `npm run lint` remains a passing gate. Warning count is now 0 after targeted type cleanup and unused-code removal.
 - Playwright uses bundled Chromium installed under `/Users/xavi/Library/Caches/ms-playwright/`; the global Codex Playwright MCP config was updated to point at that executable, but already-running Codex sessions may need restart before MCP browser tools reload the new setting.
 - Playwright webServer uses `next dev --webpack` because the Turbopack dev server can hang while compiling `/api/projects/[projectId]/invites`; production builds still use the default Next.js production build path.
+- New graph connections default to `DEPENDS_ON` without a creation-time relation picker; existing relation types are changed by clicking an existing edge and editing it.

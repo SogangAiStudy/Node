@@ -18,6 +18,7 @@
 - [x] Add DB-backed authenticated e2e tests for workspace invite/join, project sharing, node CRUD, request/inbox, and permission boundaries
 - [x] Verify group collaboration and permission management with DB-backed e2e coverage
 - [x] Add Scratch-like nested node containment with drag-in graph UI and DB-backed e2e coverage
+- [x] Make graph connection creation default to `DEPENDS_ON` and add optimistic node/edge saves with leave warnings
 - [x] Run DB-backed authenticated e2e against the current Supabase/Vercel database after applying task-collaboration migrations
 - [x] Reduce ESLint warnings from 249 to 181 through real code cleanup
 - [x] Reduce the remaining ESLint warnings to zero without weakening rule coverage
