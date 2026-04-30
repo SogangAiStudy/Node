@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
     Dialog,
     DialogContent,
@@ -21,19 +21,15 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import {
-    Check,
     Copy,
     Mail,
-    MoreHorizontal,
     Plus,
     Search,
     Users,
     X,
-    UserPlus
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
 
 interface ProjectSettingsDialogProps {
     projectId: string;
@@ -41,6 +37,44 @@ interface ProjectSettingsDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     defaultTab?: "members" | "teams";
+}
+
+type ProjectSettingsTab = "members" | "teams";
+type ProjectRole = "PROJECT_ADMIN" | "EDITOR" | "VIEWER";
+
+interface ProjectInvite {
+    id: string;
+    email: string;
+    invitedBy: string;
+}
+
+interface ProjectMember {
+    id: string;
+    userId: string;
+    name: string | null;
+    email: string;
+    image: string | null;
+    role: ProjectRole;
+}
+
+interface ProjectTeam {
+    id: string;
+    name: string;
+    memberCount: number;
+    role: ProjectRole;
+}
+
+interface AvailableTeam {
+    id: string;
+    name: string;
+    memberCount: number;
+}
+
+interface ProjectAccessData {
+    invites: ProjectInvite[];
+    members: ProjectMember[];
+    teams: ProjectTeam[];
+    availableTeams: AvailableTeam[];
 }
 
 export function ProjectSettingsDialog({
@@ -51,22 +85,18 @@ export function ProjectSettingsDialog({
     defaultTab = "members",
 }: ProjectSettingsDialogProps) {
     const queryClient = useQueryClient();
-    const [activeTab, setActiveTab] = useState(defaultTab);
+    const [activeTab, setActiveTab] = useState<ProjectSettingsTab>(defaultTab);
     const [inviteEmail, setInviteEmail] = useState("");
     const [inviteRole, setInviteRole] = useState("EDITOR");
     const [selectedTeam, setSelectedTeam] = useState<string>("");
 
-    useEffect(() => {
-        if (open) setActiveTab(defaultTab);
-    }, [open, defaultTab]);
-
     // Fetch Access Data
-    const { data: accessData, isLoading } = useQuery({
+    const { data: accessData, isLoading } = useQuery<ProjectAccessData>({
         queryKey: ["project-access", projectId],
         queryFn: async () => {
             const res = await fetch(`/api/projects/${projectId}/access`);
             if (!res.ok) throw new Error("Failed to load access data");
-            return res.json();
+            return res.json() as Promise<ProjectAccessData>;
         },
         enabled: open,
     });
@@ -90,7 +120,7 @@ export function ProjectSettingsDialog({
             setInviteEmail("");
             queryClient.invalidateQueries({ queryKey: ["project-access", projectId] });
         },
-        onError: (err: any) => toast.error(err.message),
+        onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to invite"),
     });
 
     // Add Team Mutation
@@ -112,7 +142,7 @@ export function ProjectSettingsDialog({
             setSelectedTeam("");
             queryClient.invalidateQueries({ queryKey: ["project-access", projectId] });
         },
-        onError: (err: any) => toast.error(err.message),
+        onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to add team"),
     });
 
     // Revoke Invite
@@ -145,7 +175,7 @@ export function ProjectSettingsDialog({
             toast.success("Member removed");
             queryClient.invalidateQueries({ queryKey: ["project-access", projectId] });
         },
-        onError: (err: any) => toast.error(err.message),
+        onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to remove member"),
     });
 
     // Update Role
@@ -164,7 +194,7 @@ export function ProjectSettingsDialog({
             toast.success("Role updated");
             queryClient.invalidateQueries({ queryKey: ["project-access", projectId] });
         },
-        onError: (err: any) => toast.error(err.message),
+        onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to update role"),
     });
 
     // Remove Team
@@ -254,7 +284,7 @@ export function ProjectSettingsDialog({
                 <Tabs
                     defaultValue="members"
                     value={activeTab}
-                    onValueChange={(v) => setActiveTab(v as any)}
+                    onValueChange={(v) => setActiveTab(v as ProjectSettingsTab)}
                     className="w-full"
                 >
                     <TabsList className="w-full justify-start rounded-none border-b bg-transparent px-6 py-0 h-10">
@@ -278,10 +308,10 @@ export function ProjectSettingsDialog({
                                 {isLoading && <div className="p-8 text-center text-sm text-muted-foreground">Loading members...</div>}
 
                                 {/* Invites */}
-                                {accessData?.invites?.length > 0 && (
+                                {(accessData?.invites?.length ?? 0) > 0 && (
                                     <div className="px-4 py-2 bg-muted/20">
                                         <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">Pending Invites</h4>
-                                        {accessData.invites.map((inv: any) => (
+                                        {accessData?.invites.map((inv) => (
                                             <div key={inv.id} className="flex items-center justify-between py-2 text-sm">
                                                 <div className="flex items-center gap-2">
                                                     <div className="h-8 w-8 rounded-full bg-zinc-100 border flex items-center justify-center">
@@ -308,11 +338,11 @@ export function ProjectSettingsDialog({
 
                                 {/* Members */}
                                 <div className="p-2">
-                                    {accessData?.members?.map((member: any) => (
+                                    {accessData?.members?.map((member) => (
                                         <div key={member.id} className="flex items-center justify-between p-2 hover:bg-muted/50 rounded-lg transition-colors group">
                                             <div className="flex items-center gap-3">
                                                 <Avatar className="h-8 w-8">
-                                                    <AvatarImage src={member.image} />
+                                                    <AvatarImage src={member.image || undefined} />
                                                     <AvatarFallback>{member.name?.[0] || "U"}</AvatarFallback>
                                                 </Avatar>
                                                 <div className="flex flex-col">
@@ -360,12 +390,12 @@ export function ProjectSettingsDialog({
                                             <SelectValue placeholder="Select a team to add..." />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            {accessData?.availableTeams?.map((t: any) => (
+                                            {accessData?.availableTeams?.map((t) => (
                                                 <SelectItem key={t.id} value={t.id}>
                                                     {t.name} ({t.memberCount} members)
                                                 </SelectItem>
                                             ))}
-                                            {accessData?.availableTeams?.length === 0 && (
+                                            {(accessData?.availableTeams?.length ?? 0) === 0 && (
                                                 <div className="p-2 text-xs text-muted-foreground text-center">No available teams</div>
                                             )}
                                         </SelectContent>
@@ -381,7 +411,7 @@ export function ProjectSettingsDialog({
                                 </div>
 
                                 <div className="space-y-1">
-                                    {accessData?.teams?.map((team: any) => (
+                                    {accessData?.teams?.map((team) => (
                                         <div key={team.id} className="flex items-center justify-between p-2 border rounded-md">
                                             <div className="flex items-center gap-3">
                                                 <div className="h-8 w-8 bg-blue-50 text-blue-600 rounded flex items-center justify-center">

@@ -3,12 +3,12 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { ExternalLink, Clock, Inbox as InboxIcon, MoreHorizontal, Bell, UserPlus, CheckCircle2, XCircle, Shield } from "lucide-react";
+import { ExternalLink, Clock, Inbox as InboxIcon, MoreHorizontal, Bell, UserPlus, CheckCircle2, Shield } from "lucide-react";
 import { RequestDTO, NotificationDTO, ProjectInviteDTO, OrgMemberDTO, InboxItem } from "@/types";
 import { toast } from "sonner";
 import {
@@ -26,7 +26,6 @@ function NotificationCard({
   notification: NotificationDTO;
   onAction: () => void;
 }) {
-  const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
 
   const handleRead = async () => {
@@ -37,16 +36,10 @@ function NotificationCard({
       });
       if (!res.ok) throw new Error("Failed to mark as read");
       onAction();
-    } catch (error) {
+    } catch {
       toast.error("Failed to dismiss notification");
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const handleNavigate = () => {
-    if (notification.entityId) {
-      router.push(`/org/${notification.orgId}/graph?nodeId=${notification.entityId}`);
     }
   };
 
@@ -137,7 +130,7 @@ function InviteCard({
       if (!res.ok) throw new Error("Failed to respond");
       toast.success(accept ? "Invite accepted" : "Invite declined");
       onAction();
-    } catch (error) {
+    } catch {
       toast.error("Failed to respond to invite");
     } finally {
       setIsLoading(false);
@@ -200,7 +193,7 @@ function JoinRequestCard({
       if (!res.ok) throw new Error("Failed to approve/decline");
       toast.success(approve ? "Member approved" : "Member declined");
       onAction();
-    } catch (error) {
+    } catch {
       toast.error("An error occurred");
     } finally {
       setIsLoading(false);
@@ -267,7 +260,7 @@ function RequestCard({
       if (!res.ok) throw new Error("Failed to respond");
       toast.success("Response saved");
       onAction();
-    } catch (error) {
+    } catch {
       toast.error("Failed to save response");
     } finally {
       setIsLoading(false);
@@ -283,7 +276,7 @@ function RequestCard({
       if (!res.ok) throw new Error("Failed to claim");
       toast.success("Request claimed");
       onAction();
-    } catch (error) {
+    } catch {
       toast.error("Failed to claim request");
     } finally {
       setIsLoading(false);
@@ -301,7 +294,7 @@ function RequestCard({
       if (!res.ok) throw new Error("Failed to approve");
       toast.success("Request approved");
       onAction();
-    } catch (error) {
+    } catch {
       toast.error("Failed to approve request");
     } finally {
       setIsLoading(false);
@@ -317,7 +310,7 @@ function RequestCard({
       if (!res.ok) throw new Error("Failed to archive");
       toast.success("Request archived");
       onAction();
-    } catch (error) {
+    } catch {
       toast.error("Failed to archive request");
     } finally {
       setIsLoading(false);
@@ -334,7 +327,7 @@ function RequestCard({
       if (!res.ok) throw new Error("Failed to delete");
       toast.success("Request deleted");
       onAction();
-    } catch (error) {
+    } catch {
       toast.error("Failed to delete request");
     } finally {
       setIsLoading(false);
@@ -447,8 +440,10 @@ export default function OrgInboxPage() {
       if (activeTab === "archived") {
         const res = await fetch(`/api/requests/org-inbox?orgId=${orgId}&mode=mine&archived=true`);
         if (!res.ok) throw new Error("Failed to fetch inbox");
-        const json = await res.json();
-        return { items: json.requests.map((r: any) => ({ type: "REQUEST", data: r })) };
+        const json = await res.json() as { requests: RequestDTO[] };
+        return {
+          items: json.requests.map((request): InboxItem => ({ type: "REQUEST", data: request })),
+        };
       }
 
       const res = await fetch(`/api/inbox/unified?orgId=${orgId}`);

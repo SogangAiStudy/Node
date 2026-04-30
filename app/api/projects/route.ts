@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
-import { requireAuth, getUserTeams, isOrgAdmin } from "@/lib/utils/auth";
+import { requireAuth, getUserTeams } from "@/lib/utils/auth";
 import { createActivityLog } from "@/lib/utils/activity-log";
 import { triggerProjectAssignmentNotifications } from "@/lib/utils/notifications";
 import { z } from "zod";
@@ -22,17 +23,14 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const requestedOrgId = searchParams.get("orgId");
 
-    // Get user's organization
+    // Get user's active organization membership
     let orgMember;
     if (requestedOrgId) {
-      // Verify user is a member of the requested org
-      orgMember = await prisma.orgMember.findUnique({
+      orgMember = await prisma.orgMember.findFirst({
         where: {
-          orgId_userId: {
-            orgId: requestedOrgId,
-            userId: user.id,
-          },
           status: { in: ["ACTIVE", "PENDING_TEAM_ASSIGNMENT"] },
+          orgId: requestedOrgId,
+          userId: user.id,
         },
         select: {
           orgId: true,
@@ -57,12 +55,21 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ projects: [] });
     }
 
-    // Check if user is org member (we already verified membership above)
-    // NEW POLICY: Everyone sees all projects in the org
+    const teamIds = await getUserTeams(orgMember.orgId, user.id);
+    const where: Prisma.ProjectWhereInput =
+      orgMember.role === "ADMIN"
+        ? { orgId: orgMember.orgId }
+        : {
+            orgId: orgMember.orgId,
+            OR: [
+              { ownerId: user.id },
+              { members: { some: { userId: user.id } } },
+              ...(teamIds.length > 0 ? [{ projectTeams: { some: { teamId: { in: teamIds } } } }] : []),
+            ],
+          };
+
     const projects = await prisma.project.findMany({
-      where: {
-        orgId: orgMember.orgId,
-      },
+      where,
       include: {
         _count: {
           select: {
@@ -81,7 +88,7 @@ export async function GET(request: NextRequest) {
       ],
     });
 
-    const projectDTOs = projects.map((project: any) => ({
+    const projectDTOs = projects.map((project) => ({
       id: project.id,
       orgId: project.orgId,
       name: project.name,
@@ -93,15 +100,14 @@ export async function GET(request: NextRequest) {
       folderId: project.folderId,
       teamCount: project._count.projectTeams,
       memberCount: project._count.projectTeams, // For UI compatibility
+      userRole: project.ownerId === user.id ? "PROJECT_ADMIN" : undefined,
     }));
 
     return NextResponse.json({ projects: projectDTOs });
   } catch (error) {
     console.error("GET /api/projects error details:", error);
-    // @ts-ignore
-    if (error.code) console.error("Error code:", error.code);
-    // @ts-ignore
-    if (error.meta) console.error("Error meta:", error.meta);
+    if (error instanceof Error && "code" in error) console.error("Error code:", error.code);
+    if (error instanceof Error && "meta" in error) console.error("Error meta:", error.meta);
     return NextResponse.json({ error: "Failed to fetch projects" }, { status: 500 });
   }
 }
@@ -140,7 +146,7 @@ export async function POST(request: NextRequest) {
       where: { orgId: orgMember.orgId },
       select: { id: true },
     });
-    const orgTeamIds = orgTeams.map((t: any) => t.id);
+    const orgTeamIds = orgTeams.map((t) => t.id);
 
     // Verify all selected teamIds belong to this organization
     const invalidTeams = validated.teamIds.filter(id => !orgTeamIds.includes(id));
@@ -152,7 +158,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Determine primary team (must be one of the selected teams if teams are selected)
-    let primaryTeamId = validated.primaryTeamId || (validated.teamIds.length > 0 ? validated.teamIds[0] : null);
+    const primaryTeamId = validated.primaryTeamId || (validated.teamIds.length > 0 ? validated.teamIds[0] : null);
 
     if (primaryTeamId && !validated.teamIds.includes(primaryTeamId)) {
       return NextResponse.json(
@@ -187,7 +193,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create project with multiple ProjectTeam entries
-    const project = await prisma.$transaction(async (tx: any) => {
+    const project = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // Create project
       const newProject = await tx.project.create({
         data: {

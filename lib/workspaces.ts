@@ -1,5 +1,7 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/utils/auth";
+import { buildTeamRequestFilters } from "@/lib/utils/requests";
 
 export interface WorkspaceSummary {
   orgId: string;
@@ -46,14 +48,25 @@ async function getUnreadInboxCount(orgId: string, userId: string): Promise<numbe
     },
   });
 
-  const teamNames = userTeams.map((tm) => tm.team?.name).filter((name): name is string => !!name);
-  const userTeamIds = userTeams.map((tm) => tm.teamId).filter((id): id is string => !!id);
+  const teamNames = userTeams.flatMap((tm) => (tm.team?.name ? [tm.team.name] : []));
+  const userTeamIds = userTeams.flatMap((tm) => (tm.teamId ? [tm.teamId] : []));
+  const requestTargets: Prisma.RequestWhereInput[] = [{ toUserId: userId }];
+  const notificationTargets: Prisma.NotificationWhereInput[] = [{ userId, targetType: "USER" }];
+
+  requestTargets.push(...buildTeamRequestFilters(userTeamIds, teamNames));
+
+  if (userTeamIds.length > 0) {
+    notificationTargets.push({
+      targetType: "TEAM" as const,
+      targetTeamId: { in: userTeamIds },
+    });
+  }
 
   const [unreadRequests, unreadNotifications, unreadInvites] = await Promise.all([
     prisma.request.count({
       where: {
         orgId,
-        OR: [{ toUserId: userId }, { toTeam: { in: teamNames } }],
+        OR: requestTargets,
         status: {
           not: "CLOSED",
         },
@@ -62,7 +75,7 @@ async function getUnreadInboxCount(orgId: string, userId: string): Promise<numbe
     prisma.notification.count({
       where: {
         orgId,
-        OR: [{ userId, targetType: "USER" }, { targetType: "TEAM", targetTeamId: { in: userTeamIds } }],
+        OR: notificationTargets,
         isRead: false,
       },
     }),
@@ -89,6 +102,9 @@ export async function getCurrentUserWorkspaces(): Promise<WorkspaceSummary[]> {
   const orgMemberships = await prisma.orgMember.findMany({
     where: {
       userId: dbUser.id,
+      status: {
+        in: ["ACTIVE", "PENDING_TEAM_ASSIGNMENT", "PENDING_APPROVAL"],
+      },
     },
     include: {
       organization: {

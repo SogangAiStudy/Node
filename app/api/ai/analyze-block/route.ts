@@ -8,7 +8,6 @@ import {
     checkRateLimit,
     getCachedBlockAnalysis,
     setCachedBlockAnalysis,
-    BlockAnalysisResult,
 } from "@/lib/ai/openai";
 import { z } from "zod";
 import { getBlockingDetails } from "@/lib/node-status";
@@ -16,10 +15,6 @@ import { getBlockingDetails } from "@/lib/node-status";
 const AnalyzeBlockSchema = z.object({
     nodeId: z.string(),
 });
-
-// Simple in-memory cache for quick lookups
-const analysisCache = new Map<string, { timestamp: number; data: any }>();
-const CACHE_TTL = 60 * 1000; // 1 minute
 
 export async function POST(req: NextRequest) {
     try {
@@ -84,9 +79,9 @@ export async function POST(req: NextRequest) {
         }
 
         // Build context for AI
-        const blockedDetails = getBlockingDetails(node as any);
+        const blockedDetails = getBlockingDetails(node);
 
-        const formatOwners = (owners: any[]) =>
+        const formatOwners = (owners: typeof node.nodeOwners) =>
             owners.map((o) => ({ id: o.user.id, name: o.user.name }));
 
         const context = {
@@ -97,7 +92,7 @@ export async function POST(req: NextRequest) {
                 owners: formatOwners(node.nodeOwners),
                 teams: node.nodeTeams.map((t) => ({ id: t.team.id, name: t.team.name })),
             },
-            blockers: blockedDetails.map((d: any) => {
+            blockers: blockedDetails.map((d) => {
                 if (d.type === "DEPENDENCY" && d.nodeId) {
                     return {
                         type: "DEPENDENCY",
@@ -112,7 +107,7 @@ export async function POST(req: NextRequest) {
                     };
                 }
                 if (d.type === "REQUEST") {
-                    const req = node.linkedRequests.find((r: any) => r.id === d.requestId);
+                    const req = node.linkedRequests.find((r) => r.id === d.requestId);
                     return {
                         type: "REQUEST",
                         question: req?.question?.slice(0, 100),

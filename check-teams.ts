@@ -8,7 +8,7 @@ async function checkTeams() {
     });
 
     console.log(`Total teams: ${teams.length}\n`);
-    teams.forEach((team: any) => {
+    teams.forEach((team) => {
         console.log(`Team: ${team.name}`);
         console.log(`  Organization: ${team.organization.name}`);
         console.log(`  ID: ${team.id}`);

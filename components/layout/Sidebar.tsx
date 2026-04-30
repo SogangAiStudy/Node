@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useParams, usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
 import {
   DropdownMenu,
@@ -47,9 +47,16 @@ interface SidebarProps {
   currentOrgId: string;
 }
 
+interface NavItemProps {
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  active?: boolean;
+  count?: number;
+}
+
 export function Sidebar({ currentOrgId }: SidebarProps) {
   const { data: session } = useSession();
-  const params = useParams();
   const pathname = usePathname();
   const router = useRouter();
 
@@ -156,9 +163,9 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
       toast.success("Folder created");
       setIsFolderModalOpen(false);
       setTargetParentId(undefined);
-    } catch (error: any) {
+    } catch (error) {
       console.error("Failed to create folder:", error);
-      toast.error(error.message || "Failed to create folder");
+      toast.error(error instanceof Error ? error.message : "Failed to create folder");
     }
   };
 
@@ -240,7 +247,7 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
     // Validate: Cannot drop folder into its own descendant or itself
     if (isFolder && destFolderId === draggableId) return;
 
-    let listToUse: any[] = isFolder ? destFolders : destProjects;
+    const listToUse: Array<Folder | Project> = isFolder ? destFolders : destProjects;
     let targetIndex = destination.index;
 
     // Adjust index logic for mixed lists
@@ -320,7 +327,7 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
 
   const currentWorkspace = workspaces?.find((w) => w.orgId === currentOrgId);
 
-  const NavItem = ({ href, icon: Icon, label, active, count }: any) => (
+  const NavItem = ({ href, icon: Icon, label, active, count }: NavItemProps) => (
     <Link
       href={href}
       className={cn(
@@ -593,7 +600,6 @@ export function Sidebar({ currentOrgId }: SidebarProps) {
         onClose={() => setIsSearchModalOpen(false)}
         onSearch={handleSearch}
         orgId={currentOrgId}
-        onSelect={() => { }}
       />
 
       {/* Resize Handle */}

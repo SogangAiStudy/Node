@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
     Dialog,
@@ -15,45 +15,47 @@ interface GlobalSearchModalProps {
     isOpen: boolean;
     onClose: () => void;
     orgId?: string;
-    onSearch: (query: string) => { projects: any[]; folders: any[] };
-    onSelect: (item: any) => void;
+    onSearch: (query: string) => SearchResults;
 }
+
+interface SearchItem {
+    id: string;
+    name: string;
+}
+
+interface SearchResults {
+    projects: SearchItem[];
+    folders: SearchItem[];
+}
+
+type FlatSearchItem = SearchItem & { type: "folder" | "project" };
 
 export function GlobalSearchModal({
     isOpen,
     onClose,
     orgId,
     onSearch,
-    onSelect,
 }: GlobalSearchModalProps) {
     const router = useRouter();
     const [query, setQuery] = useState("");
-    const [results, setResults] = useState<{ projects: any[]; folders: any[] }>({
-        projects: [],
-        folders: [],
-    });
     const [selectedIndex, setSelectedIndex] = useState(0);
 
-    useEffect(() => {
-        if (isOpen) {
+    const handleOpenChange = (nextOpen: boolean) => {
+        if (!nextOpen) {
             setQuery("");
-            setResults({ projects: [], folders: [] });
             setSelectedIndex(0);
+            onClose();
         }
-    }, [isOpen]);
+    };
 
-    useEffect(() => {
-        const res = onSearch(query);
-        setResults(res);
-        setSelectedIndex(0);
-    }, [query, onSearch]);
+    const results = useMemo(() => onSearch(query), [query, onSearch]);
 
-    const flatResults = [
+    const flatResults = useMemo<FlatSearchItem[]>(() => [
         ...results.folders.map(s => ({ ...s, type: "folder" as const })),
         ...results.projects.map(p => ({ ...p, type: "project" as const })),
-    ];
+    ], [results]);
 
-    const handleSelect = useCallback((item: any) => {
+    const handleSelect = useCallback((item: FlatSearchItem) => {
         onClose();
         if (item.type === "folder") {
             router.push(`/org/${orgId}/projects#folder-${item.id}`);
@@ -85,7 +87,7 @@ export function GlobalSearchModal({
     }, [isOpen, flatResults, selectedIndex, handleSelect]);
 
     return (
-        <Dialog open={isOpen} onOpenChange={onClose}>
+        <Dialog open={isOpen} onOpenChange={handleOpenChange}>
             <DialogContent className="max-w-2xl p-0 overflow-hidden bg-[#1a1b1e] border-[#2c2d31] shadow-2xl top-[20%] translate-y-0">
                 <div className="flex items-center px-4 border-b border-[#2c2d31]">
                     <Search className="h-5 w-5 text-[#7b7c7e] mr-3" />
@@ -110,7 +112,7 @@ export function GlobalSearchModal({
                             </div>
                         ) : flatResults.length === 0 ? (
                             <div className="px-4 py-8 text-center">
-                                <p className="text-sm text-[#7b7c7e]">No results found for "{query}"</p>
+                                <p className="text-sm text-[#7b7c7e]">No results found for &quot;{query}&quot;</p>
                             </div>
                         ) : (
                             <div className="space-y-1">

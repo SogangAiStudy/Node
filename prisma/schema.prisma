@@ -26,6 +26,9 @@ model User {
   sessions           Session[]
   teamMemberships    TeamMember[]
   nodeOwners         NodeOwner[]
+  updatedNodePages   NodePage[]       @relation("NodePageUpdatedBy")
+  nodeComments       NodeComment[]    @relation("NodeCommentAuthor")
+  nodeAttachments    NodeAttachment[] @relation("NodeAttachmentUploader")
   orgInboxStates     OrgInboxState[]
   sentInvites        ProjectInvite[] @relation("InvitedBy")
   receivedInvites    ProjectInvite[] @relation("TargetUser")
@@ -128,12 +131,14 @@ model Team {
   orgId           String
   name            String
   description     String?
+  isDefault       Boolean       @default(false) @map("is_default")
   createdAt       DateTime      @default(now())
   nodes           Node[]
   projectTeams    ProjectTeam[]
   primaryProjects Project[]     @relation("PrimaryTeam")
   members         TeamMember[]
   nodeTeams       NodeTeam[]
+  targetedRequests Request[]    @relation("RequestTargetTeam")
   organization    Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
   @@unique([orgId, name])
@@ -225,6 +230,7 @@ model ProjectInvite {
   projectId       String
   invitedByUserId String
   targetUserId    String
+  role            ProjectRole         @default(EDITOR)
   status          ProjectInviteStatus @default(PENDING)
   createdAt       DateTime            @default(now())
   respondedAt     DateTime?
@@ -242,6 +248,7 @@ model ProjectInvite {
 model Node {
   id             String       @id @default(cuid())
   projectId      String
+  parentNodeId   String?      @map("parent_node_id")
   title          String
   description    String?
   type           NodeType     @default(TASK)
@@ -261,16 +268,83 @@ model Node {
   organization   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   owner          User?        @relation("NodeOwner", fields: [ownerId], references: [id])
   project        Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parentNode     Node?        @relation("NodeHierarchy", fields: [parentNodeId], references: [id], onDelete: SetNull)
+  childNodes     Node[]       @relation("NodeHierarchy")
   team           Team?        @relation(fields: [teamId], references: [id])
   nodeTeams      NodeTeam[]
   nodeOwners     NodeOwner[]
   linkedRequests Request[]
+  page           NodePage?
+  comments       NodeComment[]
+  attachments    NodeAttachment[]
 
   @@index([orgId])
   @@index([projectId])
+  @@index([parentNodeId])
   @@index([teamId])
   @@index([ownerId])
   @@map("nodes")
+}
+
+model NodePage {
+  id              String   @id @default(cuid())
+  nodeId          String   @unique
+  orgId           String
+  projectId       String
+  contentMarkdown String   @default("") @map("content_markdown")
+  updatedByUserId String?  @map("updated_by_user_id")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  node      Node  @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  updatedBy User? @relation("NodePageUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([orgId])
+  @@index([projectId])
+  @@index([updatedByUserId])
+  @@map("node_pages")
+}
+
+model NodeComment {
+  id        String   @id @default(cuid())
+  nodeId    String
+  orgId     String
+  projectId String
+  authorId  String   @map("author_id")
+  body      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  node   Node @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  author User @relation("NodeCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([nodeId])
+  @@index([orgId])
+  @@index([projectId])
+  @@index([authorId])
+  @@map("node_comments")
+}
+
+model NodeAttachment {
+  id         String   @id @default(cuid())
+  nodeId     String
+  orgId      String
+  projectId  String
+  uploadedBy String   @map("uploaded_by")
+  fileName   String   @map("file_name")
+  mimeType   String   @map("mime_type")
+  sizeBytes  Int      @map("size_bytes")
+  storageKey String   @unique @map("storage_key")
+  createdAt  DateTime @default(now())
+
+  node     Node @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  uploader User @relation("NodeAttachmentUploader", fields: [uploadedBy], references: [id], onDelete: Cascade)
+
+  @@index([nodeId])
+  @@index([orgId])
+  @@index([projectId])
+  @@index([uploadedBy])
+  @@map("node_attachments")
 }
 
 model NodeTeam {
@@ -322,6 +396,7 @@ model Request {
   fromUserId    String
   toUserId      String?
   toTeam        String?
+  targetTeamId  String?       @map("target_team_id")
   status        RequestStatus @default(OPEN)
   responseDraft String?
   responseFinal String?
@@ -337,6 +412,7 @@ model Request {
   linkedNode    Node          @relation(fields: [linkedNodeId], references: [id], onDelete: Cascade)
   organization  Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
   project       Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  targetTeam    Team?         @relation("RequestTargetTeam", fields: [targetTeamId], references: [id], onDelete: SetNull)
   toUser        User?         @relation("RequestAssignee", fields: [toUserId], references: [id])
 
   @@index([orgId])
@@ -344,6 +420,7 @@ model Request {
   @@index([linkedNodeId])
   @@index([fromUserId])
   @@index([toUserId])
+  @@index([targetTeamId])
   @@index([status])
   @@map("requests")
 }

@@ -4,14 +4,18 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FolderKanban, Clock } from "lucide-react";
 import { ProjectDTO } from "@/types";
-import { cn } from "@/lib/utils";
+import { Project } from "@/hooks/use-workspace-structure";
 
 interface ProjectCardProps {
-    project: ProjectDTO;
+    project: ProjectDTO | Project;
     orgId: string;
 }
 
 export function ProjectCard({ project, orgId }: ProjectCardProps) {
+    const lastUpdated = ("lastUpdated" in project ? project.lastUpdated : undefined) ||
+        (project.updatedAt ? new Date(project.updatedAt).toLocaleDateString() : "Recently updated");
+    const description = "description" in project ? project.description : null;
+
     return (
         <Link href={`/org/${orgId}/projects/${project.id}/graph`}>
             <Card className="h-full hover:shadow-md transition-all cursor-pointer group border border-border hover:border-primary/50">
@@ -22,24 +26,10 @@ export function ProjectCard({ project, orgId }: ProjectCardProps) {
                     </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                    {/* Preview Thumbnail */}
-                    {project.previewThumbnail && (
-                        <div className="w-full h-28 bg-muted rounded-md overflow-hidden border border-border">
-                            <div className="w-full h-full flex items-center justify-center">
-                                {/* TODO: Replace with actual preview image */}
-                                <div className="text-xs text-muted-foreground text-center px-4">
-                                    Node graph preview
-                                    <br />
-                                    <span className="text-[10px]">(placeholder)</span>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
                     {/* Description */}
-                    {project.description && (
+                    {description && (
                         <p className="text-sm text-muted-foreground line-clamp-2 min-h-[2.5rem]">
-                            {project.description}
+                            {description}
                         </p>
                     )}
 
@@ -47,7 +37,7 @@ export function ProjectCard({ project, orgId }: ProjectCardProps) {
                     <div className="flex items-center justify-between text-xs text-muted-foreground pt-2 border-t border-border">
                         <div className="flex items-center gap-1">
                             <Clock className="h-3 w-3" />
-                            <span>{project.lastUpdated || "Recently updated"}</span>
+                            <span>{lastUpdated}</span>
                         </div>
                     </div>
                 </CardContent>

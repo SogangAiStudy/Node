@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/utils/auth";
-import { isProjectAdmin } from "@/lib/utils/permissions";
+import { isProjectAdmin, requireProjectView } from "@/lib/utils/permissions";
+import { authOrPermissionErrorResponse } from "@/lib/utils/api-error-responses";
 import { triggerProjectAssignmentNotifications } from "@/lib/utils/notifications";
 import { z } from "zod";
 
@@ -18,6 +19,8 @@ export async function GET(
     try {
         const user = await requireAuth();
         const { projectId } = await params;
+
+        await requireProjectView(projectId, user.id);
 
         const projectTeams = await prisma.projectTeam.findMany({
             where: {
@@ -38,13 +41,10 @@ export async function GET(
             },
         });
 
-        // Basic permission check - if user can see project, they can see teams?
-        // For now, let's assume if they can reach this page they have some access,
-        // but stricter check would be checking ProjectMember or OrganizationMember status.
-        // Given the latency/error context, simply returning the data for now is the priority.
-
         return NextResponse.json(projectTeams);
     } catch (error) {
+        const authResponse = authOrPermissionErrorResponse(error);
+        if (authResponse) return authResponse;
         console.error("GET Project Teams error:", error);
         return NextResponse.json({ error: "Failed to fetch project teams" }, { status: 500 });
     }

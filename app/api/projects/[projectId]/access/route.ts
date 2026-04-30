@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/utils/auth";
+import { isProjectAdmin, requireProjectView } from "@/lib/utils/permissions";
 
 // GET /api/projects/[projectId]/access
 export async function GET(
@@ -11,11 +12,12 @@ export async function GET(
         const user = await requireAuth();
         const { projectId } = await params;
 
-        // Verify access
         const project = await prisma.project.findUnique({
             where: { id: projectId },
-            include: {
-                organization: true,
+            select: {
+                id: true,
+                orgId: true,
+                ownerId: true,
             },
         });
 
@@ -23,29 +25,24 @@ export async function GET(
             return NextResponse.json({ error: "Project not found" }, { status: 404 });
         }
 
-        // Check if user has access to this project
-        // (Simplification: If they are in the org, let's allow them to see access info for now,
-        // or strictly enforce membership. Let's enforce basic read access logic like "can view project")
-        // For now, let's assume if you can call this, you have passed middleware or basic checks.
-        // But strict check:
-        const orgMember = await prisma.orgMember.findUnique({
-            where: {
-                orgId_userId: {
-                    orgId: project.orgId,
-                    userId: user.id,
-                },
-            },
-        });
-
-        if (!orgMember) {
-            return NextResponse.json({ error: "No access" }, { status: 403 });
-        }
+        await requireProjectView(projectId, user.id);
+        const canManageAccess = await isProjectAdmin(projectId, user.id);
 
         // Fetch all related data
         const [projectMembers, projectTeams, invites] = await Promise.all([
             // Direct Members
             prisma.projectMember.findMany({
-                where: { projectId },
+                where: {
+                    projectId,
+                    user: {
+                        orgMemberships: {
+                            some: {
+                                orgId: project.orgId,
+                                status: { in: ["ACTIVE", "PENDING_TEAM_ASSIGNMENT"] },
+                            },
+                        },
+                    },
+                },
                 include: {
                     user: {
                         select: {
@@ -64,8 +61,17 @@ export async function GET(
                 include: {
                     team: {
                         include: {
-                            _count: {
-                                select: { members: true },
+                            members: {
+                                where: {
+                                    user: {
+                                        orgMemberships: {
+                                            some: {
+                                                orgId: project.orgId,
+                                                status: { in: ["ACTIVE", "PENDING_TEAM_ASSIGNMENT"] },
+                                            },
+                                        },
+                                    },
+                                },
                             },
                         },
                     },
@@ -128,7 +134,7 @@ export async function GET(
                 teamId: pt.teamId,
                 name: pt.team.name,
                 role: pt.role,
-                memberCount: pt.team._count.members,
+                memberCount: pt.team.members.length,
             })),
             invites: invites.map((inv) => ({
                 id: inv.id,
@@ -136,6 +142,7 @@ export async function GET(
                 name: inv.targetUser.name,
                 image: inv.targetUser.image,
                 invitedBy: inv.invitedBy.name,
+                role: inv.role,
                 status: inv.status,
                 createdAt: inv.createdAt,
             })),
@@ -144,9 +151,15 @@ export async function GET(
                 name: t.name,
                 memberCount: t._count.members,
             })),
+            permissions: {
+                canManageAccess,
+            },
         });
     } catch (error) {
         console.error("GET /api/projects/[id]/access error:", error);
+        if (error instanceof Error && error.message === "Not authorized to view this project") {
+            return NextResponse.json({ error: "No access" }, { status: 403 });
+        }
         return NextResponse.json({ error: "Failed to fetch access data" }, { status: 500 });
     }
 }

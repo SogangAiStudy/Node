@@ -53,8 +53,8 @@ export function FolderTreeItem({ folder, orgId, level = 0, onCreateSubFolder, in
 
             queryClient.invalidateQueries({ queryKey: ["workspace-structure", orgId] });
             toast.success("Folder renamed");
-        } catch (error: any) {
-            toast.error(error.message || "Failed to rename folder");
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : "Failed to rename folder");
             setEditName(folder.name);
         }
         setIsEditing(false);
@@ -68,8 +68,8 @@ export function FolderTreeItem({ folder, orgId, level = 0, onCreateSubFolder, in
             if (!res.ok) throw new Error("Failed to delete");
             queryClient.invalidateQueries({ queryKey: ["workspace-structure", orgId] });
             toast.success("Folder deleted");
-        } catch (error: any) {
-            toast.error(error.message || "Failed to delete folder");
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : "Failed to delete folder");
         }
     };
 
@@ -262,8 +262,8 @@ export function ProjectTreeItem({ project, orgId, level, index }: { project: Pro
 
             queryClient.invalidateQueries({ queryKey: ["workspace-structure", orgId] });
             toast.success("Project renamed");
-        } catch (error: any) {
-            toast.error(error.message || "Failed to rename project");
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : "Failed to rename project");
             setEditName(project.name);
         }
         setIsEditing(false);
@@ -277,8 +277,8 @@ export function ProjectTreeItem({ project, orgId, level, index }: { project: Pro
             if (!res.ok) throw new Error("Failed to delete");
             queryClient.invalidateQueries({ queryKey: ["workspace-structure", orgId] });
             toast.success("Project deleted");
-        } catch (error: any) {
-            toast.error(error.message || "Failed to delete project");
+        } catch (error) {
+            toast.error(error instanceof Error ? error.message : "Failed to delete project");
         }
     };
 

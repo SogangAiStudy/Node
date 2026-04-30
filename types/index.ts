@@ -65,6 +65,7 @@ export interface TeamDTO {
   orgId: string;
   name: string;
   description: string | null;
+  isDefault: boolean;
   createdAt: string;
   memberCount?: number;
   projectCount?: number;
@@ -104,6 +105,7 @@ export interface NodeDTO {
   id: string;
   orgId: string;
   projectId: string;
+  parentNodeId: string | null;
   teamId: string | null;
   teamName: string | null;
   projectName?: string; // Optional for now as it might not be populated everywhere
@@ -126,10 +128,53 @@ export interface NodeDTO {
   phase: string | null;
   createdAt: string;
   updatedAt: string;
+  commentCount?: number;
+  attachmentCount?: number;
+  childCount?: number;
 
   // Position for React Flow
   positionX: number | null;
   positionY: number | null;
+}
+
+export interface NodePageDTO {
+  id: string;
+  nodeId: string;
+  orgId: string;
+  projectId: string;
+  contentMarkdown: string;
+  updatedByUserId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface NodeCommentDTO {
+  id: string;
+  nodeId: string;
+  orgId: string;
+  projectId: string;
+  authorId: string;
+  authorName: string | null;
+  authorEmail: string;
+  authorImage: string | null;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface NodeAttachmentDTO {
+  id: string;
+  nodeId: string;
+  orgId: string;
+  projectId: string;
+  uploadedBy: string;
+  uploadedByName: string | null;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  storageKey: string;
+  downloadUrl: string | null;
+  createdAt: string;
 }
 
 // Edge DTO
@@ -155,6 +200,8 @@ export interface RequestDTO {
   fromUserName: string;
   toUserId: string | null;
   toUserName: string | null;
+  targetTeamId: string | null;
+  toTeamName: string | null;
   toTeam: string | null;
   status: RequestStatus;
   responseDraft: string | null;
@@ -172,6 +219,7 @@ export interface NotificationDTO {
   id: string;
   userId: string | null;
   orgId: string;
+  projectId?: string | null;
   type: NotificationType;
   targetType: NotificationTargetType;
   targetTeamId: string | null;
@@ -191,6 +239,7 @@ export interface ProjectInviteDTO {
   invitedByUserId: string;
   invitedByUserName: string;
   targetUserId: string;
+  role: ProjectRole;
   status: ProjectInviteStatus;
   createdAt: string;
 }

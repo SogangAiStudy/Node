@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/utils/auth";
-import { requireProjectView, requireProjectEdit } from "@/lib/utils/permissions";
+import { requireProjectEdit } from "@/lib/utils/permissions";
+import { authOrPermissionErrorResponse } from "@/lib/utils/api-error-responses";
 import { createActivityLog } from "@/lib/utils/activity-log";
 import { z } from "zod";
 import { EdgeRelation } from "@/types";
@@ -57,12 +58,10 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    const authResponse = authOrPermissionErrorResponse(error);
+    if (authResponse) return authResponse;
+
     console.error("DELETE /api/edges/[edgeId] error:", error);
-
-    if (error instanceof Error && error.message === "Not a member of this project") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
     return NextResponse.json({ error: "Failed to delete edge" }, { status: 500 });
   }
 }
@@ -143,10 +142,12 @@ export async function PATCH(
 
     return NextResponse.json(updatedEdge);
   } catch (error) {
-    console.error("PATCH /api/edges/[edgeId] error:", error);
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "Invalid input", details: error.issues }, { status: 400 });
     }
+    const authResponse = authOrPermissionErrorResponse(error);
+    if (authResponse) return authResponse;
+    console.error("PATCH /api/edges/[edgeId] error:", error);
     return NextResponse.json({ error: "Failed to update edge" }, { status: 500 });
   }
 }

@@ -1,47 +1,35 @@
-import { memo, useState, useEffect } from "react";
+import { memo, useCallback, useState, useEffect } from "react";
 import { Handle, Position } from "reactflow";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { NodeDTO, ComputedStatus, ManualStatus } from "@/types";
+import { NodeDTO, ManualStatus } from "@/types";
 import { CreateRequestDialog } from "./CreateRequestDialog";
 import { cn } from "@/lib/utils";
 import {
   Loader2,
   User,
-  Pencil,
-  Crown,
-  AlertCircle,
   Clock,
   Calendar,
-  ChevronDown,
   Plus,
   Ban,
-  HelpCircle,
   Sparkles,
   X,
   PanelRightOpen,
   CheckCircle2,
   PlayCircle,
   MessageSquarePlus,
+  Layers,
+  CornerUpLeft,
+  FolderPlus,
 } from "lucide-react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuSeparator,
-  DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { useUpdateNode } from "@/hooks/use-node-mutations";
 
 interface Member {
@@ -49,11 +37,6 @@ interface Member {
   userName: string | null;
   teamId: string | null;
   teamName: string | null;
-}
-
-interface Team {
-  id: string;
-  name: string;
 }
 
 interface CustomNodeProps {
@@ -64,25 +47,27 @@ interface CustomNodeProps {
     blockedBy: string[];
     blocking: string[];
     isFaded?: boolean;
+    onOpenDetail?: () => void;
+    onCreateChild?: () => void;
+    onDetachFromParent?: () => void;
   };
   selected?: boolean;
 }
 
-function getStatusColor(status: ComputedStatus): string {
-  switch (status) {
-    case "BLOCKED":
-      return "bg-red-500 text-white";
-    case "WAITING":
-      return "bg-yellow-500 text-white";
-    case "DONE":
-      return "bg-green-500 text-white";
-    case "DOING":
-      return "bg-blue-500 text-white";
-    case "TODO":
-      return "bg-gray-500 text-white";
-    default:
-      return "bg-gray-500 text-white";
-  }
+interface BlockingReason {
+  targetTitle: string;
+  actionNeeded: string;
+}
+
+interface SuggestedActor {
+  name: string;
+  nextStep: string;
+}
+
+interface AIAnalysis {
+  summary?: string;
+  blockingReasons?: BlockingReason[];
+  whoShouldAct?: SuggestedActor[];
 }
 
 function getInitials(name: string | null) {
@@ -96,7 +81,7 @@ function getInitials(name: string | null) {
 }
 
 export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
-  const { node, projectId, onDataChange, blockedBy, blocking, isFaded } = data;
+  const { node, projectId, onDataChange, isFaded, onOpenDetail, onCreateChild, onDetachFromParent } = data;
   const [createRequestOpen, setCreateRequestOpen] = useState(false);
   const updateNodeMutation = useUpdateNode();
 
@@ -109,7 +94,7 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
   const [hasLoadedMetadata, setHasLoadedMetadata] = useState(false);
 
   // AI Analysis (Subtle trigger)
-  const [aiAnalysis, setAiAnalysis] = useState<any>(null);
+  const [aiAnalysis, setAiAnalysis] = useState<AIAnalysis | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [showAnalysis, setShowAnalysis] = useState(false);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
@@ -139,7 +124,7 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
     }
   };
 
-  const fetchMetadata = async () => {
+  const fetchMetadata = useCallback(async () => {
     try {
       const res = await fetch(`/api/projects/${projectId}/members`);
       if (res.ok) {
@@ -150,13 +135,13 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
     } catch (error) {
       console.error("Failed to fetch node metadata:", error);
     }
-  };
+  }, [projectId]);
 
   useEffect(() => {
     if (selected && !hasLoadedMetadata) {
       fetchMetadata();
     }
-  }, [selected, hasLoadedMetadata]);
+  }, [fetchMetadata, selected, hasLoadedMetadata]);
 
 
   // Updating Logic
@@ -174,7 +159,7 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
       setIsEditingTitle(false);
       return;
     }
-    await updateNode({ title: editedTitle } as any);
+    await updateNode({ title: editedTitle });
     setIsEditingTitle(false);
   };
 
@@ -193,13 +178,18 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
   const isTodo = node.computedStatus === "TODO";
   const isDoing = node.computedStatus === "DOING";
   const isDone = node.computedStatus === "DONE";
+  const childCount = node.childCount || 0;
+  const isContainer = childCount > 0;
+  const blockingReasons = aiAnalysis?.blockingReasons ?? [];
+  const suggestedActors = aiAnalysis?.whoShouldAct ?? [];
 
   return (
     <div
       className={cn(
-        "min-w-[240px] max-w-[280px] rounded-md border bg-white transition-all duration-200",
+        "rounded-md border bg-white transition-all duration-200",
+        isContainer ? "w-full h-full min-w-[320px] bg-slate-50/90" : "min-w-[240px] max-w-[280px]",
         // Base state
-        "border-slate-200",
+        isContainer ? "border-indigo-200" : "border-slate-200",
         // Selection state
         selected && "border-primary ring-2 ring-primary/30 z-50",
         // Hover
@@ -208,9 +198,10 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
         isFaded && "opacity-30 grayscale-[0.8] pointer-events-none",
         // Status-based emphasis
         isBlocked && "border-l-4 border-l-red-500 shadow-md",
-        isTodo && !selected && "shadow-lg border-slate-300 scale-[1.02]",
+        isTodo && !selected && !isContainer && "shadow-lg border-slate-300 scale-[1.02]",
         isDoing && !selected && "ring-2 ring-blue-400/50 shadow-lg border-blue-200",
-        isDone && "opacity-60 shadow-none border-slate-100"
+        isDone && "opacity-60 shadow-none border-slate-100",
+        isContainer && "shadow-sm"
       )}
     >
       {/* Left Handle (Input) */}
@@ -223,7 +214,14 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
         )}
       />
 
-      <div className="p-3">
+      <div className={cn("p-3", isContainer && "h-full")}>
+        {isContainer && (
+          <div className="mb-2 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-indigo-600">
+            <Layers className="h-3 w-3" />
+            <span>{childCount} inside</span>
+          </div>
+        )}
+
         {/* 1. Header: Title & Status */}
         <div className="flex items-start justify-between gap-2 mb-2">
           {isEditingTitle ? (
@@ -281,7 +279,7 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
                     <div className="text-xs text-slate-400 p-2 text-center">Loading...</div>
                   ) : (
                     members.map(m => (
-                      <DropdownMenuItem key={m.userId} onClick={() => updateNode({ ownerIds: [m.userId] } as any)}>
+                      <DropdownMenuItem key={m.userId} onClick={() => updateNode({ ownerIds: [m.userId] })}>
                         <span className="text-sm">{m.userName}</span>
                       </DropdownMenuItem>
                     ))
@@ -315,6 +313,12 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
                 {team.name}
               </span>
             ))}
+          </div>
+        )}
+
+        {isContainer && (
+          <div className="mt-3 rounded border border-dashed border-indigo-200 bg-white/60 px-3 py-2 text-[10px] font-medium text-indigo-500">
+            Drop nodes here
           </div>
         )}
 
@@ -406,6 +410,31 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
                 )}
                 Analyze
               </button>
+
+              {/* Add Child Button */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCreateChild?.();
+                }}
+                className="nodrag px-2 py-1 text-[10px] font-medium rounded border border-indigo-200 text-indigo-600 hover:bg-indigo-50 transition-colors flex items-center gap-1"
+              >
+                <FolderPlus className="w-3 h-3" />
+                Inside
+              </button>
+
+              {node.parentNodeId && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDetachFromParent?.();
+                  }}
+                  className="nodrag px-2 py-1 text-[10px] font-medium rounded border border-slate-200 text-slate-500 hover:bg-slate-100 transition-colors flex items-center gap-1"
+                >
+                  <CornerUpLeft className="w-3 h-3" />
+                  Out
+                </button>
+              )}
             </div>
 
             {/* Open Sidebar Button */}
@@ -415,8 +444,7 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
               className="h-6 w-6 p-0 hover:bg-slate-100 text-slate-400 hover:text-indigo-600 rounded-full"
               onClick={(e) => {
                 e.stopPropagation();
-                // @ts-ignore - Passed via data but not typed in CustomNodeProps yet
-                if (data.onOpenDetail) data.onOpenDetail();
+                onOpenDetail?.();
               }}
             >
               <PanelRightOpen className="w-4 h-4 scale-x-[-1]" />
@@ -445,11 +473,11 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
                   <p className="text-slate-600 leading-relaxed">{aiAnalysis.summary}</p>
                 )}
 
-                {aiAnalysis.blockingReasons?.length > 0 && (
+                {blockingReasons.length > 0 && (
                   <div>
                     <div className="font-semibold text-slate-700 mb-1">Blocking:</div>
                     <ul className="space-y-1">
-                      {aiAnalysis.blockingReasons.map((r: any, i: number) => (
+                      {blockingReasons.map((r, i) => (
                         <li key={i} className="text-slate-600 bg-slate-50 px-2 py-1 rounded">
                           <span className="font-medium">{r.targetTitle}</span>: {r.actionNeeded}
                         </li>
@@ -458,11 +486,11 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
                   </div>
                 )}
 
-                {aiAnalysis.whoShouldAct?.length > 0 && (
+                {suggestedActors.length > 0 && (
                   <div>
                     <div className="font-semibold text-slate-700 mb-1">Who should act:</div>
                     <ul className="space-y-1">
-                      {aiAnalysis.whoShouldAct.map((w: any, i: number) => (
+                      {suggestedActors.map((w, i) => (
                         <li key={i} className="text-slate-600">
                           <span className="font-medium">{w.name}</span>: {w.nextStep}
                         </li>
@@ -504,4 +532,3 @@ export const CustomNode = memo(({ data, selected }: CustomNodeProps) => {
 });
 
 CustomNode.displayName = "CustomNode";
-

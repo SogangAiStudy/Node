@@ -37,10 +37,10 @@ export function checkRateLimit(userId: string): boolean {
 }
 
 // Simple in-memory cache for blocked analysis
-const blockAnalysisCache = new Map<string, { result: any; nodeUpdatedAt: string; cachedAt: number }>();
+const blockAnalysisCache = new Map<string, { result: unknown; nodeUpdatedAt: string; cachedAt: number }>();
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
-export function getCachedBlockAnalysis(nodeId: string, nodeUpdatedAt: string): any | null {
+export function getCachedBlockAnalysis(nodeId: string, nodeUpdatedAt: string): unknown | null {
     const entry = blockAnalysisCache.get(nodeId);
     if (!entry) return null;
 
@@ -54,7 +54,7 @@ export function getCachedBlockAnalysis(nodeId: string, nodeUpdatedAt: string): a
     return entry.result;
 }
 
-export function setCachedBlockAnalysis(nodeId: string, nodeUpdatedAt: string, result: any): void {
+export function setCachedBlockAnalysis(nodeId: string, nodeUpdatedAt: string, result: unknown): void {
     blockAnalysisCache.set(nodeId, {
         result,
         nodeUpdatedAt,

@@ -37,15 +37,14 @@ interface ProjectMember {
 }
 
 const PERMISSION_LEVELS = [
-    { value: "ADMIN", label: "Full access" },
-    { value: "EDITOR", label: "Can edit" },
-    { value: "REQUESTER", label: "Can request" },
+    { value: "PROJECT_ADMIN", label: "Admin" },
+    { value: "EDITOR", label: "Editor" },
     { value: "VIEWER", label: "Can view" },
 ];
 
 export function ShareDialog({ open, onOpenChange, projectId, orgId }: ShareDialogProps) {
     const [email, setEmail] = useState("");
-    const [role, setRole] = useState("EDITOR");
+    const role = "EDITOR";
     const [copied, setCopied] = useState(false);
     const queryClient = useQueryClient();
 
@@ -62,7 +61,7 @@ export function ShareDialog({ open, onOpenChange, projectId, orgId }: ShareDialo
 
     const inviteMutation = useMutation({
         mutationFn: async ({ email, role }: { email: string; role: string }) => {
-            const res = await fetch(`/api/projects/${projectId}/invite`, {
+            const res = await fetch(`/api/projects/${projectId}/invites`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email, role }),

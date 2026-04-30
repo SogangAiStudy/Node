@@ -10,6 +10,11 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
+    "verify": "npm run lint && npm run verify:smoke && npm run build",
+    "verify:smoke": "node scripts/smoke-product-readiness.mjs",
+    "test:e2e": "playwright test",
+    "test:e2e:db": "RUN_DB_E2E=1 playwright test tests/e2e/authenticated-workspace.spec.ts tests/e2e/collaboration-permissions.spec.ts tests/e2e/node-hierarchy.spec.ts",
+    "test:e2e:db:remote": "E2E_ENV_FILE=.env.vercel RUN_DB_E2E=1 playwright test tests/e2e/authenticated-workspace.spec.ts tests/e2e/collaboration-permissions.spec.ts tests/e2e/node-hierarchy.spec.ts",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:push:local": "dotenv -e .env.local -- prisma db push",
@@ -66,6 +71,7 @@
     "zod": "^4.2.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
     "@tailwindcss/postcss": "^4",
     "@types/dagre": "^0.7.53",
     "@types/node": "^20",

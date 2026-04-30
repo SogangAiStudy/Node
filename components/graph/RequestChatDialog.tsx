@@ -30,7 +30,6 @@ interface RequestChatDialogProps {
 export function RequestChatDialog({
     open,
     onOpenChange,
-    requestId,
     requestQuestion,
     nodeTitle,
     currentUserId = "current-user",

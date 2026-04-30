@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/utils/auth";
 import { isProjectAdmin } from "@/lib/utils/permissions";
+import { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
@@ -42,7 +43,9 @@ export async function DELETE(
 
         return NextResponse.json({ success: true });
     } catch (error) {
-        if ((error as any).code === 'P2025') return NextResponse.json({ success: true });
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
+            return NextResponse.json({ success: true });
+        }
         return NextResponse.json({ error: "Failed to revoke invite" }, { status: 500 });
     }
 }

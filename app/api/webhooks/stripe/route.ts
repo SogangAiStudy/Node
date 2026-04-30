@@ -3,6 +3,10 @@ import { stripe } from "@/lib/stripe";
 import { prisma } from "@/lib/db/prisma";
 import Stripe from "stripe";
 
+type SubscriptionWithPeriod = Stripe.Subscription & {
+    current_period_end?: number | null;
+};
+
 export async function POST(req: NextRequest) {
     if (!stripe) {
         return NextResponse.json(
@@ -60,7 +64,7 @@ export async function POST(req: NextRequest) {
                     break;
                 }
 
-                const subscription = await stripe.subscriptions.retrieve(subscriptionId) as any;
+                const subscription = await stripe.subscriptions.retrieve(subscriptionId) as SubscriptionWithPeriod;
 
                 await prisma.organization.update({
                     where: { id: orgId },
@@ -78,7 +82,7 @@ export async function POST(req: NextRequest) {
             }
 
             case "customer.subscription.updated": {
-                const subscription = event.data.object as any;
+                const subscription = event.data.object as SubscriptionWithPeriod;
                 const customerId = subscription.customer as string;
 
                 const org = await prisma.organization.findUnique({
@@ -105,7 +109,7 @@ export async function POST(req: NextRequest) {
             }
 
             case "customer.subscription.deleted": {
-                const subscription = event.data.object as Stripe.Subscription;
+                const subscription = event.data.object as SubscriptionWithPeriod;
                 const customerId = subscription.customer as string;
 
                 const org = await prisma.organization.findUnique({
@@ -132,12 +136,15 @@ export async function POST(req: NextRequest) {
             }
 
             case "invoice.payment_succeeded": {
-                const invoice = event.data.object as any;
-                const subscriptionId = invoice.subscription as string;
+                const invoice = event.data.object as Stripe.Invoice & {
+                    subscription?: string | Stripe.Subscription | null;
+                };
+                const subscriptionId =
+                    typeof invoice.subscription === "string" ? invoice.subscription : invoice.subscription?.id;
 
                 if (!subscriptionId) break;
 
-                const subscription = await stripe.subscriptions.retrieve(subscriptionId) as any;
+                const subscription = await stripe.subscriptions.retrieve(subscriptionId) as SubscriptionWithPeriod;
                 const customerId = subscription.customer as string;
 
                 const org = await prisma.organization.findUnique({
@@ -162,12 +169,15 @@ export async function POST(req: NextRequest) {
             }
 
             case "invoice.payment_failed": {
-                const invoice = event.data.object as any;
-                const subscriptionId = invoice.subscription as string;
+                const invoice = event.data.object as Stripe.Invoice & {
+                    subscription?: string | Stripe.Subscription | null;
+                };
+                const subscriptionId =
+                    typeof invoice.subscription === "string" ? invoice.subscription : invoice.subscription?.id;
 
                 if (!subscriptionId) break;
 
-                const subscription = await stripe.subscriptions.retrieve(subscriptionId) as any;
+                const subscription = await stripe.subscriptions.retrieve(subscriptionId) as SubscriptionWithPeriod;
                 const customerId = subscription.customer as string;
 
                 const org = await prisma.organization.findUnique({

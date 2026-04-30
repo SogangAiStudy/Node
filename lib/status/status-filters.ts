@@ -1,11 +1,17 @@
 
-import { Node, Edge, Request } from "@prisma/client";
-import { ComputedStatus, ManualStatus, NodeDTO } from "@/types";
-import { computeAllNodeStatuses } from "./compute-status";
+import { Edge } from "@prisma/client";
+import { ComputedStatus, ManualStatus } from "@/types";
+
+type NodeWithOwners = {
+    id: string;
+    ownerId: string | null;
+    manualStatus: ManualStatus;
+    nodeOwners?: Array<{ userId: string }>;
+};
 
 // Helper to check if a user is an owner
-function isOwner(userId: string, node: any) {
-    return node.ownerId === userId || node.nodeOwners?.some((no: any) => no.userId === userId);
+function isOwner(userId: string, node: NodeWithOwners) {
+    return node.ownerId === userId || node.nodeOwners?.some((owner) => owner.userId === userId);
 }
 
 /**
@@ -15,11 +21,11 @@ function isOwner(userId: string, node: any) {
  * - Manual Status is TODO or DOING
  * - Computed Status is NOT BLOCKED and NOT WAITING
  */
-export function getMyActionsForActionCenter(
+export function getMyActionsForActionCenter<T extends NodeWithOwners>(
     userId: string,
-    nodes: any[],
+    nodes: T[],
     statusMap: Map<string, ComputedStatus>
-): any[] {
+): T[] {
     return nodes.filter((node) => {
         if (!isOwner(userId, node)) return false;
 
@@ -43,11 +49,11 @@ export function getMyActionsForActionCenter(
  * "Waiting" = Items I own that are waiting/blocked.
  * "Blocking" = Items I own that are blocking OTHERS.
  */
-export function getMyWaitingForActionCenter(
+export function getMyWaitingForActionCenter<T extends NodeWithOwners>(
     userId: string,
-    nodes: any[],
+    nodes: T[],
     statusMap: Map<string, ComputedStatus>
-): any[] {
+): T[] {
     return nodes.filter((node) => {
         if (!isOwner(userId, node)) return false;
 
@@ -63,12 +69,12 @@ export function getMyWaitingForActionCenter(
  * - Is a dependency for a node owned by SOMEONE ELSE
  * - The dependent node is actually BLOCKED by this relationship
  */
-export function getImBlockingForActionCenter(
+export function getImBlockingForActionCenter<T extends NodeWithOwners>(
     userId: string,
-    nodes: any[],
+    nodes: T[],
     edges: Edge[]
-): Array<{ blockedNode: any; waitingOnMyNode: any }> {
-    const result: Array<{ blockedNode: any; waitingOnMyNode: any }> = [];
+): Array<{ blockedNode: T; waitingOnMyNode: T }> {
+    const result: Array<{ blockedNode: T; waitingOnMyNode: T }> = [];
 
     // 1. Find my incomplete nodes
     const myIncompleteNodes = nodes.filter((node) => {

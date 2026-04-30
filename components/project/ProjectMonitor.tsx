@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { ActionSection } from "@/components/action-center/ActionSection";
-import { AlertCircle, Clock, Ban, CheckCircle2 } from "lucide-react";
+import { Clock, Ban, CheckCircle2 } from "lucide-react";
 import { NodeDTO, EdgeDTO } from "@/types"; // We will filter NodeDTO locally
 
 interface ProjectMonitorProps {
@@ -11,7 +11,7 @@ interface ProjectMonitorProps {
     userId: string;
 }
 
-export function ProjectMonitor({ nodes, edges, userId }: ProjectMonitorProps) {
+export function ProjectMonitor({ nodes }: ProjectMonitorProps) {
     // 1. Actionable: Nodes in this project ready to proceed (TODO/DOING & !BLOCKED & !WAITING)
     // Default: all users (per spec "Default: all users")
     // Optional toggle: "Only my actions" (Not implementing toggle yet, strictly following spec "Default: all users")

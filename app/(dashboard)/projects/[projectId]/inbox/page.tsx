@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -32,7 +32,7 @@ function RequestCard({
       if (!res.ok) throw new Error("Failed to respond");
       toast.success("Response saved");
       onAction();
-    } catch (error) {
+    } catch {
       toast.error("Failed to save response");
     } finally {
       setIsLoading(false);
@@ -48,7 +48,7 @@ function RequestCard({
       if (!res.ok) throw new Error("Failed to claim");
       toast.success("Request claimed");
       onAction();
-    } catch (error) {
+    } catch {
       toast.error("Failed to claim request");
     } finally {
       setIsLoading(false);
@@ -66,7 +66,7 @@ function RequestCard({
       if (!res.ok) throw new Error("Failed to approve");
       toast.success("Request approved");
       onAction();
-    } catch (error) {
+    } catch {
       toast.error("Failed to approve request");
     } finally {
       setIsLoading(false);
@@ -82,7 +82,7 @@ function RequestCard({
       if (!res.ok) throw new Error("Failed to close");
       toast.success("Request closed");
       onAction();
-    } catch (error) {
+    } catch {
       toast.error("Failed to close request");
     } finally {
       setIsLoading(false);

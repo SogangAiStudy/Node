@@ -2,8 +2,34 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/utils/auth";
 import { requireProjectView } from "@/lib/utils/permissions";
+import { authOrPermissionErrorResponse } from "@/lib/utils/api-error-responses";
 import { computeAllNodeStatuses } from "@/lib/status/compute-status";
-import { NodeDTO, EdgeDTO } from "@/types";
+import type { Edge, Prisma } from "@prisma/client";
+import type { ComputedStatus, NodeDTO, EdgeDTO } from "@/types";
+
+type GraphNode = Prisma.NodeGetPayload<{
+  include: {
+    _count: {
+      select: {
+        comments: true;
+        attachments: true;
+        childNodes: true;
+      };
+    };
+  };
+}>;
+
+function toEdgeDTO(edge: Edge): EdgeDTO {
+  return {
+    id: edge.id,
+    orgId: edge.orgId,
+    projectId: edge.projectId,
+    fromNodeId: edge.fromNodeId,
+    toNodeId: edge.toNodeId,
+    relation: edge.relation,
+    createdAt: edge.createdAt.toISOString(),
+  };
+}
 
 // GET /api/projects/[projectId]/graph - Get all nodes and edges with computed status
 export async function GET(
@@ -20,6 +46,15 @@ export async function GET(
     const [baseNodes, edges, requests] = await Promise.all([
       prisma.node.findMany({
         where: { projectId },
+        include: {
+          _count: {
+            select: {
+              comments: true,
+              attachments: true,
+              childNodes: true,
+            },
+          },
+        },
         orderBy: { createdAt: "desc" },
       }),
       prisma.edge.findMany({
@@ -34,22 +69,14 @@ export async function GET(
     if (baseNodes.length === 0) {
       return NextResponse.json({
         nodes: [],
-        edges: edges.map((edge: any) => ({
-          id: edge.id,
-          orgId: edge.orgId,
-          projectId: edge.projectId,
-          fromNodeId: edge.fromNodeId,
-          toNodeId: edge.toNodeId,
-          relation: edge.relation,
-          createdAt: edge.createdAt.toISOString(),
-        })),
+        edges: edges.map(toEdgeDTO),
       });
     }
 
     // 2. Collect unique IDs for relations to avoid "IN (NULL)" queries
-    const ownerIds = Array.from(new Set(baseNodes.map((n: any) => n.ownerId).filter(Boolean))) as string[];
-    const teamIds = Array.from(new Set(baseNodes.map((n: any) => n.teamId).filter(Boolean))) as string[];
-    const nodeIds = baseNodes.map((n: any) => n.id);
+    const ownerIds = Array.from(new Set(baseNodes.map((node) => node.ownerId).filter((id): id is string => Boolean(id))));
+    const teamIds = Array.from(new Set(baseNodes.map((node) => node.teamId).filter((id): id is string => Boolean(id))));
+    const nodeIds = baseNodes.map((node) => node.id);
 
     // 3. Fetch relations conditionally
     const [owners, teams, nodeOwners, nodeTeams] = await Promise.all([
@@ -80,38 +107,40 @@ export async function GET(
     ]);
 
     // Create lookup maps for performance
-    const ownerMap = new Map(owners.map((u: any) => [u.id, u.name]));
-    const teamMap = new Map(teams.map((t: any) => [t.id, t.name]));
+    const ownerMap = new Map(owners.map((user) => [user.id, user.name]));
+    const teamMap = new Map(teams.map((team) => [team.id, team.name]));
     const nodeOwnersMap = new Map<string, Array<{ id: string; name: string }>>();
     const nodeTeamsMap = new Map<string, Array<{ id: string; name: string }>>();
 
-    nodeOwners.forEach((no: any) => {
-      const list = nodeOwnersMap.get(no.nodeId) || [];
-      list.push({ id: no.user.id, name: no.user.name || "Unknown" });
-      nodeOwnersMap.set(no.nodeId, list);
+    nodeOwners.forEach((nodeOwner) => {
+      const { nodeId, user: owner } = nodeOwner;
+      const list = nodeOwnersMap.get(nodeId) || [];
+      list.push({ id: owner.id, name: owner.name || "Unknown" });
+      nodeOwnersMap.set(nodeId, list);
     });
 
-    nodeTeams.forEach((nt: any) => {
-      const list = nodeTeamsMap.get(nt.nodeId) || [];
-      list.push({ id: nt.team.id, name: nt.team.name });
-      nodeTeamsMap.set(nt.nodeId, list);
+    nodeTeams.forEach((nodeTeam) => {
+      const { nodeId, team } = nodeTeam;
+      const list = nodeTeamsMap.get(nodeId) || [];
+      list.push({ id: team.id, name: team.name });
+      nodeTeamsMap.set(nodeId, list);
     });
 
     // Compute statuses for all nodes
     const statusMap = computeAllNodeStatuses(baseNodes, edges, requests);
 
     // 4. Transform to DTOs using maps
-    const nodeDTOs: NodeDTO[] = baseNodes.map((node: any) => {
-      const computedStatus = statusMap.get(node.id) || (node.manualStatus as any) || "TODO";
+    const nodeDTOs: NodeDTO[] = baseNodes.map((node: GraphNode) => {
+      const computedStatus = statusMap.get(node.id) || (node.manualStatus as ComputedStatus) || "TODO";
 
       // Calculate blocking count
       // Find edges where this node is the 'to' (dependency) and the 'from' (dependent) is BLOCKED
       // relation DEPENDS_ON: from depends on to.
       let blocksCount = 0;
       if (computedStatus !== 'DONE') {
-        const dependentEdges = edges.filter((e: any) => e.toNodeId === node.id && e.relation === 'DEPENDS_ON');
-        blocksCount = dependentEdges.filter((e: any) => {
-          const dependentStatus = statusMap.get(e.fromNodeId);
+        const dependentEdges = edges.filter((edge) => edge.toNodeId === node.id && edge.relation === 'DEPENDS_ON');
+        blocksCount = dependentEdges.filter((edge) => {
+          const dependentStatus = statusMap.get(edge.fromNodeId);
           return dependentStatus === 'BLOCKED';
         }).length;
       }
@@ -120,16 +149,16 @@ export async function GET(
       let waitingReason = undefined;
       if (computedStatus === 'WAITING' || computedStatus === 'BLOCKED') {
         // Check requests
-        const nodeRequests = requests.filter((r: any) => r.linkedNodeId === node.id && (r.status === 'OPEN' || r.status === 'RESPONDED'));
+        const nodeRequests = requests.filter((request) => request.linkedNodeId === node.id && (request.status === 'OPEN' || request.status === 'RESPONDED'));
         if (nodeRequests.length > 0) {
           waitingReason = "Waiting for response";
         } else {
           // Check approval edges
-          const approvalEdges = edges.filter((e: any) => e.fromNodeId === node.id && e.relation === 'APPROVAL_BY');
+          const approvalEdges = edges.filter((edge) => edge.fromNodeId === node.id && edge.relation === 'APPROVAL_BY');
           if (approvalEdges.length > 0) {
             waitingReason = "Waiting for approval";
           } else if (computedStatus === 'BLOCKED') {
-            const blockingEdges = edges.filter((e: any) => e.fromNodeId === node.id && e.relation === 'DEPENDS_ON');
+            const blockingEdges = edges.filter((edge) => edge.fromNodeId === node.id && edge.relation === 'DEPENDS_ON');
             if (blockingEdges.length > 0) {
               waitingReason = `Blocked by ${blockingEdges.length} task${blockingEdges.length > 1 ? 's' : ''}`;
             }
@@ -141,6 +170,7 @@ export async function GET(
         id: node.id,
         orgId: node.orgId,
         projectId: node.projectId,
+        parentNodeId: node.parentNodeId,
         teamId: node.teamId,
         teamName: node.teamId ? teamMap.get(node.teamId) || null : null,
         title: node.title,
@@ -158,33 +188,26 @@ export async function GET(
         dueAt: node.dueAt?.toISOString() || null,
         createdAt: node.createdAt.toISOString(),
         updatedAt: node.updatedAt.toISOString(),
+        commentCount: node._count?.comments || 0,
+        attachmentCount: node._count?.attachments || 0,
+        childCount: node._count?.childNodes || 0,
         positionX: node.positionX,
         positionY: node.positionY,
         phase: node.phase || null,
       };
     });
 
-    const edgeDTOs: EdgeDTO[] = edges.map((edge: any) => ({
-      id: edge.id,
-      orgId: edge.orgId,
-      projectId: edge.projectId,
-      fromNodeId: edge.fromNodeId,
-      toNodeId: edge.toNodeId,
-      relation: edge.relation,
-      createdAt: edge.createdAt.toISOString(),
-    }));
+    const edgeDTOs: EdgeDTO[] = edges.map(toEdgeDTO);
 
     return NextResponse.json({
       nodes: nodeDTOs,
       edges: edgeDTOs,
     });
   } catch (error) {
+    const authResponse = authOrPermissionErrorResponse(error);
+    if (authResponse) return authResponse;
+
     console.error("GET /api/projects/[projectId]/graph error:", error);
-
-    if (error instanceof Error && error.message === "Not a member of this project") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
     return NextResponse.json({ error: "Failed to fetch graph data" }, { status: 500 });
   }
 }

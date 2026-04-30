@@ -10,8 +10,6 @@ const prisma = new PrismaClient({ adapter });
 
 async function check() {
     const userId = 'cmjtac2na000294v4bane8o09';
-    const orgId = 'cmjtac7cx000494v4n9jaxl9b';
-
     console.log('Checking for UserId:', userId);
     const user = await prisma.user.findUnique({ where: { id: userId } });
     console.log('User found:', !!user);

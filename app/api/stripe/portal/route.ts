@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
         // Validate that the customer exists in Stripe
         try {
             await stripe.customers.retrieve(org.stripeCustomerId);
-        } catch (error: any) {
+        } catch (error) {
             console.error(`Customer ${org.stripeCustomerId} not found in Stripe:`, error);
             return NextResponse.json(
                 { error: "Stripe customer not found. Please contact support or try upgrading again." },

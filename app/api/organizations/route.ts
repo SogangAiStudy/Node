@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/utils/auth";
 import { prisma } from "@/lib/db/prisma";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 
 const createOrgSchema = z.object({
   name: z.string().min(1, "Organization name is required").max(100),
@@ -22,7 +23,7 @@ export async function POST(request: NextRequest) {
     // This allows them to have a 'Personal' space AND 'Team' spaces.
 
     // Create organization, org membership, and optionally a default team
-    const result = await prisma.$transaction(async (tx: any) => {
+    const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // Create organization with invite code
       const organization = await tx.organization.create({
         data: {
@@ -53,6 +54,7 @@ export async function POST(request: NextRequest) {
             orgId: organization.id,
             name: "Default Team",
             description: "Default team for the organization",
+            isDefault: true,
           },
         });
 
@@ -110,6 +112,9 @@ export async function GET() {
     const orgMembers = await prisma.orgMember.findMany({
       where: {
         userId: user.id,
+        status: {
+          in: ["ACTIVE", "PENDING_TEAM_ASSIGNMENT", "PENDING_APPROVAL"],
+        },
       },
       include: {
         organization: {
@@ -124,7 +129,7 @@ export async function GET() {
       },
     });
 
-    const organizations = orgMembers.map((om: any) => ({
+    const organizations = orgMembers.map((om) => ({
       id: om.organization.id,
       name: om.organization.name,
       role: om.role,

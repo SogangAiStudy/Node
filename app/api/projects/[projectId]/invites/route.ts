@@ -48,6 +48,23 @@ export async function POST(
             );
         }
 
+        const targetMembership = await prisma.orgMember.findUnique({
+            where: {
+                orgId_userId: {
+                    orgId: project.orgId,
+                    userId: targetUser.id,
+                },
+            },
+            select: { status: true },
+        });
+
+        if (!targetMembership || !["ACTIVE", "PENDING_TEAM_ASSIGNMENT"].includes(targetMembership.status)) {
+            return NextResponse.json(
+                { error: "This user must be an active workspace member before receiving project access." },
+                { status: 400 }
+            );
+        }
+
         // Check if already a member
         const existingMember = await prisma.projectMember.findUnique({
             where: {
@@ -89,6 +106,7 @@ export async function POST(
                 projectId,
                 invitedByUserId: user.id,
                 targetUserId: targetUser.id,
+                role: validated.role,
                 status: "PENDING",
             },
         });

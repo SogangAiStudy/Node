@@ -5,33 +5,15 @@ import { redirect } from "next/navigation";
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
+  let workspaces: Awaited<ReturnType<typeof getCurrentUserWorkspaces>>;
+
   try {
-    const workspaces = await getCurrentUserWorkspaces();
-    const activeWorkspace = workspaces.find((workspace) =>
-      ["ACTIVE", "PENDING_TEAM_ASSIGNMENT"].includes(workspace.status)
-    );
-
-    if (activeWorkspace?.orgId) {
-      redirect(`/org/${activeWorkspace.orgId}/projects`);
-    }
-
-    const firstWorkspace = workspaces[0];
-    if (firstWorkspace?.orgId) {
-      redirect(`/org/${firstWorkspace.orgId}/projects`);
-    }
-
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="mx-auto max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-          <h2 className="text-lg font-semibold text-slate-900">No workspaces yet</h2>
-          <p className="mt-2 text-sm text-slate-600">
-            Create a workspace or join one with an invite code to get started.
-          </p>
-        </div>
-      </div>
-    );
+    workspaces = await getCurrentUserWorkspaces();
   } catch (error) {
-    console.error("Dashboard bootstrap failed:", error);
+    console.error("Dashboard bootstrap failed:", {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
 
     return (
       <div className="container mx-auto px-4 py-8">
@@ -45,4 +27,28 @@ export default async function DashboardPage() {
       </div>
     );
   }
+
+  const activeWorkspace = workspaces.find((workspace) =>
+    ["ACTIVE", "PENDING_TEAM_ASSIGNMENT"].includes(workspace.status)
+  );
+
+  if (activeWorkspace?.orgId) {
+    redirect(`/org/${activeWorkspace.orgId}/projects`);
+  }
+
+  const firstWorkspace = workspaces[0];
+  if (firstWorkspace?.orgId) {
+    redirect(`/org/${firstWorkspace.orgId}/projects`);
+  }
+
+  return (
+    <div className="container mx-auto px-4 py-8">
+      <div className="mx-auto max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+        <h2 className="text-lg font-semibold text-slate-900">No workspaces yet</h2>
+        <p className="mt-2 text-sm text-slate-600">
+          Create a workspace or join one with an invite code to get started.
+        </p>
+      </div>
+    </div>
+  );
 }

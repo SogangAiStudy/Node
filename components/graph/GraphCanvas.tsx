@@ -8,14 +8,14 @@ import ReactFlow, {
   MiniMap,
   useNodesState,
   useEdgesState,
-  addEdge,
   Connection,
   MarkerType,
   NodeDragHandler,
+  Position,
 } from "reactflow";
 import dagre from "dagre";
 import "reactflow/dist/style.css";
-import { NodeDTO, GraphData, EdgeRelation } from "@/types";
+import { NodeDTO, GraphData } from "@/types";
 import { CustomNode } from "./CustomNode";
 import { ActionCenterBar } from "./ActionCenterBar";
 import { Toolbar } from "./Toolbar";
@@ -55,6 +55,79 @@ const nodeTypes = {
 
 const nodeWidth = 240;
 const nodeHeight = 120;
+const containerMinWidth = 340;
+const containerMinHeight = 190;
+const containerPadding = 32;
+const containerHeaderHeight = 76;
+
+function getNodeDepth(node: NodeDTO, nodeById: Map<string, NodeDTO>) {
+  let depth = 0;
+  let parentId = node.parentNodeId;
+
+  while (parentId) {
+    const parent = nodeById.get(parentId);
+    if (!parent) break;
+    depth += 1;
+    parentId = parent.parentNodeId;
+  }
+
+  return depth;
+}
+
+function isDescendantOf(nodeId: string, possibleAncestorId: string, nodeById: Map<string, NodeDTO>) {
+  let parentId = nodeById.get(nodeId)?.parentNodeId ?? null;
+
+  while (parentId) {
+    if (parentId === possibleAncestorId) return true;
+    parentId = nodeById.get(parentId)?.parentNodeId ?? null;
+  }
+
+  return false;
+}
+
+function numberStyleValue(value: unknown) {
+  return typeof value === "number" ? value : undefined;
+}
+
+function getFlowNodeDimensions(flowNode: Node) {
+  return {
+    width: flowNode.width ?? numberStyleValue(flowNode.style?.width) ?? nodeWidth,
+    height: flowNode.height ?? numberStyleValue(flowNode.style?.height) ?? nodeHeight,
+  };
+}
+
+function getAbsoluteNodePosition(flowNode: Node, allNodes: Node[]) {
+  let x = flowNode.position.x;
+  let y = flowNode.position.y;
+  let parentId = flowNode.parentNode;
+
+  while (parentId) {
+    const parent = allNodes.find((candidate) => candidate.id === parentId);
+    if (!parent) break;
+    x += parent.position.x;
+    y += parent.position.y;
+    parentId = parent.parentNode;
+  }
+
+  return { x, y };
+}
+
+async function persistNodeFrame(nodeId: string, parentNodeId: string | null, x: number, y: number) {
+  const res = await fetch(`/api/nodes/${nodeId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      parentNodeId,
+      positionX: Math.round(x),
+      positionY: Math.round(y),
+    }),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || `Failed to save node (${res.status})`);
+  }
+}
 
 const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = "LR") => {
   const dagreGraph = new dagre.graphlib.Graph();
@@ -86,8 +159,8 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[], direction = "LR") => 
 
   nodes.forEach((node) => {
     const nodeWithPosition = dagreGraph.node(node.id);
-    node.targetPosition = isHorizontal ? ("left" as any) : ("top" as any);
-    node.sourcePosition = isHorizontal ? ("right" as any) : ("bottom" as any);
+    node.targetPosition = isHorizontal ? Position.Left : Position.Top;
+    node.sourcePosition = isHorizontal ? Position.Right : Position.Bottom;
 
     node.position = {
       x: nodeWithPosition.x - nodeWidth / 2,
@@ -111,15 +184,48 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
   const [isSyncing, setIsSyncing] = useState(false);
   const [contextMenu, setContextMenu] = useState<ContextMenuPosition | null>(null);
   const [addNodeOpen, setAddNodeOpen] = useState(false);
-  const [addNodePosition, setAddNodePosition] = useState<{ x: number; y: number } | null>(null);
-  const [layoutDirection, setLayoutDirection] = useState<"LR" | "TB">("LR");
+  const [addNodeParent, setAddNodeParent] = useState<{ id: string; title: string } | null>(null);
+  const [pendingDetachNodeId, setPendingDetachNodeId] = useState<string | null>(null);
+  const [layoutDirection] = useState<"LR" | "TB">("LR");
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const queryClient = useQueryClient();
 
   const { layoutedNodes, layoutedEdges } = useMemo(() => {
+    const nodeById = new Map(data.nodes.map((node) => [node.id, node]));
+    const childrenByParentId = data.nodes.reduce((map, node) => {
+      if (!node.parentNodeId) return map;
+      const children = map.get(node.parentNodeId) || [];
+      children.push(node);
+      map.set(node.parentNodeId, children);
+      return map;
+    }, new Map<string, NodeDTO[]>());
+
+    const nodeDimensions = new Map<string, { width: number; height: number }>();
+    data.nodes.forEach((node) => {
+      const children = childrenByParentId.get(node.id) || [];
+      if (children.length === 0) {
+        nodeDimensions.set(node.id, { width: nodeWidth, height: nodeHeight });
+        return;
+      }
+
+      const maxChildX = Math.max(0, ...children.map((child) => child.positionX ?? containerPadding));
+      const maxChildY = Math.max(0, ...children.map((child) => child.positionY ?? containerHeaderHeight));
+      nodeDimensions.set(node.id, {
+        width: Math.max(containerMinWidth, maxChildX + nodeWidth + containerPadding),
+        height: Math.max(containerMinHeight, maxChildY + nodeHeight + containerPadding),
+      });
+    });
+
     const initialNodes: Node[] = data.nodes.map((node) => {
-      const x = typeof node.positionX === 'number' && !Number.isNaN(node.positionX) ? node.positionX : 0;
-      const y = typeof node.positionY === 'number' && !Number.isNaN(node.positionY) ? node.positionY : 0;
+      const x = typeof node.positionX === 'number' && !Number.isNaN(node.positionX)
+        ? node.positionX
+        : node.parentNodeId ? containerPadding : 0;
+      const y = typeof node.positionY === 'number' && !Number.isNaN(node.positionY)
+        ? node.positionY
+        : node.parentNodeId ? containerHeaderHeight : 0;
+      const dimensions = nodeDimensions.get(node.id);
+      const childCount = childrenByParentId.get(node.id)?.length || 0;
 
       // Calculate if this node matches the current filters
       let isFaded = false;
@@ -142,6 +248,13 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
         id: node.id,
         type: "custom",
         position: { x, y },
+        parentNode: node.parentNodeId || undefined,
+        extent: node.parentNodeId ? "parent" : undefined,
+        draggable: true,
+        zIndex: node.parentNodeId ? 20 + getNodeDepth(node, nodeById) : 0,
+        style: childCount > 0 && dimensions
+          ? { width: dimensions.width, height: dimensions.height }
+          : undefined,
         data: {
           node,
           isFaded // Pass faded state to the node component
@@ -180,6 +293,19 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
 
       initialNodes.forEach((node) => {
         const nodeData = data.nodes.find((n) => n.id === node.id);
+        if (nodeData?.parentNodeId) {
+          nodesWithSavedPos.push({
+            ...node,
+            position: {
+              x: typeof nodeData.positionX === 'number' && !Number.isNaN(nodeData.positionX) ? nodeData.positionX : containerPadding,
+              y: typeof nodeData.positionY === 'number' && !Number.isNaN(nodeData.positionY) ? nodeData.positionY : containerHeaderHeight,
+            },
+            sourcePosition: Position.Right,
+            targetPosition: Position.Left,
+          });
+          return;
+        }
+
         const hasValidPos =
           nodeData &&
           typeof nodeData.positionX === 'number' && !Number.isNaN(nodeData.positionX) &&
@@ -190,8 +316,8 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
           nodesWithSavedPos.push({
             ...node,
             position: { x: nodeData!.positionX!, y: nodeData!.positionY! },
-            sourcePosition: "right" as any,
-            targetPosition: "left" as any,
+            sourcePosition: Position.Right,
+            targetPosition: Position.Left,
           });
         } else {
           nodesNeedingLayout.push(node);
@@ -200,7 +326,9 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
 
       // Auto-layout nodes without saved positions
       if (nodesNeedingLayout.length > 0) {
-        const { nodes: layoutedNodes } = getLayoutedElements(nodesNeedingLayout, initialEdges, layoutDirection);
+        const layoutNodeIds = new Set(nodesNeedingLayout.map((node) => node.id));
+        const layoutEdges = initialEdges.filter((edge) => layoutNodeIds.has(edge.source) && layoutNodeIds.has(edge.target));
+        const { nodes: layoutedNodes } = getLayoutedElements(nodesNeedingLayout, layoutEdges, layoutDirection);
         return { nodes: [...nodesWithSavedPos, ...layoutedNodes], edges: initialEdges };
       }
 
@@ -246,15 +374,67 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
             setSelectedNodeId(node.id);
             setIsSheetOpen(true);
           },
+          onCreateChild: () => {
+            const sourceNode = data.nodes.find((n) => n.id === node.id);
+            setAddNodeParent({ id: node.id, title: sourceNode?.title || "selected node" });
+            setAddNodeOpen(true);
+          },
+          onDetachFromParent: () => {
+            setPendingDetachNodeId(node.id);
+          },
         },
       };
     });
 
-    return { layoutedNodes: nodesWithExtraData, layoutedEdges: edges };
+    return {
+      layoutedNodes: nodesWithExtraData.sort((a, b) => {
+        const aNode = nodeById.get(a.id);
+        const bNode = nodeById.get(b.id);
+        if (!aNode || !bNode) return 0;
+        return getNodeDepth(aNode, nodeById) - getNodeDepth(bNode, nodeById);
+      }),
+      layoutedEdges: edges,
+    };
   }, [data.nodes, data.edges, filterStatus, searchQuery, selectedTeamIds, selectedUserIds, projectId, orgId, onDataChange, layoutDirection]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(layoutedNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(layoutedEdges);
+
+  useEffect(() => {
+    if (!pendingDetachNodeId) return;
+    const flowNode = nodes.find((node) => node.id === pendingDetachNodeId);
+    setPendingDetachNodeId(null);
+    if (!flowNode?.parentNode) return;
+
+    const parent = nodes.find((node) => node.id === flowNode.parentNode);
+    const absolute = getAbsoluteNodePosition(flowNode, nodes);
+    const parentAbsolute = parent ? getAbsoluteNodePosition(parent, nodes) : absolute;
+    const parentSize = parent ? getFlowNodeDimensions(parent) : { width: nodeWidth, height: nodeHeight };
+    const nextX = parentAbsolute.x + parentSize.width + 48;
+    const nextY = absolute.y;
+
+    queryClient.setQueryData<GraphData>(["graph", projectId], (old: GraphData | undefined) => {
+      if (!old) return old;
+      return {
+        ...old,
+        nodes: old.nodes.map((node) =>
+          node.id === flowNode.id
+            ? { ...node, parentNodeId: null, positionX: Math.round(nextX), positionY: Math.round(nextY) }
+            : node
+        ),
+      };
+    });
+
+    void persistNodeFrame(flowNode.id, null, nextX, nextY)
+      .then(() => {
+        toast.success("Node moved out");
+        onDataChange();
+      })
+      .catch((error) => {
+        toast.error(error instanceof Error ? error.message : "Failed to move node");
+        onDataChange();
+      });
+  }, [nodes, onDataChange, pendingDetachNodeId, projectId, queryClient]);
 
   // Focus on specific node when focusNodeId is provided
   useEffect(() => {
@@ -351,10 +531,67 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
     setRelation(edge.data?.originalEdge?.relation || "DEPENDS_ON");
   }, []);
 
-  const queryClient = useQueryClient();
-
   const onNodeDragStop: NodeDragHandler = useCallback(
     async (_event, node) => {
+      const currentNodes = nodes.map((candidate) =>
+        candidate.id === node.id
+          ? {
+            ...candidate,
+            position: node.position,
+            parentNode: node.parentNode,
+          }
+          : candidate
+      );
+      const dtoById = new Map(data.nodes.map((candidate) => [candidate.id, candidate]));
+      const draggedDto = dtoById.get(node.id);
+      const draggedAbsolute = getAbsoluteNodePosition(
+        currentNodes.find((candidate) => candidate.id === node.id) || node,
+        currentNodes
+      );
+      const draggedSize = getFlowNodeDimensions(node);
+      const draggedCenter = {
+        x: draggedAbsolute.x + draggedSize.width / 2,
+        y: draggedAbsolute.y + draggedSize.height / 2,
+      };
+
+      const dropTarget = currentNodes
+        .filter((candidate) => {
+          if (candidate.id === node.id) return false;
+          if (!draggedDto) return false;
+          if (isDescendantOf(candidate.id, node.id, dtoById)) return false;
+          return true;
+        })
+        .sort((a, b) => {
+          const aDto = dtoById.get(a.id);
+          const bDto = dtoById.get(b.id);
+          if (!aDto || !bDto) return 0;
+          return getNodeDepth(bDto, dtoById) - getNodeDepth(aDto, dtoById);
+        })
+        .find((candidate) => {
+          const absolute = getAbsoluteNodePosition(candidate, currentNodes);
+          const size = getFlowNodeDimensions(candidate);
+          return (
+            draggedCenter.x >= absolute.x &&
+            draggedCenter.x <= absolute.x + size.width &&
+            draggedCenter.y >= absolute.y &&
+            draggedCenter.y <= absolute.y + size.height
+          );
+        });
+
+      const nextParentId = dropTarget?.id || node.parentNode || null;
+      const parentChanged = (draggedDto?.parentNodeId || null) !== nextParentId;
+      const nextPosition = (() => {
+        if (!dropTarget || !parentChanged) {
+          return node.position;
+        }
+
+        const targetAbsolute = getAbsoluteNodePosition(dropTarget, currentNodes);
+        return {
+          x: Math.max(containerPadding, draggedAbsolute.x - targetAbsolute.x),
+          y: Math.max(containerHeaderHeight, draggedAbsolute.y - targetAbsolute.y),
+        };
+      })();
+
       // Optimistically update the cache to avoid snap-back
       queryClient.setQueryData<GraphData>(["graph", projectId], (old: GraphData | undefined) => {
         if (!old) return old;
@@ -362,7 +599,12 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
           ...old,
           nodes: old.nodes.map((n) =>
             n.id === node.id
-              ? { ...n, positionX: Math.round(node.position.x), positionY: Math.round(node.position.y) }
+              ? {
+                ...n,
+                parentNodeId: nextParentId,
+                positionX: Math.round(nextPosition.x),
+                positionY: Math.round(nextPosition.y),
+              }
               : n
           ),
         };
@@ -370,22 +612,10 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
 
       // Persist node position to database
       try {
-        const res = await fetch(`/api/nodes/${node.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            positionX: Math.round(node.position.x),
-            positionY: Math.round(node.position.y),
-          }),
-        });
-
-        if (res.ok) {
-          // toast.success("Position saved", { duration: 1000 });
-          // No need to refetch everything!
-        } else {
-          const errorData = await res.json().catch(() => ({}));
-          console.error("Position save failed:", res.status, errorData);
-          throw new Error(errorData.error || `Failed to save position (${res.status})`);
+        await persistNodeFrame(node.id, nextParentId, nextPosition.x, nextPosition.y);
+        if (parentChanged && dropTarget) {
+          toast.success(`Moved inside ${data.nodes.find((n) => n.id === dropTarget.id)?.title || "node"}`);
+          onDataChange();
         }
       } catch (error) {
         console.error("Failed to save node position:", error);
@@ -394,7 +624,7 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
         onDataChange(); // Refetch to restore correct state
       }
     },
-    [projectId, queryClient, onDataChange]
+    [data.nodes, nodes, projectId, queryClient, onDataChange]
   );
 
   const handleOrganizeApply = useCallback(
@@ -507,7 +737,10 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
                 or click the button below to get started.
               </p>
               <Button
-                onClick={() => setAddNodeOpen(true)}
+                onClick={() => {
+                  setAddNodeParent(null);
+                  setAddNodeOpen(true);
+                }}
                 className="bg-blue-600 hover:bg-blue-700 text-white shadow-md"
               >
                 <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -524,8 +757,8 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
           <CanvasContextMenu
             position={contextMenu}
             onClose={() => setContextMenu(null)}
-            onAddNode={(x, y) => {
-              setAddNodePosition({ x, y });
+            onAddNode={() => {
+              setAddNodeParent(null);
               setAddNodeOpen(true);
             }}
           />
@@ -536,10 +769,13 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
       <AddNodeDialog
         projectId={projectId}
         orgId={orgId}
+        parentNodeId={addNodeParent?.id || null}
+        parentNodeTitle={addNodeParent?.title || null}
         open={addNodeOpen}
         onOpenChange={setAddNodeOpen}
         onSuccess={() => {
           onDataChange();
+          setAddNodeParent(null);
           setAddNodeOpen(false);
         }}
       />
@@ -616,7 +852,7 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
                   toast.success("Connection removed");
                   onDataChange();
                   setEditingEdge(null);
-                } catch (e) {
+                } catch {
                   toast.error("Failed to delete connection");
                 } finally {
                   setIsSyncing(false);
@@ -647,4 +883,3 @@ export function GraphCanvas({ projectId, orgId, data, onDataChange, focusNodeId 
     </div>
   );
 }
-

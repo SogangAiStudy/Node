@@ -66,7 +66,7 @@ export function ActionCenter({ orgId }: ActionCenterProps) {
                 emptyState={
                     <div className="flex flex-col items-center gap-2">
                         <CheckCircle2 className="h-8 w-8 text-green-500/20" />
-                        <p>You're all caught up! No immediate actions required.</p>
+                        <p>You&apos;re all caught up! No immediate actions required.</p>
                     </div>
                 }
                 renderItem={(item) => (
@@ -112,7 +112,7 @@ export function ActionCenter({ orgId }: ActionCenterProps) {
                 emptyState={
                     <div className="flex flex-col items-center gap-2">
                         <Clock className="h-8 w-8 text-yellow-500/20" />
-                        <p>You aren't waiting on anyone currently.</p>
+                        <p>You aren&apos;t waiting on anyone currently.</p>
                     </div>
                 }
                 renderItem={(item) => (
@@ -157,7 +157,7 @@ export function ActionCenter({ orgId }: ActionCenterProps) {
                 emptyState={
                     <div className="flex flex-col items-center gap-2">
                         <Ban className="h-8 w-8 text-red-500/20" />
-                        <p>Good job! You aren't blocking anyone's work.</p>
+                        <p>Good job! You aren&apos;t blocking anyone&apos;s work.</p>
                     </div>
                 }
                 renderItem={(item) => (

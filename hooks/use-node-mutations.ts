@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { NodeDTO, GraphData, ManualStatus } from "@/types";
+import { NodeDTO, GraphData } from "@/types";
 import { toast } from "sonner";
 
 interface UpdateNodePayload {
@@ -38,13 +38,11 @@ export const useUpdateNode = () => {
                     ...previousGraphData,
                     nodes: previousGraphData.nodes.map((n) => {
                         if (n.id === nodeId) {
-                            const updatedNode = { ...n, ...updates };
-
-                            // If manualStatus is updated, optimistically update computedStatus too
-                            // so visual feedback (badges, colors) is instant.
-                            if (updates.manualStatus) {
-                                (updatedNode as any).computedStatus = updates.manualStatus;
-                            }
+                            const updatedNode = {
+                                ...n,
+                                ...updates,
+                                ...(updates.manualStatus ? { computedStatus: updates.manualStatus } : {}),
+                            };
 
                             return updatedNode;
                         }

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { requireAuth, isOrgMember } from "@/lib/utils/auth";
-import { Folder } from "@prisma/client";
+import { requireAuth, getUserTeams } from "@/lib/utils/auth";
+import { getActiveOrgMembership } from "@/lib/utils/permissions";
+import { Prisma } from "@prisma/client";
 
 export async function GET(
     request: NextRequest,
@@ -15,9 +16,23 @@ export async function GET(
             return NextResponse.json({ error: "orgId is required" }, { status: 400 });
         }
 
-        if (!(await isOrgMember(orgId, user.id))) {
+        const membership = await getActiveOrgMembership(orgId, user.id);
+        if (!membership) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
+
+        const teamIds = await getUserTeams(orgId, user.id);
+        const projectWhere: Prisma.ProjectWhereInput =
+            membership.role === "ADMIN"
+                ? { orgId }
+                : {
+                    orgId,
+                    OR: [
+                        { ownerId: user.id },
+                        { members: { some: { userId: user.id } } },
+                        ...(teamIds.length > 0 ? [{ projectTeams: { some: { teamId: { in: teamIds } } } }] : []),
+                    ],
+                };
 
         // Fetch all folders and projects in one go
         const [folders, projects] = await Promise.all([
@@ -26,7 +41,7 @@ export async function GET(
                 orderBy: { sortOrder: "asc" },
             }),
             prisma.project.findMany({
-                where: { orgId },
+                where: projectWhere,
                 orderBy: { sortOrder: "asc" },
                 select: {
                     id: true,
@@ -44,10 +59,26 @@ export async function GET(
             }),
         ]);
 
+        type ProjectTreeItem = {
+            id: string;
+            name: string;
+            folderId: string | null;
+            updatedAt: Date;
+            sortOrder: number;
+            primaryTeam: { name: string } | null;
+            _count: { projectTeams: number };
+            isFavorite: boolean;
+        };
+
+        type FolderTreeItem = (typeof folders)[number] & {
+            children: FolderTreeItem[];
+            projects: ProjectTreeItem[];
+        };
+
         // Build the tree
-        const folderMap = new Map();
-        const rootFolders: any[] = [];
-        const unfiledProjects: any[] = [];
+        const folderMap = new Map<string, FolderTreeItem>();
+        const rootFolders: FolderTreeItem[] = [];
+        const unfiledProjects: ProjectTreeItem[] = [];
 
         // Initialize folder map
         folders.forEach(f => {
@@ -56,10 +87,13 @@ export async function GET(
 
         // Nest folders
         folders.forEach(f => {
+            const folder = folderMap.get(f.id);
+            if (!folder) return;
+
             if (f.parentId && folderMap.has(f.parentId)) {
-                folderMap.get(f.parentId).children.push(folderMap.get(f.id));
+                folderMap.get(f.parentId)?.children.push(folder);
             } else {
-                rootFolders.push(folderMap.get(f.id));
+                rootFolders.push(folder);
             }
         });
 
@@ -67,7 +101,7 @@ export async function GET(
         projects.forEach(p => {
             const isFavorite = p.members.length > 0 ? p.members[0].isFavorite : false;
             // Transform project to match expected DTO (flatten isFavorite)
-            const projectWithFavorite = {
+            const projectWithFavorite: ProjectTreeItem = {
                 id: p.id,
                 name: p.name,
                 folderId: p.folderId,
@@ -79,7 +113,7 @@ export async function GET(
             };
 
             if (p.folderId && folderMap.has(p.folderId)) {
-                folderMap.get(p.folderId).projects.push(projectWithFavorite);
+                folderMap.get(p.folderId)?.projects.push(projectWithFavorite);
             } else {
                 unfiledProjects.push(projectWithFavorite);
             }

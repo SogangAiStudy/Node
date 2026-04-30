@@ -2,29 +2,29 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { useParams, useSearchParams } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Plus, FolderKanban } from "lucide-react";
 import Link from "next/link";
-import { WorkspaceTabs } from "@/components/workspace/WorkspaceTabs";
+import { WorkspaceTab, WorkspaceTabs } from "@/components/workspace/WorkspaceTabs";
 import { FolderSection } from "@/components/workspace/FolderSection";
-import { ProjectDTO } from "@/types";
-import {
-  WorkspaceTab,
-  enrichProjectWithWorkspaceData,
-  filterProjectsByTab,
-} from "@/lib/mock-workspace-data";
-import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
+import { DragDropContext, DropResult } from "@hello-pangea/dnd";
 import { toast } from "sonner";
 import { useWorkspaceStructure, Folder, Project } from "@/hooks/use-workspace-structure";
 import { useMoveItem } from "@/hooks/use-move-item";
+
+function getAllProjects(folders: Folder[]): Project[] {
+  let projects: Project[] = [];
+  for (const folder of folders) {
+    projects = [...projects, ...folder.projects, ...getAllProjects(folder.children)];
+  }
+  return projects;
+}
 
 export default function OrgProjectsPage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const orgId = params.orgId as string;
   const [activeTab, setActiveTab] = useState<WorkspaceTab>("all");
-  const queryClient = useQueryClient();
 
   // Unified Data Hook
   const { data: structure, isLoading } = useWorkspaceStructure(orgId);
@@ -41,33 +41,30 @@ export default function OrgProjectsPage() {
     }
   }, [searchParams, orgId]);
 
-  // Flatten all projects for "All Projects" / Filter logic
-  // Recursive function to gather all projects from tree
-  const getAllProjects = (folders: Folder[]): Project[] => {
-    let projects: Project[] = [];
-    for (const f of folders) {
-      projects = [...projects, ...f.projects, ...getAllProjects(f.children)];
-    }
-    return projects;
-  };
-
   const allProjectsRaw = useMemo(() => {
     if (!structure) return [];
     return [...(structure.root.unfiledProjects || []), ...getAllProjects(structure.root.folders || [])];
   }, [structure]);
 
-  // Enrich with current logic (add lastUpdated text etc)
-  // Logic from mock-workspace-data expects simple object
-  const enrichedProjects = useMemo(() => {
-    return allProjectsRaw.map((project, index) =>
-      enrichProjectWithWorkspaceData(project as any, index)
-    );
-  }, [allProjectsRaw]);
-
-  // Filter projects by active tab
   const filteredProjects = useMemo(() => {
-    return filterProjectsByTab(enrichedProjects, activeTab);
-  }, [enrichedProjects, activeTab]);
+    const sortedByUpdated = [...allProjectsRaw].sort(
+      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    );
+
+    if (activeTab === "recents") {
+      return sortedByUpdated.slice(0, 12);
+    }
+
+    if (activeTab === "favorites") {
+      return sortedByUpdated.filter((project) => project.isFavorite);
+    }
+
+    if (activeTab === "unfiled") {
+      return structure?.root.unfiledProjects || [];
+    }
+
+    return allProjectsRaw;
+  }, [activeTab, allProjectsRaw, structure?.root.unfiledProjects]);
 
   // Handle Drag End
   const onDragEnd = (result: DropResult) => {
@@ -159,12 +156,12 @@ export default function OrgProjectsPage() {
   // Calculate tab counts
   const tabCounts = useMemo(() => {
     return {
-      all: enrichedProjects.length,
-      recents: filterProjectsByTab(enrichedProjects, "recents").length,
-      favorites: filterProjectsByTab(enrichedProjects, "favorites").length,
-      unfiled: filterProjectsByTab(enrichedProjects, "unfiled").length,
+      all: allProjectsRaw.length,
+      recents: Math.min(allProjectsRaw.length, 12),
+      favorites: allProjectsRaw.filter((project) => project.isFavorite).length,
+      unfiled: structure?.root.unfiledProjects?.length || 0,
     };
-  }, [enrichedProjects]);
+  }, [allProjectsRaw, structure?.root.unfiledProjects]);
 
   if (isLoading) {
     return (
@@ -185,8 +182,8 @@ export default function OrgProjectsPage() {
     return (
       <div key={folder.id}>
         <FolderSection
-          folder={folder as any} // Cast due to missing projectIds, handled by UI logic
-          projects={folder.projects as any[]}
+          folder={folder}
+          projects={folder.projects}
           orgId={orgId}
           isDropZone={true}
         />
@@ -247,10 +244,13 @@ export default function OrgProjectsPage() {
                       name: "Unfiled",
                       description: "Projects without a folder",
                       color: "#9ca3af",
-                      projectIds: [],
-                      isExpanded: true,
-                    } as any}
-                    projects={(structure?.root?.unfiledProjects ?? []) as any[]}
+                      orgId,
+                      parentId: null,
+                      sortOrder: 0,
+                      children: [],
+                      projects: structure?.root?.unfiledProjects ?? [],
+                    }}
+                    projects={structure?.root?.unfiledProjects ?? []}
                     orgId={orgId}
                     isDropZone={true}
                   />
@@ -259,28 +259,22 @@ export default function OrgProjectsPage() {
             ) : (
               /* Flat List for filtered tabs */
               <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                {filteredProjects.map((project) => (
-                  // Using ProjectCard directly or a wrapper?
-                  // Current design uses SubjectSection for layout. 
-                  // Flat list should probably use ProjectCard directly.
-                  // But imported `SubjectSection` uses `ProjectCard` internally.
-                  // I'll assume we can use `ProjectCard` if I import it, or just use a dummy Unfiled section to hold them all.
-                  // Dummy section is easiest for filtering layout consistency.
-                  <FolderSection
-                    key="filtered"
-                    folder={{
-                      id: activeTab,
-                      name: activeTab.charAt(0).toUpperCase() + activeTab.slice(1),
-                      description: "",
-                      color: "transparent",
-                      projectIds: [],
-                      isExpanded: true
-                    } as any}
-                    projects={filteredProjects as any[]}
-                    orgId={orgId}
-                    isDropZone={false} // No D&D in filtered view usually
-                  />
-                ))}
+                <FolderSection
+                  folder={{
+                    id: activeTab,
+                    name: activeTab.charAt(0).toUpperCase() + activeTab.slice(1),
+                    description: "",
+                    color: "transparent",
+                    orgId,
+                    parentId: null,
+                    sortOrder: 0,
+                    children: [],
+                    projects: filteredProjects,
+                  }}
+                  projects={filteredProjects}
+                  orgId={orgId}
+                  isDropZone={false}
+                />
               </div>
             )}
           </div>

@@ -13,7 +13,6 @@ import {
 import { toast } from "sonner";
 import { Loader2, Sparkles, Layers } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
 
 interface ClusterSuggestion {
     name: string;

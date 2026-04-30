@@ -20,7 +20,6 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Copy, Check, X, Users } from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
 
 interface ShareModalProps {
     open: boolean;
@@ -39,9 +38,8 @@ interface ProjectMember {
 }
 
 const PERMISSION_LEVELS = [
-    { value: "ADMIN", label: "Full access", description: "Edit, suggest, comment, and share" },
-    { value: "EDITOR", label: "Can edit", description: "Edit, suggest, and comment" },
-    { value: "REQUESTER", label: "Can request", description: "Suggest and comment" },
+    { value: "PROJECT_ADMIN", label: "Admin", description: "Manage access and edit" },
+    { value: "EDITOR", label: "Editor", description: "Edit tasks and collaborate" },
     { value: "VIEWER", label: "Can view", description: "View only" },
 ];
 
@@ -64,7 +62,7 @@ export function ShareModal({ open, onOpenChange, projectId, orgId }: ShareModalP
 
     const inviteMutation = useMutation({
         mutationFn: async ({ email, role }: { email: string; role: string }) => {
-            const res = await fetch(`/api/projects/${projectId}/invite`, {
+            const res = await fetch(`/api/projects/${projectId}/invites`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email, role }),
@@ -78,7 +76,7 @@ export function ShareModal({ open, onOpenChange, projectId, orgId }: ShareModalP
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["project-members", projectId] });
             setEmail("");
-            toast.success("User invited successfully");
+                toast.success("Invite sent");
         },
         onError: (error: Error) => {
             toast.error(error.message);

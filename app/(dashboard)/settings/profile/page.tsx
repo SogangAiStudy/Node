@@ -1,6 +1,5 @@
 import { requireAuth } from "@/lib/utils/auth";
 import { prisma } from "@/lib/db/prisma";
-import { redirect } from "next/navigation";
 import ProfilePageClient from "./page-client";
 
 export default async function ProfilePage() {

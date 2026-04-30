@@ -19,7 +19,6 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Copy, Check, Users } from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
 
 interface SharePopoverProps {
     projectId: string;
@@ -36,15 +35,14 @@ interface ProjectMember {
 }
 
 const PERMISSION_LEVELS = [
-    { value: "ADMIN", label: "Full access" },
-    { value: "EDITOR", label: "Can edit" },
-    { value: "REQUESTER", label: "Can request" },
+    { value: "PROJECT_ADMIN", label: "Admin" },
+    { value: "EDITOR", label: "Editor" },
     { value: "VIEWER", label: "Can view" },
 ];
 
 export function SharePopover({ projectId, orgId, children }: SharePopoverProps) {
     const [email, setEmail] = useState("");
-    const [role, setRole] = useState("EDITOR");
+    const role = "EDITOR";
     const [copied, setCopied] = useState(false);
     const [isOpen, setIsOpen] = useState(false);
     const queryClient = useQueryClient();
@@ -62,7 +60,7 @@ export function SharePopover({ projectId, orgId, children }: SharePopoverProps) 
 
     const inviteMutation = useMutation({
         mutationFn: async ({ email, role }: { email: string; role: string }) => {
-            const res = await fetch(`/api/projects/${projectId}/invite`, {
+            const res = await fetch(`/api/projects/${projectId}/invites`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email, role }),

@@ -42,7 +42,7 @@ export function LimitReachedDialog({
                     </DialogTitle>
                     <DialogDescription className="pt-4 space-y-3">
                         <p className="text-base text-foreground">
-                            You've reached the <strong>20-node limit</strong> for the Free plan.
+                            You&apos;ve reached the <strong>20-node limit</strong> for the Free plan.
                         </p>
                         <p className="text-sm">
                             Upgrade to Pro to create unlimited nodes and keep building your graph.

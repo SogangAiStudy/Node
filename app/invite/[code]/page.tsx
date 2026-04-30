@@ -1,5 +1,8 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db/prisma";
+import { requireAuth } from "@/lib/utils/auth";
+import { assignToDefaultTeam } from "@/lib/utils/teams";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 interface InvitePageProps {
@@ -13,7 +16,14 @@ export default async function InvitePage({ params }: InvitePageProps) {
     const session = await auth();
 
     // If not logged in, redirect to login with return URL
-    if (!session?.user?.id) {
+    if (!session?.user) {
+        return redirect(`/login?callbackUrl=/invite/${code}`);
+    }
+
+    let user;
+    try {
+        user = await requireAuth();
+    } catch {
         return redirect(`/login?callbackUrl=/invite/${code}`);
     }
 
@@ -22,7 +32,7 @@ export default async function InvitePage({ params }: InvitePageProps) {
         where: { inviteCode: code },
         include: {
             members: {
-                where: { userId: session.user.id },
+                where: { userId: user.id },
             },
         },
     });
@@ -39,12 +49,12 @@ export default async function InvitePage({ params }: InvitePageProps) {
                     <p className="text-[#7b7c7e] mb-6">
                         This invitation link is invalid or has expired.
                     </p>
-                    <a
+                    <Link
                         href="/"
                         className="inline-block px-6 py-2 bg-[#1a1b1e] text-white rounded-lg hover:bg-[#37352f] transition-colors"
                     >
                         Go to Dashboard
-                    </a>
+                    </Link>
                 </div>
             </div>
         );
@@ -59,12 +69,14 @@ export default async function InvitePage({ params }: InvitePageProps) {
     try {
         await prisma.orgMember.create({
             data: {
-                userId: session.user.id,
+                userId: user.id,
                 orgId: organization.id,
                 role: "MEMBER",
                 status: "ACTIVE",
             },
         });
+
+        await assignToDefaultTeam(organization.id, user.id);
     } catch (error) {
         console.error("Error adding member:", error);
         return (
@@ -77,12 +89,12 @@ export default async function InvitePage({ params }: InvitePageProps) {
                     <p className="text-[#7b7c7e] mb-6">
                         There was an error adding you to the workspace. Please try again or contact support.
                     </p>
-                    <a
+                    <Link
                         href="/"
                         className="inline-block px-6 py-2 bg-[#1a1b1e] text-white rounded-lg hover:bg-[#37352f] transition-colors"
                     >
                         Go to Dashboard
-                    </a>
+                    </Link>
                 </div>
             </div>
         );

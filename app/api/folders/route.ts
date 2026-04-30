@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth, isOrgMember } from "@/lib/utils/auth";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 
 const CreateFolderSchema = z.object({
     orgId: z.string(),
@@ -94,16 +95,17 @@ export async function POST(request: NextRequest) {
         });
 
         return NextResponse.json({ folder }, { status: 201 });
-    } catch (error: any) {
+    } catch (error) {
         console.error("POST /api/folders error:", error);
 
-        if (error.code === 'P2002') {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
             return NextResponse.json({ error: "A folder with this name already exists in this location" }, { status: 409 });
         }
 
         if (error instanceof z.ZodError) {
             return NextResponse.json({ error: "Invalid input", details: error.flatten() }, { status: 400 });
         }
-        return NextResponse.json({ error: "Internal Server Error", message: error.message }, { status: 500 });
+        const message = error instanceof Error ? error.message : "Unknown error";
+        return NextResponse.json({ error: "Internal Server Error", message }, { status: 500 });
     }
 }

@@ -1,4 +1,4 @@
-import { PrismaClient, NodeType, ManualStatus, EdgeRelation } from "@prisma/client";
+import { PrismaClient, NodeType, ManualStatus, EdgeRelation, User } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 
@@ -35,7 +35,7 @@ async function main() {
     { email: "dana@node.ai", name: "Dana (Marketing)" },
   ];
 
-  const fakeUsers: Record<string, any> = {};
+  const fakeUsers: Record<string, User> = {};
   for (const u of fakeUsersData) {
     fakeUsers[u.email] = await prisma.user.upsert({
       where: { email: u.email },

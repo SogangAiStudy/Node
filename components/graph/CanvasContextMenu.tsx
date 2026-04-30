@@ -2,7 +2,6 @@
 
 import { forwardRef } from "react";
 import { Plus, Link2, Maximize } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 export interface ContextMenuPosition {
     x: number;

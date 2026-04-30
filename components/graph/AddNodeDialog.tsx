@@ -27,6 +27,8 @@ import { MultiSelectSearch, SelectItem as MultiSelectItem } from "@/components/u
 interface AddNodeDialogProps {
   projectId: string;
   orgId: string;
+  parentNodeId?: string | null;
+  parentNodeTitle?: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
@@ -44,12 +46,7 @@ interface Team {
   name: string;
 }
 
-interface Team {
-  id: string;
-  name: string;
-}
-
-export function AddNodeDialog({ projectId, orgId, open, onOpenChange, onSuccess }: AddNodeDialogProps) {
+export function AddNodeDialog({ projectId, orgId, parentNodeId, parentNodeTitle, open, onOpenChange, onSuccess }: AddNodeDialogProps) {
   const { data: session } = useSession();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -117,6 +114,7 @@ export function AddNodeDialog({ projectId, orgId, open, onOpenChange, onSuccess 
           ownerId: ownerId || null, // Primary owner
           ownerIds: uniqueOwnerIds, // All owners/participants
           teamIds,
+          parentNodeId: parentNodeId || null,
           dueAt: dueAt ? new Date(dueAt).toISOString() : null,
         }),
       });
@@ -179,9 +177,15 @@ export function AddNodeDialog({ projectId, orgId, open, onOpenChange, onSuccess 
         <DialogContent className="sm:max-w-[500px]">
           <form onSubmit={handleSubmit}>
             <DialogHeader>
-              <DialogTitle>Add Node</DialogTitle>
+              <DialogTitle>{parentNodeId ? "Add Child Node" : "Add Node"}</DialogTitle>
             </DialogHeader>
             <div className="space-y-6 my-4">
+              {parentNodeId && (
+                <div className="rounded-md border border-indigo-100 bg-indigo-50 px-3 py-2 text-xs text-indigo-700">
+                  Inside {parentNodeTitle || "selected node"}
+                </div>
+              )}
+
               <div className="grid gap-2">
                 <Label htmlFor="title" className="text-sm font-medium">Title</Label>
                 <Input

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { NodeDTO, EdgeDTO } from "@/types";
 import { cn } from "@/lib/utils";
 import { CheckCircle2, Clock, Ban, ChevronDown, ChevronRight, Zap } from "lucide-react";
@@ -25,9 +25,9 @@ interface ActionCategory {
 export function ActionCenterBar({ nodes, edges, userId, onNodeClick }: ActionCenterBarProps) {
     const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
 
-    const isOwner = (node: NodeDTO) => {
-        return node.ownerId === userId || node.owners?.some((o: any) => o.id === userId);
-    };
+    const isOwner = useCallback((node: NodeDTO) => {
+        return node.ownerId === userId || node.owners?.some((owner) => owner.id === userId);
+    }, [userId]);
 
     // Actionable: Nodes ready to proceed (TODO/DOING & !BLOCKED & !WAITING)
     const actionable = useMemo(() => {
@@ -37,7 +37,7 @@ export function ActionCenterBar({ nodes, edges, userId, onNodeClick }: ActionCen
             n.computedStatus !== "BLOCKED" &&
             n.computedStatus !== "WAITING"
         );
-    }, [nodes, userId]);
+    }, [isOwner, nodes]);
 
     // Waiting: Nodes I own that are in WAITING or BLOCKED state
     const waiting = useMemo(() => {
@@ -45,7 +45,7 @@ export function ActionCenterBar({ nodes, edges, userId, onNodeClick }: ActionCen
             isOwner(n) &&
             (n.computedStatus === "WAITING" || n.computedStatus === "BLOCKED")
         );
-    }, [nodes, userId]);
+    }, [isOwner, nodes]);
 
     // Blocking: Nodes I own that are blocking downstream nodes owned by OTHERS
     const blocking = useMemo(() => {
@@ -65,7 +65,7 @@ export function ActionCenterBar({ nodes, edges, userId, onNodeClick }: ActionCen
 
             return hasDependentOther;
         });
-    }, [nodes, edges, userId]);
+    }, [isOwner, nodes, edges]);
 
     const categories: ActionCategory[] = [
         {
@@ -152,7 +152,7 @@ export function ActionCenterBar({ nodes, edges, userId, onNodeClick }: ActionCen
                             .find((c) => c.id === expandedCategory)
                             ?.items.map((item) => {
                                 // Determine reasons
-                                const isOwner = item.owners?.some((o: any) => o.id === userId) || item.ownerId === userId;
+                                const itemIsOwner = isOwner(item);
                                 const isTeam = item.teams && item.teams.length > 0;
 
                                 return (
@@ -176,14 +176,14 @@ export function ActionCenterBar({ nodes, edges, userId, onNodeClick }: ActionCen
                                                 )}
                                             </div>
                                             {/* OWNER/TEAM Badges */}
-                                            {isOwner && (
+                                            {itemIsOwner && (
                                                 <span className="text-[9px] bg-blue-600 text-white px-1.5 py-0.5 rounded font-bold uppercase flex-shrink-0">
                                                     Owner
                                                 </span>
                                             )}
-                                            {isTeam && !isOwner && item.teams?.map((t: any) => (
-                                                <span key={t.id} className="text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-medium flex-shrink-0">
-                                                    {t.name}
+                                            {isTeam && !itemIsOwner && item.teams?.map((team) => (
+                                                <span key={team.id} className="text-[9px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-medium flex-shrink-0">
+                                                    {team.name}
                                                 </span>
                                             ))}
                                         </div>

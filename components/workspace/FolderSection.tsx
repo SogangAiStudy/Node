@@ -2,14 +2,13 @@ import { useState } from "react";
 import Link from "next/link";
 import { ChevronRight, Plus, GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ProjectDTO } from "@/types";
 import { ProjectCard } from "./ProjectCard";
-import { Folder } from "@/lib/mock-workspace-data";
+import { Folder, Project } from "@/hooks/use-workspace-structure";
 import { Droppable, Draggable } from "@hello-pangea/dnd";
 
 interface FolderSectionProps {
-    folder: Folder;
-    projects: ProjectDTO[];
+    folder: Folder & { isExpanded?: boolean };
+    projects: Project[];
     orgId: string;
     onExpandToggle?: (folderId: string, isExpanded: boolean) => void;
     isDropZone?: boolean;

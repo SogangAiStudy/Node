@@ -1,16 +1,12 @@
 "use client";
 
 import { ReactNode } from "react";
-import Link from "next/link";
-import { usePathname, useParams } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ProjectHeader } from "@/components/project/ProjectHeader";
 
 export default function ProjectLayout({ children }: { children: ReactNode }) {
-  const pathname = usePathname();
   const params = useParams();
-  const orgId = params.orgId as string;
   const projectId = params.projectId as string;
 
   // Fetch project data for header
@@ -23,12 +19,6 @@ export default function ProjectLayout({ children }: { children: ReactNode }) {
     },
     enabled: !!projectId,
   });
-
-  const currentTab = pathname.includes("/now")
-    ? "now"
-    : pathname.includes("/graph")
-      ? "graph"
-      : "graph";
 
   return (
     <div className="flex flex-col h-screen">
@@ -47,4 +37,3 @@ export default function ProjectLayout({ children }: { children: ReactNode }) {
     </div>
   );
 }
-

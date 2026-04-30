@@ -1,9 +1,16 @@
 import { prisma } from "@/lib/db/prisma";
+import { Prisma } from "@prisma/client";
 
 export type ActivityAction =
   | "CREATE_NODE"
   | "UPDATE_NODE"
   | "DELETE_NODE"
+  | "UPDATE_NODE_PAGE"
+  | "CREATE_NODE_COMMENT"
+  | "UPDATE_NODE_COMMENT"
+  | "DELETE_NODE_COMMENT"
+  | "CREATE_NODE_ATTACHMENT"
+  | "DELETE_NODE_ATTACHMENT"
   | "CREATE_EDGE"
   | "UPDATE_EDGE"
   | "DELETE_EDGE"
@@ -16,7 +23,8 @@ export type ActivityAction =
   | "ADD_PROJECT_MEMBER"
   | "UPDATE_PROJECT_MEMBER";
 
-export type EntityType = "NODE" | "EDGE" | "REQUEST" | "PROJECT" | "PROJECT_MEMBER";
+export type EntityType = "NODE" | "EDGE" | "REQUEST" | "PROJECT" | "PROJECT_MEMBER" | "NODE_COMMENT" | "NODE_ATTACHMENT";
+type ActivityDetails = Prisma.InputJsonObject;
 
 /**
  * Create an activity log entry for audit trail
@@ -36,8 +44,8 @@ export async function createActivityLog({
   action: ActivityAction;
   entityType: EntityType;
   entityId: string;
-  details?: Record<string, unknown>;
-}, tx?: any): Promise<void> {
+  details?: ActivityDetails;
+}, tx?: Prisma.TransactionClient): Promise<void> {
   const db = tx || prisma;
 
   // Get orgId from project if not provided
@@ -98,7 +106,7 @@ export async function getActivityLogs(
     },
   });
 
-  return logs.map((log: any) => ({
+  return logs.map((log) => ({
     id: log.id,
     projectId: log.projectId,
     userId: log.userId,

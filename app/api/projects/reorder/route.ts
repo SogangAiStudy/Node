@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth, isOrgMember } from "@/lib/utils/auth";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 
 const ReorderProjectsSchema = z.object({
     orgId: z.string(),
@@ -40,10 +41,13 @@ export async function PUT(request: NextRequest) {
         );
 
         return NextResponse.json({ success: true });
-    } catch (error: any) {
+    } catch (error) {
         console.error("PUT /api/projects/reorder error:", error);
-        if (error.code) console.error("Error code:", error.code);
-        if (error.meta) console.error("Error meta:", error.meta);
-        return NextResponse.json({ error: "Failed to reorder projects", details: error.message }, { status: 500 });
+        if (error instanceof Prisma.PrismaClientKnownRequestError) {
+            console.error("Error code:", error.code);
+            console.error("Error meta:", error.meta);
+        }
+        const details = error instanceof Error ? error.message : "Unknown error";
+        return NextResponse.json({ error: "Failed to reorder projects", details }, { status: 500 });
     }
 }

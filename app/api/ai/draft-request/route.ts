@@ -73,9 +73,9 @@ export async function POST(req: NextRequest) {
         }
 
         // Build context
-        const blockedDetails = getBlockingDetails(node as any);
+        const blockedDetails = getBlockingDetails(node);
         const blockingReasons = blockedDetails
-            .map((d: any) => {
+            .map((d) => {
                 if (d.type === "DEPENDENCY") return `Waiting on: "${d.nodeId?.title || "a task"}"`;
                 if (d.type === "APPROVAL") return `Needs approval for: "${d.nodeId?.title || "a task"}"`;
                 if (d.type === "REQUEST") return "Has an open request pending";

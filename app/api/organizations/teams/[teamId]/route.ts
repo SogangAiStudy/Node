@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/utils/auth";
+import { requireOrgAdmin } from "@/lib/utils/permissions";
 import { z } from "zod";
 
 const updateTeamSchema = z.object({
@@ -24,25 +25,14 @@ export async function PATCH(
 
         const team = await prisma.team.findUnique({
             where: { id: teamId },
-            select: { orgId: true }
+            select: { orgId: true, isDefault: true }
         });
 
         if (!team) {
             return NextResponse.json({ error: "Team not found" }, { status: 404 });
         }
 
-        const orgMember = await prisma.orgMember.findUnique({
-            where: {
-                orgId_userId: {
-                    orgId: team.orgId,
-                    userId: user.id,
-                },
-            },
-        });
-
-        if (!orgMember || orgMember.role !== "ADMIN") {
-            return NextResponse.json({ error: "Only admins can update teams" }, { status: 403 });
-        }
+        await requireOrgAdmin(team.orgId, user.id);
 
         const updatedTeam = await prisma.team.update({
             where: { id: teamId },
@@ -55,6 +45,9 @@ export async function PATCH(
         return NextResponse.json({ team: updatedTeam });
     } catch (error) {
         console.error("PATCH team error:", error);
+        if (error instanceof Error && error.message === "Organization admin access required") {
+            return NextResponse.json({ error: "Only admins can update teams" }, { status: 403 });
+        }
         return NextResponse.json({ error: "Internal server error" }, { status: 500 });
     }
 }
@@ -73,24 +66,47 @@ export async function DELETE(
 
         const team = await prisma.team.findUnique({
             where: { id: teamId },
-            select: { orgId: true }
+            select: { id: true, orgId: true, name: true, isDefault: true }
         });
 
         if (!team) {
             return NextResponse.json({ error: "Team not found" }, { status: 404 });
         }
 
-        const orgMember = await prisma.orgMember.findUnique({
-            where: {
-                orgId_userId: {
-                    orgId: team.orgId,
-                    userId: user.id,
-                },
-            },
-        });
+        await requireOrgAdmin(team.orgId, user.id);
 
-        if (!orgMember || orgMember.role !== "ADMIN") {
-            return NextResponse.json({ error: "Only admins can delete teams" }, { status: 403 });
+        if (team.isDefault) {
+            return NextResponse.json({ error: "The default team cannot be deleted" }, { status: 409 });
+        }
+
+        const [primaryProjectCount, projectAssignmentCount, nodeCount, nodeTeamCount, openRequestCount] = await Promise.all([
+            prisma.project.count({ where: { primaryTeamId: teamId } }),
+            prisma.projectTeam.count({ where: { teamId } }),
+            prisma.node.count({ where: { teamId } }),
+            prisma.nodeTeam.count({ where: { teamId } }),
+            prisma.request.count({
+                where: {
+                    orgId: team.orgId,
+                    status: { not: "CLOSED" },
+                    OR: [
+                        { targetTeamId: teamId },
+                        { toTeam: team.name },
+                    ],
+                },
+            }),
+        ]);
+
+        if (primaryProjectCount > 0 || projectAssignmentCount > 0 || nodeCount > 0 || nodeTeamCount > 0 || openRequestCount > 0) {
+            return NextResponse.json({
+                error: "This team is still referenced and cannot be deleted",
+                details: {
+                    primaryProjectCount,
+                    projectAssignmentCount,
+                    nodeCount,
+                    nodeTeamCount,
+                    openRequestCount,
+                },
+            }, { status: 409 });
         }
 
         await prisma.team.delete({
@@ -100,6 +116,9 @@ export async function DELETE(
         return NextResponse.json({ message: "Team deleted successfully" });
     } catch (error) {
         console.error("DELETE team error:", error);
+        if (error instanceof Error && error.message === "Organization admin access required") {
+            return NextResponse.json({ error: "Only admins can delete teams" }, { status: 403 });
+        }
         return NextResponse.json({ error: "Internal server error" }, { status: 500 });
     }
 }

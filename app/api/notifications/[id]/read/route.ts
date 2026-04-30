@@ -19,7 +19,21 @@ export async function PATCH(
         }
 
         if (notification.userId !== user.id) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+            if (notification.targetType !== "TEAM" || !notification.targetTeamId) {
+                return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+            }
+
+            const teamMember = await prisma.teamMember.findFirst({
+                where: {
+                    teamId: notification.targetTeamId,
+                    userId: user.id,
+                },
+                select: { id: true },
+            });
+
+            if (!teamMember) {
+                return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+            }
         }
 
         await prisma.notification.update({

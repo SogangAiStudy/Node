@@ -43,7 +43,12 @@ export async function GET(req: Request) {
             }),
             prisma.request.findMany({
                 where: { orgId },
-                include: { toUser: true }
+                include: {
+                    toUser: true,
+                    targetTeam: {
+                        select: { name: true },
+                    },
+                }
             }),
             prisma.teamMember.findMany({
                 where: { orgId, userId: user.id },
@@ -64,20 +69,20 @@ export async function GET(req: Request) {
         // 4. Transform to DTOs
         type NodeWithRelations = typeof nodes[number];
 
-        const mapNodeToDTO = (n: NodeWithRelations): any => {
+        const mapNodeToDTO = (n: NodeWithRelations) => {
             // Determine reasons why this node appears
             const reasons: string[] = [];
             const isOwner = n.nodeOwners.some(no => no.userId === user.id) || n.ownerId === user.id;
-            const nodeTeamIds = (n as any).nodeTeams?.map((nt: any) => nt.teamId) || [];
+            const nodeTeamIds = n.nodeTeams.map((nt) => nt.teamId);
             const matchingTeamIds = nodeTeamIds.filter((tid: string) => userTeamIds.includes(tid));
             const isTeam = matchingTeamIds.length > 0;
 
             if (isOwner) reasons.push("OWNER");
             if (isTeam) reasons.push("TEAM");
 
-            const teamNames = (n as any).nodeTeams
-                ?.filter((nt: any) => userTeamIds.includes(nt.teamId))
-                ?.map((nt: any) => nt.team.name) || [];
+            const teamNames = n.nodeTeams
+                .filter((nt) => userTeamIds.includes(nt.teamId))
+                .map((nt) => nt.team.name);
 
             return {
                 id: n.id,
@@ -90,7 +95,7 @@ export async function GET(req: Request) {
                 ownerId: n.ownerId,
                 ownerName: n.owner?.name,
                 orgId: n.orgId,
-                teams: (n as any).nodeTeams?.map((nt: any) => ({ id: nt.teamId, name: nt.team.name })) || [],
+                teams: n.nodeTeams.map((nt) => ({ id: nt.teamId, name: nt.team.name })),
                 owners: n.nodeOwners.map(no => ({ id: no.userId, name: no.user.name })),
                 createdAt: n.createdAt.toISOString(),
                 updatedAt: n.updatedAt.toISOString(),
@@ -103,8 +108,8 @@ export async function GET(req: Request) {
 
         // Sort: OWNER items first, then by dueAt, then by priority
         const myActions = myActionsNodes
-            .map((n: any) => mapNodeToDTO(n))
-            .sort((a: any, b: any) => {
+            .map((n) => mapNodeToDTO(n))
+            .sort((a, b) => {
                 const aIsOwner = a.reasons?.includes("OWNER") ? 0 : 1;
                 const bIsOwner = b.reasons?.includes("OWNER") ? 0 : 1;
                 if (aIsOwner !== bIsOwner) return aIsOwner - bIsOwner;
@@ -116,7 +121,7 @@ export async function GET(req: Request) {
                 return (b.priority || 0) - (a.priority || 0);
             });
 
-        const enrichWaitingNode = (n: any) => {
+        const enrichWaitingNode = (n: NodeWithRelations) => {
             const status = statusMap.get(n.id);
             let reason = "Unknown";
             let responsible: string[] = [];
@@ -132,14 +137,16 @@ export async function GET(req: Request) {
                 reason = `Blocked by ${blockingNodes.length} task${blockingNodes.length > 1 ? 's' : ''} `;
                 responsible = blockingNodes.flatMap(bn => {
                     if (bn.owner?.name) return [bn.owner.name];
-                    if (bn.nodeOwners?.length) return bn.nodeOwners.map((no: any) => no.user.name || "Unknown");
+                    if (bn.nodeOwners?.length) return bn.nodeOwners.map((no) => no.user.name || "Unknown");
                     return [];
                 }).filter((name): name is string => !!name);
             }
             else if (status === 'WAITING') {
                 if (activeRequests.length > 0) {
                     reason = "Waiting for response";
-                    responsible = activeRequests.map(r => r.toUser?.name || r.toTeam || "Unassigned").filter((name): name is string => !!name);
+                    responsible = activeRequests
+                        .map(r => r.toUser?.name || r.targetTeam?.name || r.toTeam || "Unassigned")
+                        .filter((name): name is string => !!name);
                 } else {
                     const approvalEdges = edges.filter(e => e.fromNodeId === n.id && e.relation === 'APPROVAL_BY');
                     if (approvalEdges.length > 0) {
@@ -147,7 +154,7 @@ export async function GET(req: Request) {
                         const approvalNodes = nodes.filter(node => approvalEdges.some(e => e.toNodeId === node.id));
                         responsible = approvalNodes.flatMap(bn => {
                             if (bn.owner?.name) return [bn.owner.name];
-                            if (bn.nodeOwners?.length) return bn.nodeOwners.map((no: any) => no.user.name || "Unknown");
+                            if (bn.nodeOwners?.length) return bn.nodeOwners.map((no) => no.user.name || "Unknown");
                             return [];
                         }).filter((name): name is string => !!name);
                     }
@@ -162,10 +169,14 @@ export async function GET(req: Request) {
             };
         };
 
-        const waiting = myWaitingNodes.map((n: any) => enrichWaitingNode(n));
+        const waiting = myWaitingNodes.map((n) => enrichWaitingNode(n));
 
         // Blocking
-        const blockingMap = new Map();
+        const blockingMap = new Map<string, {
+            node: NodeWithRelations;
+            blockedCount: number;
+            affectedProjects: Set<string>;
+        }>();
         imBlockingData.forEach(({ waitingOnMyNode, blockedNode }) => {
             if (!blockingMap.has(waitingOnMyNode.id)) {
                 blockingMap.set(waitingOnMyNode.id, {
@@ -175,6 +186,7 @@ export async function GET(req: Request) {
                 });
             }
             const entry = blockingMap.get(waitingOnMyNode.id);
+            if (!entry) return;
             entry.blockedCount++;
 
             const bn = nodes.find(n => n.id === blockedNode.id);

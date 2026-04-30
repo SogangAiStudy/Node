@@ -1,6 +1,34 @@
 import { prisma } from "@/lib/db/prisma";
 import { OrgRole, ProjectRole } from "@/types";
 
+export const ACTIVE_ORG_MEMBER_STATUSES = ["ACTIVE", "PENDING_TEAM_ASSIGNMENT"] as const;
+
+function isActiveOrgStatus(status: string) {
+    return ACTIVE_ORG_MEMBER_STATUSES.includes(status as (typeof ACTIVE_ORG_MEMBER_STATUSES)[number]);
+}
+
+export async function getOrgMembership(orgId: string, userId: string) {
+    return prisma.orgMember.findUnique({
+        where: {
+            orgId_userId: {
+                orgId,
+                userId,
+            },
+        },
+        select: {
+            orgId: true,
+            userId: true,
+            role: true,
+            status: true,
+        },
+    });
+}
+
+export async function getActiveOrgMembership(orgId: string, userId: string) {
+    const membership = await getOrgMembership(orgId, userId);
+    return membership && isActiveOrgStatus(membership.status) ? membership : null;
+}
+
 // ============================================================================
 // ORGANIZATION-LEVEL PERMISSIONS
 // ============================================================================
@@ -9,17 +37,7 @@ import { OrgRole, ProjectRole } from "@/types";
  * Check if user is an organization admin
  */
 export async function isOrgAdmin(orgId: string, userId: string): Promise<boolean> {
-    const orgMember = await prisma.orgMember.findUnique({
-        where: {
-            orgId_userId: {
-                orgId,
-                userId,
-            },
-        },
-        select: {
-            role: true,
-        },
-    });
+    const orgMember = await getActiveOrgMembership(orgId, userId);
     return orgMember?.role === OrgRole.ADMIN;
 }
 
@@ -27,44 +45,30 @@ export async function isOrgAdmin(orgId: string, userId: string): Promise<boolean
  * Require user to be an organization admin
  */
 export async function requireOrgAdmin(orgId: string, userId: string) {
-    const isAdmin = await isOrgAdmin(orgId, userId);
-    if (!isAdmin) {
+    const membership = await getActiveOrgMembership(orgId, userId);
+    if (!membership || membership.role !== OrgRole.ADMIN) {
         throw new Error("Organization admin access required");
     }
+    return membership;
 }
 
 /**
  * Check if user is a member of an organization
  */
 export async function isOrgMember(orgId: string, userId: string): Promise<boolean> {
-    const orgMember = await prisma.orgMember.findUnique({
-        where: {
-            orgId_userId: {
-                orgId,
-                userId,
-            },
-        },
-        select: {
-            status: true,
-        },
-    });
-
-    if (!orgMember) {
-        return false;
-    }
-
-    const isActive = ["ACTIVE", "PENDING_TEAM_ASSIGNMENT"].includes(orgMember.status);
-    return isActive;
+    const orgMember = await getActiveOrgMembership(orgId, userId);
+    return !!orgMember;
 }
 
 /**
  * Require user to be an organization member
  */
 export async function requireOrgMember(orgId: string, userId: string) {
-    const isMember = await isOrgMember(orgId, userId);
-    if (!isMember) {
+    const membership = await getActiveOrgMembership(orgId, userId);
+    if (!membership) {
         throw new Error("Not a member of this organization");
     }
+    return membership;
 }
 
 // ============================================================================
@@ -75,6 +79,11 @@ export async function requireOrgMember(orgId: string, userId: string) {
  * Get all team IDs that a user belongs to in an organization
  */
 export async function getUserTeams(orgId: string, userId: string): Promise<string[]> {
+    const membership = await getActiveOrgMembership(orgId, userId);
+    if (!membership) {
+        return [];
+    }
+
     const teamMemberships = await prisma.teamMember.findMany({
         where: {
             orgId,
@@ -84,7 +93,7 @@ export async function getUserTeams(orgId: string, userId: string): Promise<strin
             teamId: true,
         },
     });
-    return teamMemberships.map((tm: any) => tm.teamId);
+    return teamMemberships.map((tm) => tm.teamId);
 }
 
 /**
@@ -108,7 +117,6 @@ export async function isTeamMember(teamId: string, userId: string): Promise<bool
  * Check if user can view a project
  */
 export async function canViewProject(projectId: string, userId: string): Promise<boolean> {
-    // Get project with orgId and ownerId
     const project = await prisma.project.findUnique({
         where: { id: projectId },
         select: { orgId: true, ownerId: true },
@@ -118,8 +126,14 @@ export async function canViewProject(projectId: string, userId: string): Promise
         return false;
     }
 
+    const orgMembership = await getActiveOrgMembership(project.orgId, userId);
+
+    if (!orgMembership) {
+        return false;
+    }
+
     // 1. Check if user is org admin (bypass all restrictions)
-    if (await isOrgAdmin(project.orgId, userId)) {
+    if (orgMembership.role === OrgRole.ADMIN) {
         return true;
     }
 
@@ -141,12 +155,22 @@ export async function canViewProject(projectId: string, userId: string): Promise
         return true;
     }
 
-    // 4. [NEW POLICY] Any active member of the organization can view any project
-    if (await isOrgMember(project.orgId, userId)) {
-        return true;
+    // 4. Check team-based project access
+    const myTeams = await getUserTeams(project.orgId, userId);
+
+    if (myTeams.length === 0) {
+        return false;
     }
 
-    return false;
+    const teamAccess = await prisma.projectTeam.findFirst({
+        where: {
+            projectId,
+            teamId: { in: myTeams },
+        },
+        select: { id: true },
+    });
+
+    return !!teamAccess;
 }
 
 /**
@@ -163,7 +187,6 @@ export async function requireProjectView(projectId: string, userId: string) {
  * Check if user can edit a project
  */
 export async function canEditProject(projectId: string, userId: string): Promise<boolean> {
-    // Get project with orgId and ownerId
     const project = await prisma.project.findUnique({
         where: { id: projectId },
         select: { orgId: true, ownerId: true },
@@ -173,8 +196,14 @@ export async function canEditProject(projectId: string, userId: string): Promise
         return false;
     }
 
+    const orgMembership = await getActiveOrgMembership(project.orgId, userId);
+
+    if (!orgMembership) {
+        return false;
+    }
+
     // 1. Check if user is org admin (bypass all restrictions)
-    if (await isOrgAdmin(project.orgId, userId)) {
+    if (orgMembership.role === OrgRole.ADMIN) {
         return true;
     }
 
@@ -218,7 +247,7 @@ export async function canEditProject(projectId: string, userId: string): Promise
             },
         });
 
-        const hasEditRole = projectTeams.some((pt: any) =>
+        const hasEditRole = projectTeams.some((pt) =>
             pt.role === ProjectRole.EDITOR ||
             pt.role === ProjectRole.PROJECT_ADMIN ||
             pt.role === ProjectRole.OWNER
@@ -227,11 +256,6 @@ export async function canEditProject(projectId: string, userId: string): Promise
         if (hasEditRole) {
             return true;
         }
-    }
-
-    // 5. [SPECIAL POLICY] Any active member of the organization can edit the ONBOARDING project
-    if (projectId === "onboarding-project-id" && await isOrgMember(project.orgId, userId)) {
-        return true;
     }
 
     return false;
@@ -264,8 +288,14 @@ export async function getUserProjectRole(
         return null;
     }
 
+    const orgMembership = await getActiveOrgMembership(project.orgId, userId);
+
+    if (!orgMembership) {
+        return null;
+    }
+
     // 1. Org admins have PROJECT_ADMIN role (effectively OWNER)
-    if (await isOrgAdmin(project.orgId, userId)) {
+    if (orgMembership.role === OrgRole.ADMIN) {
         return ProjectRole.PROJECT_ADMIN;
     }
 
@@ -287,21 +317,7 @@ export async function getUserProjectRole(
 
     let highestRole: ProjectRole | null = projectMember ? projectMember.role : null;
 
-    // 4. [NEW POLICY] Onboarding project gives PROJECT_ADMIN to all org members
-    if (projectId === "onboarding-project-id") {
-        if (await isOrgMember(project.orgId, userId)) {
-            return ProjectRole.PROJECT_ADMIN;
-        }
-    }
-
-    // 5. [NEW POLICY] Any org member is at least a VIEWER
-    if (!highestRole) {
-        if (await isOrgMember(project.orgId, userId)) {
-            highestRole = ProjectRole.VIEWER;
-        }
-    }
-
-    // 6. Check team-based roles
+    // 4. Check team-based roles
     const myTeams = await getUserTeams(project.orgId, userId);
 
     if (myTeams.length > 0) {
@@ -317,7 +333,7 @@ export async function getUserProjectRole(
             },
         });
 
-        const roles = projectTeams.map((pt: any) => pt.role as ProjectRole);
+        const roles = projectTeams.map((pt) => pt.role);
 
         if (roles.includes(ProjectRole.OWNER)) return ProjectRole.OWNER;
         if (roles.includes(ProjectRole.PROJECT_ADMIN)) return ProjectRole.PROJECT_ADMIN;

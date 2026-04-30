@@ -1,12 +1,11 @@
 "use client";
 
 import * as React from "react";
-import { Search, Check, User, Users, X } from "lucide-react";
+import { Search, Check, Users, X } from "lucide-react";
 import { cn, getInitials } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 
 export interface SelectItem {
     id: string;

@@ -98,7 +98,7 @@ export function Navbar({ user }: NavbarProps) {
                     </div>
                     {orgStatus.organization.role === "ADMIN" && (
                       <DropdownMenuItem asChild>
-                        <Link href="/organization/members" className="cursor-pointer">
+                        <Link href={`/org/${orgStatus.organization.id}/settings?tab=members`} className="cursor-pointer">
                           Teams & Members
                         </Link>
                       </DropdownMenuItem>

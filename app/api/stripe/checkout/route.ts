@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
         if (customerId) {
             try {
                 await stripe.customers.retrieve(customerId);
-            } catch (error: any) {
+            } catch {
                 // Customer doesn't exist in Stripe (likely environment mismatch)
                 console.warn(`Customer ${customerId} not found in Stripe, creating new customer`);
                 customerId = null;

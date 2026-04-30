@@ -1,5 +1,5 @@
 
-import { EdgeRelation, ManualStatus, RequestStatus, NodeType } from "@prisma/client";
+import { EdgeRelation, ManualStatus, RequestStatus } from "@prisma/client";
 
 // Minimal interface for the node data needed to check status
 export interface NodeWithRelations {
@@ -8,6 +8,8 @@ export interface NodeWithRelations {
     edgesFrom: Array<{
         relation: EdgeRelation;
         toNode: {
+            id?: string;
+            title?: string;
             manualStatus: ManualStatus;
         };
     }>;
@@ -15,7 +17,7 @@ export interface NodeWithRelations {
         id: string; // Added ID
         status: RequestStatus;
         question?: string;
-        linkedNodeId: string; // To differentiate if needed, though usually filtered by query
+        linkedNodeId?: string; // To differentiate if needed, though usually filtered by query
     }>;
 }
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/utils/auth";
 import { requireProjectView, requireProjectEdit } from "@/lib/utils/permissions";
+import { authOrPermissionErrorResponse } from "@/lib/utils/api-error-responses";
 import { createActivityLog } from "@/lib/utils/activity-log";
 import { triggerNodeAssignmentNotifications } from "@/lib/utils/notifications";
 import { assertWithinNodeLimit } from "@/lib/subscription";
@@ -10,6 +11,7 @@ import { NodeType, ManualStatus } from "@/types";
 
 const CreateNodeSchema = z.object({
   title: z.string().min(1).max(200),
+  parentNodeId: z.string().optional().nullable(),
   description: z.string().optional().nullable(),
   type: z.nativeEnum(NodeType).default(NodeType.TASK),
   manualStatus: z.nativeEnum(ManualStatus).default(ManualStatus.TODO),
@@ -55,6 +57,17 @@ export async function POST(
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
 
+    if (validated.parentNodeId) {
+      const parentNode = await prisma.node.findUnique({
+        where: { id: validated.parentNodeId },
+        select: { projectId: true },
+      });
+
+      if (!parentNode || parentNode.projectId !== projectId) {
+        return NextResponse.json({ error: "Parent node not found" }, { status: 404 });
+      }
+    }
+
     // Check if organization has reached node limit
     try {
       await assertWithinNodeLimit(project.orgId);
@@ -83,6 +96,7 @@ export async function POST(
         data: {
           orgId: project.orgId,
           projectId,
+          parentNodeId: validated.parentNodeId || null,
           title: validated.title,
           description: validated.description,
           type: validated.type,
@@ -106,6 +120,7 @@ export async function POST(
           team: { select: { name: true } },
           nodeTeams: { include: { team: { select: { id: true, name: true } } } },
           nodeOwners: { include: { user: { select: { id: true, name: true } } } },
+          _count: { select: { childNodes: true } },
         },
       });
 
@@ -146,6 +161,7 @@ export async function POST(
         id: node.id,
         orgId: node.orgId,
         projectId: node.projectId,
+        parentNodeId: node.parentNodeId,
         title: node.title,
         description: node.description,
         type: node.type,
@@ -153,9 +169,10 @@ export async function POST(
         ownerName: node.owner?.name || null,
         teamId: node.teamId,
         teamName: node.team?.name || null,
-        teams: node.nodeTeams.map((nt: any) => ({ id: nt.team.id, name: nt.team.name })),
-        owners: node.nodeOwners.map((no: any) => ({ id: no.user.id, name: no.user.name })),
+        teams: node.nodeTeams.map((nt) => ({ id: nt.team.id, name: nt.team.name })),
+        owners: node.nodeOwners.map((no) => ({ id: no.user.id, name: no.user.name })),
         priority: node.priority,
+        childCount: node._count.childNodes,
         dueAt: node.dueAt?.toISOString() || null,
         phase: node.phase,
         createdAt: node.createdAt.toISOString(),
@@ -164,16 +181,14 @@ export async function POST(
       { status: 201 }
     );
   } catch (error) {
-    console.error("POST /api/projects/[projectId]/nodes error:", error);
-
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "Invalid input", details: error.flatten() }, { status: 400 });
     }
 
-    if (error instanceof Error && error.message === "Not a member of this project") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const authResponse = authOrPermissionErrorResponse(error);
+    if (authResponse) return authResponse;
 
+    console.error("POST /api/projects/[projectId]/nodes error:", error);
     return NextResponse.json({ error: "Failed to create node" }, { status: 500 });
   }
 }

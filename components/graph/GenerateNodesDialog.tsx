@@ -25,7 +25,6 @@ import {
     ChevronDown,
     ChevronRight,
     Users,
-    X,
     Edit3,
     FileText,
     Lightbulb,
@@ -79,10 +78,10 @@ interface GenerateNodesDialogProps {
 }
 
 type Step = "input" | "plan" | "generating";
+type GeneratedPlanNodeType = GeneratedPlanNode["type"];
 
 export function GenerateNodesDialog({
     projectId,
-    orgId,
     open,
     onOpenChange,
     onSuccess,
@@ -524,7 +523,7 @@ export function GenerateNodesDialog({
                                                                             value={node.type}
                                                                             onValueChange={(v) =>
                                                                                 updateNode(node.tempId, {
-                                                                                    type: v as any,
+                                                                                    type: v as GeneratedPlanNodeType,
                                                                                 })
                                                                             }
                                                                         >

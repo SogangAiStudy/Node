@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db/prisma";
 import { stripe } from "@/lib/stripe";
+import Stripe from "stripe";
+
+type SubscriptionWithPeriod = Stripe.Subscription & {
+    current_period_end?: number | null;
+};
 
 export async function POST(req: NextRequest) {
     console.log("[verify-session] Starting verification");
@@ -88,7 +93,7 @@ export async function POST(req: NextRequest) {
 
         console.log("[verify-session] Retrieving subscription from Stripe", subscriptionId);
 
-        const subscription = await stripe.subscriptions.retrieve(subscriptionId) as any;
+        const subscription = await stripe.subscriptions.retrieve(subscriptionId) as SubscriptionWithPeriod;
 
         console.log("[verify-session] Subscription retrieved", {
             status: subscription.status,

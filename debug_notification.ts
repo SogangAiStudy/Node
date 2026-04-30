@@ -5,7 +5,7 @@ async function main() {
     const keys = Object.keys(prisma);
     console.log("Prisma keys found:", keys.filter(k => k.toLowerCase().includes('notification')));
 
-    if ((prisma as any).notification) {
+    if ("notification" in prisma) {
         console.log("✅ notification model is present in prisma object.");
     } else {
         console.log("❌ notification model is ABSENT in prisma object.");

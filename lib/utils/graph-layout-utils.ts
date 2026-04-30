@@ -54,7 +54,7 @@ export function calculateDepths(nodes: LayoutNode[], edges: LayoutEdge[]) {
 
     // Cycle defense: Nodes in cycles get high depth
     if (sorted.length < nodes.length) {
-        nodes.forEach((n, idx) => {
+        nodes.forEach((n) => {
             if (!sorted.includes(n.id)) {
                 depths[n.id] = 999;
             }
@@ -146,7 +146,6 @@ export function calculateGridLayout(
             currentRowMaxHeight = 0;
         }
 
-        const actualW = node.width || nodeDefaultW;
         const actualH = node.height || nodeDefaultH;
         currentRowMaxHeight = Math.max(currentRowMaxHeight, actualH);
 

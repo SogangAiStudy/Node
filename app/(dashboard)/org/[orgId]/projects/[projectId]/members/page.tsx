@@ -25,9 +25,8 @@ interface ProjectMember {
 }
 
 const PERMISSION_LEVELS = [
-    { value: "ADMIN", label: "Full access", description: "Edit, suggest, comment, and share" },
-    { value: "EDITOR", label: "Can edit", description: "Edit, suggest, and comment" },
-    { value: "REQUESTER", label: "Can request", description: "Suggest and comment" },
+    { value: "PROJECT_ADMIN", label: "Admin", description: "Manage access and edit" },
+    { value: "EDITOR", label: "Editor", description: "Edit tasks and collaborate" },
     { value: "VIEWER", label: "Can view", description: "View only" },
 ];
 
@@ -35,7 +34,6 @@ export default function MembersPage() {
     const params = useParams();
     const router = useRouter();
     const projectId = params.projectId as string;
-    const orgId = params.orgId as string;
     const queryClient = useQueryClient();
 
     const [email, setEmail] = useState("");
@@ -53,7 +51,7 @@ export default function MembersPage() {
 
     const inviteMutation = useMutation({
         mutationFn: async ({ email, role }: { email: string; role: string }) => {
-            const res = await fetch(`/api/projects/${projectId}/invite`, {
+            const res = await fetch(`/api/projects/${projectId}/invites`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email, role }),

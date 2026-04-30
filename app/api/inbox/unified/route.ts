@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth, getUserTeams } from "@/lib/utils/auth";
-import {
-    RequestDTO,
-    NotificationDTO,
-    ProjectInviteDTO,
-    OrgMemberDTO,
-    InboxItem,
-    UnifiedInboxDTO
-} from "@/types";
+import { buildTeamRequestFilters, requestDetailsInclude, toRequestDTO } from "@/lib/utils/requests";
+import { InboxItem } from "@/types";
+import type { Notification, OrgMember, User } from "@prisma/client";
+
+type JoinRequestWithUser = OrgMember & { user: Pick<User, "name" | "email"> };
 
 export async function GET(request: NextRequest) {
     try {
@@ -29,29 +27,38 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
         }
 
+        if (!["ACTIVE", "PENDING_TEAM_ASSIGNMENT"].includes(membership.status)) {
+            return NextResponse.json({ error: "Inactive members cannot access this inbox" }, { status: 403 });
+        }
+
         const isAdmin = membership.role === "ADMIN";
         const myTeamIds = await getUserTeams(orgId, user.id);
         const myTeams = await prisma.team.findMany({
             where: { id: { in: myTeamIds } },
             select: { name: true }
         });
-        const myTeamNames = myTeams.map(t => t.name);
+        const myTeamNames = myTeams.flatMap((team) => (team.name ? [team.name] : []));
+        const requestTargets: Prisma.RequestWhereInput[] = [{ toUserId: user.id }];
+        const notificationTargets: Prisma.NotificationWhereInput[] = [{ userId: user.id }];
+
+        requestTargets.push(...buildTeamRequestFilters(myTeamIds, myTeamNames));
+
+        if (myTeamIds.length > 0) {
+            notificationTargets.push({
+                targetType: "TEAM",
+                targetTeamId: { in: myTeamIds }
+            });
+        }
 
         // 1. Fetch Requests (personal + team)
         const requests = await prisma.request.findMany({
             where: {
                 orgId,
                 isArchived: false,
-                OR: [
-                    { toUserId: user.id },
-                    { toTeam: { in: myTeamNames } }
-                ]
+                OR: requestTargets
             },
             include: {
-                linkedNode: { select: { title: true } },
-                fromUser: { select: { name: true } },
-                toUser: { select: { name: true } },
-                approvedBy: { select: { name: true } },
+                ...requestDetailsInclude,
             },
             orderBy: { createdAt: "desc" },
         });
@@ -66,18 +73,12 @@ export async function GET(request: NextRequest) {
         });
 
         // 3. Fetch Notifications (personal + team)
-        let notifications: any[] = [];
+        let notifications: Notification[] = [];
         try {
             notifications = await prisma.notification.findMany({
                 where: {
                     orgId,
-                    OR: [
-                        { userId: user.id },
-                        {
-                            targetType: "TEAM",
-                            targetTeamId: { in: myTeamIds }
-                        }
-                    ]
+                    OR: notificationTargets
                 },
                 orderBy: { createdAt: "desc" },
                 take: 50
@@ -88,7 +89,7 @@ export async function GET(request: NextRequest) {
         }
 
         // 4. Fetch Join Requests (if admin)
-        let joinRequests: any[] = [];
+        let joinRequests: JoinRequestWithUser[] = [];
         if (isAdmin) {
             joinRequests = await prisma.orgMember.findMany({
                 where: { orgId, status: "PENDING_APPROVAL" },
@@ -104,26 +105,7 @@ export async function GET(request: NextRequest) {
             items.push({
                 type: "REQUEST",
                 data: {
-                    id: req.id,
-                    orgId: req.orgId,
-                    projectId: req.projectId,
-                    linkedNodeId: req.linkedNodeId,
-                    linkedNodeTitle: req.linkedNode.title,
-                    question: req.question,
-                    fromUserId: req.fromUserId,
-                    fromUserName: req.fromUser.name || "Unknown",
-                    toUserId: req.toUserId,
-                    toUserName: req.toUser?.name || null,
-                    toTeam: req.toTeam,
-                    status: req.status,
-                    responseDraft: req.responseDraft,
-                    responseFinal: req.responseFinal,
-                    approvedById: req.approvedById,
-                    approvedByName: req.approvedBy?.name || null,
-                    approvedAt: req.approvedAt?.toISOString() || null,
-                    claimedAt: req.claimedAt?.toISOString() || null,
-                    createdAt: req.createdAt.toISOString(),
-                    updatedAt: req.updatedAt.toISOString(),
+                    ...toRequestDTO(req),
                 }
             });
         });
@@ -140,20 +122,47 @@ export async function GET(request: NextRequest) {
                     invitedByUserId: inv.invitedByUserId,
                     invitedByUserName: inv.invitedBy.name || "System",
                     targetUserId: inv.targetUserId,
+                    role: inv.role,
                     status: inv.status,
                     createdAt: inv.createdAt.toISOString(),
                 }
             });
         });
 
+        const notificationEntityIds = notifications.flatMap((n) => n.entityId ? [n.entityId] : []);
+        const [notificationNodes, notificationProjects] = await Promise.all([
+            notificationEntityIds.length > 0
+                ? prisma.node.findMany({
+                    where: { id: { in: notificationEntityIds } },
+                    select: { id: true, projectId: true },
+                })
+                : Promise.resolve([]),
+            notificationEntityIds.length > 0
+                ? prisma.project.findMany({
+                    where: { id: { in: notificationEntityIds } },
+                    select: { id: true },
+                })
+                : Promise.resolve([]),
+        ]);
+        const notificationNodeProjectMap = new Map(notificationNodes.map((node) => [node.id, node.projectId]));
+        const notificationProjectIds = new Set(notificationProjects.map((project) => project.id));
+
         // Map Notifications
-        notifications.forEach((n: any) => {
+        notifications.forEach((n) => {
+            const projectId =
+                n.entityId && notificationNodeProjectMap.has(n.entityId)
+                    ? notificationNodeProjectMap.get(n.entityId) || null
+                    : n.entityId && notificationProjectIds.has(n.entityId)
+                        ? n.entityId
+                        : null;
+
             items.push({
                 type: "NOTIFICATION",
                 data: {
                     id: n.id,
                     userId: n.userId,
                     orgId: n.orgId,
+                    projectId,
                     type: n.type,
                     targetType: n.targetType,
                     targetTeamId: n.targetTeamId,

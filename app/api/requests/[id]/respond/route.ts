@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/utils/auth";
 import { getUserTeams } from "@/lib/utils/permissions";
 import { createActivityLog } from "@/lib/utils/activity-log";
+import { requestDetailsInclude, toRequestDTO } from "@/lib/utils/requests";
 import { z } from "zod";
 import { RequestStatus } from "@prisma/client";
 
@@ -36,9 +37,22 @@ export async function PATCH(
 
     if (existingRequest.toUserId === user.id) {
       authorized = true;
-    } else if (existingRequest.toTeam) {
+    } else if (existingRequest.targetTeamId || existingRequest.toTeam) {
       const myTeams = await getUserTeams(existingRequest.orgId, user.id);
-      if (myTeams.includes(existingRequest.toTeam)) {
+      let targetTeamId = existingRequest.targetTeamId;
+
+      if (!targetTeamId && existingRequest.toTeam) {
+        const legacyTeam = await prisma.team.findFirst({
+          where: {
+            orgId: existingRequest.orgId,
+            name: existingRequest.toTeam,
+          },
+          select: { id: true },
+        });
+        targetTeamId = legacyTeam?.id ?? null;
+      }
+
+      if (targetTeamId && myTeams.includes(targetTeamId)) {
         authorized = true;
       }
     }
@@ -54,20 +68,7 @@ export async function PATCH(
         responseDraft: validated.responseDraft,
         status: RequestStatus.RESPONDED,
       },
-      include: {
-        linkedNode: {
-          select: { title: true },
-        },
-        fromUser: {
-          select: { name: true },
-        },
-        toUser: {
-          select: { name: true },
-        },
-        approvedBy: {
-          select: { name: true },
-        },
-      },
+      include: requestDetailsInclude,
     });
 
     // Log activity
@@ -82,27 +83,7 @@ export async function PATCH(
       },
     });
 
-    return NextResponse.json({
-      id: updatedRequest.id,
-      projectId: updatedRequest.projectId,
-      linkedNodeId: updatedRequest.linkedNodeId,
-      linkedNodeTitle: updatedRequest.linkedNode.title,
-      question: updatedRequest.question,
-      fromUserId: updatedRequest.fromUserId,
-      fromUserName: updatedRequest.fromUser.name || "Unknown",
-      toUserId: updatedRequest.toUserId,
-      toUserName: updatedRequest.toUser?.name || null,
-      toTeam: updatedRequest.toTeam,
-      status: updatedRequest.status,
-      responseDraft: updatedRequest.responseDraft,
-      responseFinal: updatedRequest.responseFinal,
-      approvedById: updatedRequest.approvedById,
-      approvedByName: updatedRequest.approvedBy?.name || null,
-      approvedAt: updatedRequest.approvedAt?.toISOString() || null,
-      claimedAt: updatedRequest.claimedAt?.toISOString() || null,
-      createdAt: updatedRequest.createdAt.toISOString(),
-      updatedAt: updatedRequest.updatedAt.toISOString(),
-    });
+    return NextResponse.json(toRequestDTO(updatedRequest));
   } catch (error) {
     console.error("PATCH /api/requests/[id]/respond error:", error);
 

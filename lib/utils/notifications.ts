@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db/prisma";
-import { NotificationType, NotificationTargetType } from "@prisma/client";
+import { NotificationType, NotificationTargetType, Prisma } from "@prisma/client";
 
 export async function createNotification({
     userId,
@@ -36,9 +36,9 @@ export async function createNotification({
                 dedupeKey,
             },
         });
-    } catch (error: any) {
+    } catch (error) {
         // If it's a unique constraint violation for dedupeKey, just return null or existing
-        if (error.code === 'P2002') {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
             console.log(`Notification deduplicated: ${dedupeKey}`);
             return null;
         }

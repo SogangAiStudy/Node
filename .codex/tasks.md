@@ -1,0 +1,68 @@
+# Tasks
+
+- [x] Generate root `AGENTS.md` contributor guide
+- [x] Install Supabase SSR dependencies and add Supabase client helpers, middleware, and example route
+- [x] Decide whether to archive or remove root documentation files
+- [x] Do a real browser gut-check after installing a Chrome/Chromium runtime for Playwright MCP
+- [x] Stabilize local verification by repairing `node_modules` / npm so `npm run lint`, Prisma, and build checks run reliably
+- [x] Add Playwright MCP server to Codex config for browser automation
+- [x] Restart Codex or reinitialize MCP startup so Playwright and Supabase tools load in-session
+- [x] Add or restore Vercel MCP server in Codex config and verify it loads in-session
+- [x] Add task page data model and APIs for page content, images, and file attachments
+- [x] Extend permissions for task page editing, uploading, and project access management
+- [x] Add production-ready task collaboration primitives: comments, mentions, attachments, activity timeline, and visible change history
+- [x] Align project sharing/member-management UI with current project invite APIs and roles (`PROJECT_ADMIN`, `EDITOR`, `VIEWER`)
+- [x] Remove test/demo-only production surfaces such as `/api/test/make-user`, stale mock workspace data, and duplicate legacy member page files
+- [x] Add minimum automated verification for real team use: auth smoke, workspace invite/join, project sharing, node CRUD, request/inbox, and permission boundaries
+- [x] Restore `npm run lint` as a passing gate by converting legacy hard-error debt to warnings and fixing remaining true errors
+- [x] Add DB-backed authenticated e2e tests for workspace invite/join, project sharing, node CRUD, request/inbox, and permission boundaries
+- [x] Verify group collaboration and permission management with DB-backed e2e coverage
+- [x] Add Scratch-like nested node containment with drag-in graph UI and DB-backed e2e coverage
+- [x] Run DB-backed authenticated e2e against the current Supabase/Vercel database after applying task-collaboration migrations
+- [x] Reduce ESLint warnings from 249 to 181 through real code cleanup
+- [x] Reduce the remaining ESLint warnings to zero without weakening rule coverage
+- [x] Deploy the zero-warning cleanup to Vercel production
+- [x] Add production Vercel env var `SUPABASE_SERVICE_ROLE_KEY` and redeploy so task attachment uploads work in production
+- [x] Add a real workspace member-removal flow; current org member management only supports status changes like `DEACTIVATED`
+- [x] Remove or align the legacy `/organization/members` page with the canonical org-scoped workspace settings flow
+- [x] Implement the teamspace permission and membership overhaul across schema, APIs, and the canonical workspace settings UI
+- [x] Regenerate Prisma client and run full type/build verification once the local Prisma CLI runtime is healthy again
+- [x] Verify production Google OAuth after deploying the Prisma Supabase-pooler normalization fix
+- [x] Verify production dashboard redirect after deploying the `NEXT_REDIRECT` catch fix
+- [x] Fix production dashboard bootstrap failure caused by catching Next.js redirect exceptions on `/`
+- [x] Fix production `/api/workspaces` Prisma validation error caused by empty team-target filters
+- [x] Route the admin Teams & Members menu to the canonical `/org/[orgId]/settings?tab=members` page
+- [x] Make the workspace invite page recover the authenticated user ID before joining by invite code
+- [ ] Verify Google Cloud OAuth allows `https://node-ruddy-tau.vercel.app/api/auth/callback/google` for the production `GOOGLE_CLIENT_ID`
+- [ ] Reproduce the Google OAuth callback-stage failure in a real browser and capture the final error URL/query parameters
+- [x] Diagnose the current `/api/auth/error?error=Configuration` production failure
+- [x] Deploy the dashboard dynamic-rendering fix so `/` no longer crashes with `DYNAMIC_SERVER_USAGE` on Vercel
+- [x] Deploy the root dashboard bootstrap fix so production no longer uses the old client-side `/api/workspaces` loading flow
+- [x] Deploy the auth session user-id recovery fix so production can recover authenticated users whose session has email but missing `user.id`
+- [x] Verify that production auth recovers after a fresh cookie/session reset and sign-in cycle
+- [ ] Add a user-facing stale-session recovery path so auth drift does not require manual cookie clearing
+- [x] Mirror the canonical `Node` repository to a personal `SeobinChoi/Node` GitHub repository and switch the local primary remote away from `SogangAiStudy/Node`
+- [x] Obtain fresh Supabase Postgres connection strings from the current project settings
+- [x] Replace the malformed production Supabase `DATABASE_URL` in Vercel with the actual transaction-pooler URI and verify `DIRECT_URL`
+- [x] Replace data-URL image storage with real upload-backed attachments
+- [x] Replace duplicated `Node/Node` absolute paths in `Node/CLAUDE.md` with repo-relative paths
+- [x] Reorganize the canonical `Node/` repository structure by moving Supabase helpers into `lib/`, consolidating status helpers, and moving loose docs into `docs/`
+- [x] Flatten the nested `Node/Node` workspace so the repository root is the canonical app checkout and archive sibling repos/worktrees to `/Users/xavi/Desktop/real_code/Node_archive`
+- [x] Fix the root dashboard infinite loading state by resolving workspace bootstrap and redirect on the server
+- [x] Fix local `npm install` hanging issue and verify local dev server startup (discovered SWC binary arch mismatch and incomplete node_modules)
+- [x] Resolve `main` pull strategy for diverged local/remote history (`ahead 8, behind 5`) and complete repo sync with `origin/main`
+- [x] Add the Supabase MCP server to Codex, enable remote MCP client support, and complete Supabase MCP login
+- [x] Attach a Supabase Personal Access Token to the Codex Supabase MCP server config
+- [x] Diagnose current Supabase MCP availability in this Codex session
+- [x] Install Supabase agent skills into `~/.codex/skills`
+- [x] Install Supabase Agent Skills into the current `~/.agents/skills` location
+- [x] Refresh the invalid Vercel MCP OAuth grant after startup failure
+- [x] Summarize the current overall project status as of 2026-04-06
+- [x] Confirm that the pasted Supabase MCP setup steps are already completed
+- [x] Clarify what becomes automatable once Supabase is connected in Codex
+- [x] Clarify the minimum remaining user actions
+- [x] Clarify which Supabase connection strings the user should copy from the dashboard
+- [x] Explain what to do when the Supabase database password is unknown
+- [x] Clarify where the copied direct Supabase URI should be placed
+- [x] Clarify the next exact user steps after setting `DIRECT_URL`
+- [x] Diagnose the newly applied Vercel DB env values after the failed retry

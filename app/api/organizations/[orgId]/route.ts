@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/utils/auth";
+import { requireOrgAdmin, requireOrgMember } from "@/lib/utils/permissions";
 import { z } from "zod";
 
 const updateOrgSchema = z.object({
@@ -18,6 +19,8 @@ export async function GET(
     try {
         const user = await requireAuth();
         const { orgId } = await params;
+
+        await requireOrgMember(orgId, user.id);
 
         const orgMember = await prisma.orgMember.findUnique({
             where: {
@@ -57,6 +60,9 @@ export async function GET(
         });
     } catch (error) {
         console.error("GET /api/organizations/[orgId] error:", error);
+        if (error instanceof Error && error.message === "Not a member of this organization") {
+            return NextResponse.json({ error: "Access denied or workspace not found" }, { status: 403 });
+        }
         return NextResponse.json({ error: "Internal server error" }, { status: 500 });
     }
 }
@@ -75,18 +81,7 @@ export async function PATCH(
         const body = await request.json();
         const { name } = updateOrgSchema.parse(body);
 
-        const orgMember = await prisma.orgMember.findUnique({
-            where: {
-                orgId_userId: {
-                    orgId,
-                    userId: user.id,
-                },
-            },
-        });
-
-        if (!orgMember || orgMember.role !== "ADMIN") {
-            return NextResponse.json({ error: "Only admins can update workspace settings" }, { status: 403 });
-        }
+        await requireOrgAdmin(orgId, user.id);
 
         const updatedOrg = await prisma.organization.update({
             where: { id: orgId },
@@ -103,6 +98,9 @@ export async function PATCH(
         });
     } catch (error) {
         console.error("PATCH /api/organizations/[orgId] error:", error);
+        if (error instanceof Error && error.message === "Organization admin access required") {
+            return NextResponse.json({ error: "Only admins can update workspace settings" }, { status: 403 });
+        }
         return NextResponse.json({ error: "Internal server error" }, { status: 500 });
     }
 }
@@ -122,7 +120,8 @@ export async function DELETE(
         const body = await request.json();
         const { confirmName } = body;
 
-        // Verify user is admin of this org
+        await requireOrgAdmin(orgId, user.id);
+
         const orgMember = await prisma.orgMember.findUnique({
             where: {
                 orgId_userId: {
@@ -135,8 +134,8 @@ export async function DELETE(
             },
         });
 
-        if (!orgMember || orgMember.role !== "ADMIN") {
-            return NextResponse.json({ error: "Only admins can delete workspace" }, { status: 403 });
+        if (!orgMember) {
+            return NextResponse.json({ error: "Access denied or workspace not found" }, { status: 403 });
         }
 
         // Confirm name matches
@@ -180,7 +179,7 @@ export async function DELETE(
             // 8. Folders (if table exists)
             try {
                 await tx.$executeRaw`DELETE FROM "public"."folders" WHERE "orgId" = ${orgId}`;
-            } catch (e) {
+            } catch {
                 // Folder table might not exist, skip
             }
 
@@ -203,6 +202,9 @@ export async function DELETE(
         return NextResponse.json({ success: true, message: "Workspace deleted successfully" });
     } catch (error) {
         console.error("DELETE /api/organizations/[orgId] error:", error);
+        if (error instanceof Error && error.message === "Organization admin access required") {
+            return NextResponse.json({ error: "Only admins can delete workspace" }, { status: 403 });
+        }
         return NextResponse.json({ error: "Failed to delete workspace" }, { status: 500 });
     }
 }

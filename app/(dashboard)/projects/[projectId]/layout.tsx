@@ -10,7 +10,6 @@ export default function ProjectLayout({ children }: { children: React.ReactNode 
   const pathname = usePathname();
   const params = useParams();
   const projectId = params.projectId as string;
-  const orgId = params.orgId as string;
 
   // Fetch project data for header
   const { data: projectData } = useQuery({

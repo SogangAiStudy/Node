@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/utils/auth";
 import { createActivityLog } from "@/lib/utils/activity-log";
+import { requestDetailsInclude, toRequestDTO } from "@/lib/utils/requests";
 import { z } from "zod";
 import { RequestStatus } from "@prisma/client";
 
@@ -57,20 +58,7 @@ export async function PATCH(
         approvedById: user.id,
         approvedAt: new Date(),
       },
-      include: {
-        linkedNode: {
-          select: { title: true },
-        },
-        fromUser: {
-          select: { name: true },
-        },
-        toUser: {
-          select: { name: true },
-        },
-        approvedBy: {
-          select: { name: true },
-        },
-      },
+      include: requestDetailsInclude,
     });
 
     // Log activity
@@ -85,27 +73,7 @@ export async function PATCH(
       },
     });
 
-    return NextResponse.json({
-      id: updatedRequest.id,
-      projectId: updatedRequest.projectId,
-      linkedNodeId: updatedRequest.linkedNodeId,
-      linkedNodeTitle: updatedRequest.linkedNode.title,
-      question: updatedRequest.question,
-      fromUserId: updatedRequest.fromUserId,
-      fromUserName: updatedRequest.fromUser.name || "Unknown",
-      toUserId: updatedRequest.toUserId,
-      toUserName: updatedRequest.toUser?.name || null,
-      toTeam: updatedRequest.toTeam,
-      status: updatedRequest.status,
-      responseDraft: updatedRequest.responseDraft,
-      responseFinal: updatedRequest.responseFinal,
-      approvedById: updatedRequest.approvedById,
-      approvedByName: updatedRequest.approvedBy?.name || null,
-      approvedAt: updatedRequest.approvedAt?.toISOString() || null,
-      claimedAt: updatedRequest.claimedAt?.toISOString() || null,
-      createdAt: updatedRequest.createdAt.toISOString(),
-      updatedAt: updatedRequest.updatedAt.toISOString(),
-    });
+    return NextResponse.json(toRequestDTO(updatedRequest));
   } catch (error) {
     console.error("PATCH /api/requests/[id]/approve error:", error);
 

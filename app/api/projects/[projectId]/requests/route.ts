@@ -4,6 +4,7 @@ import { requireAuth } from "@/lib/utils/auth";
 import { requireProjectView } from "@/lib/utils/permissions";
 import { createActivityLog } from "@/lib/utils/activity-log";
 import { createNotification } from "@/lib/utils/notifications";
+import { requestDetailsInclude, toRequestDTO } from "@/lib/utils/requests";
 import { z } from "zod";
 
 const CreateRequestSchema = z
@@ -11,13 +12,17 @@ const CreateRequestSchema = z
     linkedNodeId: z.string(),
     question: z.string().min(1),
     toUserId: z.string().optional(),
+    targetTeamId: z.string().optional(),
     toTeam: z.string().optional(),
   })
-  .refine((data) => !!(data.toUserId || data.toTeam), {
-    message: "Either toUserId or toTeam must be provided",
+  .refine((data) => !!(data.toUserId || data.targetTeamId || data.toTeam), {
+    message: "Either toUserId or targetTeamId must be provided",
   })
-  .refine((data) => !(data.toUserId && data.toTeam), {
-    message: "Cannot provide both toUserId and toTeam",
+  .refine((data) => {
+    const recipientCount = [data.toUserId, data.targetTeamId || data.toTeam].filter(Boolean).length;
+    return recipientCount === 1;
+  }, {
+    message: "Cannot provide both user and team recipients",
   });
 
 // POST /api/projects/[projectId]/requests - Create new request
@@ -61,17 +66,18 @@ export async function POST(
       await requireProjectView(projectId, validated.toUserId);
     }
 
-    // If toTeam provided, verify at least one team member exists and team has access
-    if (validated.toTeam) {
-      // Find teamId by name (hacky since toTeam is currently a string)
-      const team = await prisma.team.findFirst({
+    let targetTeam = null;
+    if (validated.targetTeamId || validated.toTeam) {
+      targetTeam = await prisma.team.findFirst({
         where: {
           orgId: project.orgId,
-          name: validated.toTeam,
+          ...(validated.targetTeamId
+            ? { id: validated.targetTeamId }
+            : { name: validated.toTeam }),
         },
       });
 
-      if (!team) {
+      if (!targetTeam) {
         return NextResponse.json({ error: "Team not found" }, { status: 400 });
       }
 
@@ -80,7 +86,7 @@ export async function POST(
         where: {
           projectId_teamId: {
             projectId,
-            teamId: team.id,
+            teamId: targetTeam.id,
           },
         },
       });
@@ -91,7 +97,15 @@ export async function POST(
 
       const teamMembers = await prisma.teamMember.findMany({
         where: {
-          teamId: team.id,
+          teamId: targetTeam.id,
+          user: {
+            orgMemberships: {
+              some: {
+                orgId: project.orgId,
+                status: { in: ["ACTIVE", "PENDING_TEAM_ASSIGNMENT"] },
+              },
+            },
+          },
         },
       });
 
@@ -112,19 +126,10 @@ export async function POST(
         question: validated.question,
         fromUserId: user.id,
         toUserId: validated.toUserId || null,
-        toTeam: validated.toTeam || null,
+        targetTeamId: targetTeam?.id || null,
+        toTeam: targetTeam?.name || validated.toTeam || null,
       },
-      include: {
-        linkedNode: {
-          select: { title: true },
-        },
-        fromUser: {
-          select: { name: true },
-        },
-        toUser: {
-          select: { name: true },
-        },
-      },
+      include: requestDetailsInclude,
     });
 
     // Log activity
@@ -138,7 +143,8 @@ export async function POST(
         linkedNodeId: req.linkedNodeId,
         linkedNodeTitle: req.linkedNode.title,
         toUserId: req.toUserId,
-        toTeam: req.toTeam,
+        targetTeamId: req.targetTeamId,
+        toTeam: req.targetTeam?.name || req.toTeam,
       },
     });
 
@@ -155,9 +161,9 @@ export async function POST(
         });
       }
 
-      if (validated.toTeam) {
-        const team = await prisma.team.findFirst({
-          where: { orgId: project.orgId, name: validated.toTeam },
+      if (targetTeam) {
+        const team = await prisma.team.findUnique({
+          where: { id: targetTeam.id },
           include: { members: true }
         });
 
@@ -180,30 +186,7 @@ export async function POST(
       console.error("Failed to create request notifications:", err);
     }
 
-    return NextResponse.json(
-      {
-        id: req.id,
-        projectId: req.projectId,
-        linkedNodeId: req.linkedNodeId,
-        linkedNodeTitle: req.linkedNode.title,
-        question: req.question,
-        fromUserId: req.fromUserId,
-        fromUserName: req.fromUser.name || "Unknown",
-        toUserId: req.toUserId,
-        toUserName: req.toUser?.name || null,
-        toTeam: req.toTeam,
-        status: req.status,
-        responseDraft: req.responseDraft,
-        responseFinal: req.responseFinal,
-        approvedById: req.approvedById,
-        approvedByName: null,
-        approvedAt: req.approvedAt?.toISOString() || null,
-        claimedAt: req.claimedAt?.toISOString() || null,
-        createdAt: req.createdAt.toISOString(),
-        updatedAt: req.updatedAt.toISOString(),
-      },
-      { status: 201 }
-    );
+    return NextResponse.json(toRequestDTO(req), { status: 201 });
   } catch (error) {
     console.error("POST /api/projects/[projectId]/requests error:", error);
 
@@ -211,7 +194,7 @@ export async function POST(
       return NextResponse.json({ error: "Invalid input", details: error.flatten() }, { status: 400 });
     }
 
-    if (error instanceof Error && error.message === "Not a member of this project") {
+    if (error instanceof Error && error.message === "Not authorized to view this project") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

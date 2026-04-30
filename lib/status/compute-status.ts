@@ -1,6 +1,15 @@
 import { Node, Edge, Request, ManualStatus, EdgeRelation, RequestStatus } from "@prisma/client";
 import { ComputedStatus } from "@/types";
 
+type NodeWithOwners = Node & {
+  nodeOwners?: Array<{ userId: string }>;
+};
+
+function isNodeOwner(userId: string, node: NodeWithOwners) {
+  return node.ownerId === userId ||
+    node.nodeOwners?.some((owner) => owner.userId === userId);
+}
+
 /**
  * Compute the status of a node based on its dependencies and requests
  * Priority: BLOCKED > WAITING > DONE > DOING > TODO
@@ -83,14 +92,11 @@ export function computeAllNodeStatuses(
  */
 export function getMyTodos(
   userId: string,
-  nodes: Node[],
+  nodes: NodeWithOwners[],
   statusMap: Map<string, ComputedStatus>
-): Node[] {
-  return nodes.filter((node: any) => {
-    const isOwner = node.ownerId === userId ||
-      node.nodeOwners?.some((no: any) => no.userId === userId);
-
-    if (!isOwner) return false;
+): NodeWithOwners[] {
+  return nodes.filter((node) => {
+    if (!isNodeOwner(userId, node)) return false;
 
     const computedStatus = statusMap.get(node.id);
     if (!computedStatus) return false;
@@ -108,14 +114,11 @@ export function getMyTodos(
  */
 export function getMyWaiting(
   userId: string,
-  nodes: Node[],
+  nodes: NodeWithOwners[],
   statusMap: Map<string, ComputedStatus>
-): Node[] {
-  return nodes.filter((node: any) => {
-    const isOwner = node.ownerId === userId ||
-      node.nodeOwners?.some((no: any) => no.userId === userId);
-
-    if (!isOwner) return false;
+): NodeWithOwners[] {
+  return nodes.filter((node) => {
+    if (!isNodeOwner(userId, node)) return false;
 
     const computedStatus = statusMap.get(node.id);
     return computedStatus === "BLOCKED" || computedStatus === "WAITING";
@@ -131,16 +134,14 @@ export function getMyWaiting(
  */
 export function getImBlocking(
   userId: string,
-  nodes: Node[],
+  nodes: NodeWithOwners[],
   edges: Edge[]
-): Array<{ blockedNode: Node; waitingOnMyNode: Node }> {
-  const result: Array<{ blockedNode: Node; waitingOnMyNode: Node }> = [];
+): Array<{ blockedNode: NodeWithOwners; waitingOnMyNode: NodeWithOwners }> {
+  const result: Array<{ blockedNode: NodeWithOwners; waitingOnMyNode: NodeWithOwners }> = [];
 
   // Find all my nodes that are not DONE
-  const myIncompleteNodes = nodes.filter((node: any) => {
-    const isOwner = node.ownerId === userId ||
-      node.nodeOwners?.some((no: any) => no.userId === userId);
-    return isOwner && node.manualStatus !== ManualStatus.DONE;
+  const myIncompleteNodes = nodes.filter((node) => {
+    return isNodeOwner(userId, node) && node.manualStatus !== ManualStatus.DONE;
   });
 
   for (const myNode of myIncompleteNodes) {
@@ -150,12 +151,11 @@ export function getImBlocking(
     );
 
     for (const edge of dependentEdges) {
-      const blockedNode: any = nodes.find((n) => n.id === edge.fromNodeId);
+      const blockedNode = nodes.find((n) => n.id === edge.fromNodeId);
 
       if (blockedNode) {
         // Only include if the blocked node is NOT owned by me (neither primary nor multi)
-        const isBlockedNodeOwnedByMe = blockedNode.ownerId === userId ||
-          blockedNode.nodeOwners?.some((no: any) => no.userId === userId);
+        const isBlockedNodeOwnedByMe = isNodeOwner(userId, blockedNode);
 
         // Also ensure it HAS an owner or owners (not unassigned)
         const hasOwner = blockedNode.ownerId !== null || (blockedNode.nodeOwners && blockedNode.nodeOwners.length > 0);

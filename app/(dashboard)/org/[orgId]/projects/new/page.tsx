@@ -7,12 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
-    Plus,
     Users,
     ArrowLeft,
     Check,
     Loader2,
-    Layers
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -29,6 +27,12 @@ interface Team {
     id: string;
     name: string;
     memberCount: number;
+}
+
+interface Folder {
+    id: string;
+    name: string;
+    color: string;
 }
 
 export default function NewProjectPage() {
@@ -51,7 +55,7 @@ export default function NewProjectPage() {
     const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([]);
 
     // Fetch teams for the workspace
-    const { data: teamsData, isLoading: isLoadingTeams } = useQuery({
+    const { data: teamsData } = useQuery({
         queryKey: ["teams", orgId],
         queryFn: async () => {
             const res = await fetch(`/api/organizations/teams?orgId=${orgId}`);
@@ -66,7 +70,7 @@ export default function NewProjectPage() {
         queryFn: async () => {
             const res = await fetch(`/api/folders?orgId=${orgId}`);
             if (!res.ok) throw new Error("Failed to fetch folders");
-            return res.json() as Promise<{ folders: any[] }>;
+            return res.json() as Promise<{ folders: Folder[] }>;
         },
     });
 
@@ -200,7 +204,7 @@ export default function NewProjectPage() {
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="none">No Folder</SelectItem>
-                                {folders.map((f: any) => (
+                                {folders.map((f) => (
                                     <SelectItem key={f.id} value={f.id}>
                                         <div className="flex items-center gap-2">
                                             <div className="w-2 h-2 rounded-full" style={{ backgroundColor: f.color }} />

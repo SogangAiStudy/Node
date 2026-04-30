@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter, useParams } from "next/navigation";
 import { Star, Share2, MoreHorizontal, Users, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -13,7 +12,6 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { SharePopover } from "@/components/project/SharePopover";
 import { ProjectSettingsDialog } from "@/components/project/ProjectSettingsDialog";
 import { Input } from "@/components/ui/input";
 import { useQueryClient } from "@tanstack/react-query";
@@ -43,8 +41,6 @@ export function ProjectHeader({
     isFavorite = false,
     onFavoriteToggle,
 }: ProjectHeaderProps) {
-    const router = useRouter();
-    const params = useParams();
     const queryClient = useQueryClient();
     const [favorite, setFavorite] = useState(isFavorite);
     const [shareOpen, setShareOpen] = useState(false);
@@ -56,15 +52,6 @@ export function ProjectHeader({
         setFavorite(newState);
         onFavoriteToggle?.(newState);
         // TODO: Persist to backend
-    };
-
-    const handleShareClick = () => {
-        setShareOpen(true);
-    };
-
-    const handleMemberManagement = () => {
-        const currentOrgId = params.orgId as string;
-        router.push(`/org/${currentOrgId}/projects/${projectId}/members`);
     };
 
     const handleRename = async () => {
@@ -89,20 +76,14 @@ export function ProjectHeader({
             queryClient.invalidateQueries({ queryKey: ["project", projectId] });
             queryClient.invalidateQueries({ queryKey: ["workspace-structure", orgId] });
             toast.success("Project renamed");
-        } catch (error: any) {
-            toast.error(error.message || "Failed to rename project");
+        } catch (error: unknown) {
+            toast.error(error instanceof Error ? error.message : "Failed to rename project");
             setEditName(projectName);
         }
         setIsEditing(false);
     };
 
-    // Mock collaborators if none provided
-    const displayCollaborators = collaborators.length > 0
-        ? collaborators
-        : [
-            { id: "1", name: "User 1", email: "user1@example.com" },
-            { id: "2", name: "User 2", email: "user2@example.com" },
-        ];
+    const displayCollaborators = collaborators;
 
     const getInitials = (name: string) => {
         return name
@@ -147,7 +128,7 @@ export function ProjectHeader({
                 <div className="flex items-center gap-2">
                     {/* Collaborators */}
                     <div className="flex items-center -space-x-2">
-                        {displayCollaborators.slice(0, 3).map((collaborator, index) => (
+                        {displayCollaborators.slice(0, 3).map((collaborator) => (
                             <Avatar
                                 key={collaborator.id}
                                 className="h-7 w-7 border-2 border-white hover:z-10 transition-all cursor-pointer"

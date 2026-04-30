@@ -1,7 +1,8 @@
 "use client";
 
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { WorkspaceTab } from "@/lib/mock-workspace-data";
+
+export type WorkspaceTab = "all" | "recents" | "favorites" | "unfiled";
 
 interface WorkspaceTabsProps {
     activeTab: WorkspaceTab;

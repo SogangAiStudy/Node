@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/select";
 import { Node, Edge } from "reactflow";
 import { cn } from "@/lib/utils";
-import { TeamDTO, NodeDTO } from "@/types";
+import { TeamDTO } from "@/types";
 import {
   Plus,
   Search,
@@ -32,7 +32,7 @@ import { AddEdgeDialog } from "./AddEdgeDialog";
 import { GenerateNodesDialog } from "./GenerateNodesDialog";
 import { OrganizeDialog } from "./OrganizeDialog";
 
-interface Team {
+interface ProjectMemberOption {
   id: string;
   name: string;
 }
@@ -92,7 +92,12 @@ export function Toolbar({
       const res = await fetch(`/api/projects/${projectId}/members`);
       if (!res.ok) throw new Error("Failed to fetch project members");
       const data = await res.json();
-      return (data.members || []).map((m: any) => ({ id: m.userId, name: m.userName }));
+      return ((data.members || []) as Array<{ userId: string; userName: string | null }>).map(
+        (member): ProjectMemberOption => ({
+          id: member.userId,
+          name: member.userName || "Unknown",
+        })
+      );
     },
     enabled: !!projectId,
   });

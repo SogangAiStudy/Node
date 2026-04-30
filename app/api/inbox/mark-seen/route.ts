@@ -33,6 +33,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (!["ACTIVE", "PENDING_TEAM_ASSIGNMENT"].includes(membership.status)) {
+      return NextResponse.json(
+        { error: "Inactive members cannot update inbox state" },
+        { status: 403 }
+      );
+    }
+
     // Upsert OrgInboxState to update lastSeenAt
     const inboxState = await prisma.orgInboxState.upsert({
       where: {

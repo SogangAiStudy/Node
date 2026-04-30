@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
     Table,
@@ -48,13 +48,9 @@ import {
     Users,
     Plus,
     Check,
-    X,
     ShieldAlert,
     Copy,
-    CheckCircle2,
     Trash2,
-    Shield,
-    UserCircle,
     Settings as SettingsIcon,
     ArrowLeft,
     AlertTriangle
@@ -78,6 +74,7 @@ interface Team {
     id: string;
     name: string;
     description: string | null;
+    isDefault: boolean;
     memberCount: number;
 }
 
@@ -86,6 +83,17 @@ interface Organization {
     name: string;
     inviteCode: string | null;
     role: string;
+}
+
+interface MemberUpdateInput {
+    role?: Member["role"];
+    status?: Member["status"];
+    teamIds?: string[];
+}
+
+interface TeamCreateInput {
+    name: string;
+    description?: string;
 }
 
 export default function WorkspaceSettingsPage() {
@@ -107,7 +115,7 @@ export default function WorkspaceSettingsPage() {
     // Member Edit State
     const [selectedTeams, setSelectedTeams] = useState<string[]>([]);
     const [selectedRole, setSelectedRole] = useState<"ADMIN" | "MEMBER">("MEMBER");
-    const [selectedStatus, setSelectedStatus] = useState<string>("");
+    const [selectedStatus, setSelectedStatus] = useState<Member["status"]>("ACTIVE");
 
     // Team Creation State
     const [newTeamName, setNewTeamName] = useState("");
@@ -175,7 +183,7 @@ export default function WorkspaceSettingsPage() {
     });
 
     const updateMemberMutation = useMutation({
-        mutationFn: async (vars: { userId: string, data: any }) => {
+        mutationFn: async (vars: { userId: string, data: MemberUpdateInput }) => {
             const res = await fetch(`/api/organizations/members/${vars.userId}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
@@ -197,7 +205,7 @@ export default function WorkspaceSettingsPage() {
     });
 
     const createTeamMutation = useMutation({
-        mutationFn: async (data: any) => {
+        mutationFn: async (data: TeamCreateInput) => {
             const res = await fetch("/api/organizations/teams", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -222,13 +230,39 @@ export default function WorkspaceSettingsPage() {
     const deleteTeamMutation = useMutation({
         mutationFn: async (teamId: string) => {
             const res = await fetch(`/api/organizations/teams/${teamId}`, { method: "DELETE" });
-            if (!res.ok) throw new Error("Failed to delete team");
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error || "Failed to delete team");
+            }
             return res.json();
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["org-teams", orgId] });
             toast.success("Team deleted");
-        }
+        },
+        onError: (err) => toast.error(err.message),
+    });
+
+    const deleteMemberMutation = useMutation({
+        mutationFn: async (userId: string) => {
+            const res = await fetch(`/api/organizations/members/${userId}`, {
+                method: "DELETE",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ orgId }),
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error || "Failed to remove member");
+            }
+            return res.json();
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["org-members", orgId] });
+            queryClient.invalidateQueries({ queryKey: ["org-teams", orgId] });
+            toast.success("Member removed from workspace");
+            setEditingMember(null);
+        },
+        onError: (err) => toast.error(err.message),
     });
 
     const deleteWorkspaceMutation = useMutation({
@@ -555,14 +589,16 @@ export default function WorkspaceSettingsPage() {
                                             </TableCell>
                                             <TableCell className="text-right">
                                                 {isAdmin && (
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                        onClick={() => handleEditMember(member)}
-                                                    >
-                                                        <Settings2 className="h-4 w-4 text-[#7b7c7e]" />
-                                                    </Button>
+                                                    <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="h-8 w-8 p-0"
+                                                            onClick={() => handleEditMember(member)}
+                                                        >
+                                                            <Settings2 className="h-4 w-4 text-[#7b7c7e]" />
+                                                        </Button>
+                                                    </div>
                                                 )}
                                             </TableCell>
                                         </TableRow>
@@ -595,14 +631,21 @@ export default function WorkspaceSettingsPage() {
                         {teamsData?.map(team => (
                             <Card key={team.id} className="border-[#e9e9e9] shadow-sm hover:border-[#d1d1d1] transition-all group">
                                 <CardHeader className="pb-3">
-                                    <div className="flex items-start justify-between">
-                                        <div className="space-y-1">
-                                            <CardTitle className="text-base font-bold">{team.name}</CardTitle>
-                                            <CardDescription className="text-xs line-clamp-2">
-                                                {team.description || "No description provided."}
-                                            </CardDescription>
-                                        </div>
-                                        {isAdmin && (
+                                        <div className="flex items-start justify-between">
+                                            <div className="space-y-1">
+                                                <div className="flex items-center gap-2">
+                                                    <CardTitle className="text-base font-bold">{team.name}</CardTitle>
+                                                    {team.isDefault && (
+                                                        <Badge variant="outline" className="text-[10px] h-5 border-[#d9d9d7] bg-[#f7f7f5]">
+                                                            Default
+                                                        </Badge>
+                                                    )}
+                                                </div>
+                                                <CardDescription className="text-xs line-clamp-2">
+                                                    {team.description || "No description provided."}
+                                                </CardDescription>
+                                            </div>
+                                        {isAdmin && !team.isDefault && (
                                             <Button
                                                 variant="ghost"
                                                 size="sm"
@@ -657,7 +700,7 @@ export default function WorkspaceSettingsPage() {
                         <div className="grid gap-4">
                             <div className="space-y-2">
                                 <Label className="text-xs font-bold uppercase tracking-wider text-[#7b7c7e]">Role</Label>
-                                <Select value={selectedRole} onValueChange={(val: any) => setSelectedRole(val)}>
+                                <Select value={selectedRole} onValueChange={(val) => setSelectedRole(val as Member["role"])}>
                                     <SelectTrigger className="h-10">
                                         <SelectValue />
                                     </SelectTrigger>
@@ -670,7 +713,7 @@ export default function WorkspaceSettingsPage() {
 
                             <div className="space-y-2">
                                 <Label className="text-xs font-bold uppercase tracking-wider text-[#7b7c7e]">Status</Label>
-                                <Select value={selectedStatus} onValueChange={(val: any) => setSelectedStatus(val)}>
+                                <Select value={selectedStatus} onValueChange={(val) => setSelectedStatus(val as Member["status"])}>
                                     <SelectTrigger className="h-10">
                                         <SelectValue />
                                     </SelectTrigger>
@@ -707,8 +750,18 @@ export default function WorkspaceSettingsPage() {
                     </div>
 
                     <DialogFooter>
+                        {editingMember && isAdmin && (
+                            <Button
+                                variant="destructive"
+                                onClick={() => deleteMemberMutation.mutate(editingMember.userId)}
+                                disabled={deleteMemberMutation.isPending}
+                                className="mr-auto"
+                            >
+                                {deleteMemberMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Remove Member"}
+                            </Button>
+                        )}
                         <Button variant="ghost" onClick={() => setEditingMember(null)} className="h-10">Cancel</Button>
-                        <Button onClick={handleSaveMember} disabled={updateMemberMutation.isPending} className="bg-[#1a1b1e] text-white hover:bg-[#37352f] h-10 px-6 font-semibold">
+                        <Button onClick={handleSaveMember} disabled={updateMemberMutation.isPending || deleteMemberMutation.isPending} className="bg-[#1a1b1e] text-white hover:bg-[#37352f] h-10 px-6 font-semibold">
                             {updateMemberMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save Changes"}
                         </Button>
                     </DialogFooter>

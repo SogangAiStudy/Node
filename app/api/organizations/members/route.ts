@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
-import { requireAuth, isOrgAdmin } from "@/lib/utils/auth";
+import { requireAuth } from "@/lib/utils/auth";
 
 /**
  * GET /api/organizations/members?orgId=...
@@ -24,6 +24,7 @@ export async function GET(request: NextRequest) {
                 },
                 select: {
                     orgId: true,
+                    status: true,
                 },
             });
         } else {
@@ -31,14 +32,18 @@ export async function GET(request: NextRequest) {
             orgMember = await prisma.orgMember.findFirst({
                 where: {
                     userId: user.id,
+                    status: {
+                        in: ["ACTIVE", "PENDING_TEAM_ASSIGNMENT"],
+                    },
                 },
                 select: {
                     orgId: true,
+                    status: true,
                 },
             });
         }
 
-        if (!orgMember) {
+        if (!orgMember || !["ACTIVE", "PENDING_TEAM_ASSIGNMENT"].includes(orgMember.status)) {
             return NextResponse.json(
                 { error: "Access denied to this organization" },
                 { status: 403 }
@@ -82,7 +87,7 @@ export async function GET(request: NextRequest) {
 
         // Group team memberships by userId
         const userTeams: Record<string, Array<{ id: string; name: string; role: string }>> = {};
-        teamMemberships.forEach((tm: any) => {
+        teamMemberships.forEach((tm) => {
             if (!userTeams[tm.userId]) {
                 userTeams[tm.userId] = [];
             }
@@ -93,7 +98,9 @@ export async function GET(request: NextRequest) {
             });
         });
 
-        const memberDTOs = members.map((om: any) => ({
+        const memberDTOs = members.map((om) => ({
+            id: om.id,
+            orgId: om.orgId,
             userId: om.userId,
             name: om.user.name,
             userName: om.user.name, // Keep for backward compatibility if needed, or remove
@@ -104,6 +111,7 @@ export async function GET(request: NextRequest) {
             status: om.status,
             teamName: userTeams[om.userId]?.[0]?.name || null,
             teams: userTeams[om.userId] || [],
+            createdAt: om.createdAt.toISOString(),
             joinedAt: om.createdAt.toISOString(),
         }));
 

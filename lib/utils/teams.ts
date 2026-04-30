@@ -1,16 +1,16 @@
 import { prisma } from "@/lib/db/prisma";
 
 /**
- * Assigns a user to the "Default Team" of an organization.
+ * Assigns a user to the default team of an organization.
  * If the team doesn't exist, it creates one.
  */
 export async function assignToDefaultTeam(orgId: string, userId: string) {
     try {
-        // 1. Find or create the "Default Team"
+        // 1. Find or create the canonical default team.
         let defaultTeam = await prisma.team.findFirst({
             where: {
                 orgId,
-                name: "Default Team"
+                isDefault: true,
             }
         });
 
@@ -19,7 +19,8 @@ export async function assignToDefaultTeam(orgId: string, userId: string) {
                 data: {
                     orgId,
                     name: "Default Team",
-                    description: "Automatic default team for all new members."
+                    description: "Automatic default team for all new members.",
+                    isDefault: true,
                 }
             });
         }

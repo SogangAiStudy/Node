@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/utils/auth";
+import { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +43,20 @@ export async function POST(
             return NextResponse.json({ error: "This invite is not for you" }, { status: 403 });
         }
 
+        const orgMembership = await prisma.orgMember.findUnique({
+            where: {
+                orgId_userId: {
+                    orgId: invite.orgId,
+                    userId: user.id,
+                },
+            },
+            select: { status: true },
+        });
+
+        if (!orgMembership || !["ACTIVE", "PENDING_TEAM_ASSIGNMENT"].includes(orgMembership.status)) {
+            return NextResponse.json({ error: "You must be an active workspace member to accept this invite" }, { status: 403 });
+        }
+
         // 4. Accept Invite Transaction
         const result = await prisma.$transaction(async (tx) => {
             // Create Member
@@ -50,18 +65,17 @@ export async function POST(
                     orgId: invite.orgId,
                     projectId: invite.projectId,
                     userId: user.id,
-                    role: "EDITOR", // Default or from invite? Schema doesn't have role in Invite?
-                    // Wait, ProjectInvite model definition in my memory was:
-                    // model ProjectInvite { id, orgId, projectId, invitedByUserId, targetUserId, status... }
-                    // Does it have 'role'? 
-                    // I need to check schema. If not, default to EDITOR.
+                    role: invite.role,
                 }
             });
 
             // Update Invite Status
             await tx.projectInvite.update({
                 where: { id: inviteId },
-                data: { status: 'ACCEPTED' }
+                data: {
+                    status: 'ACCEPTED',
+                    respondedAt: new Date(),
+                }
             });
 
             return member;
@@ -72,7 +86,7 @@ export async function POST(
     } catch (error) {
         console.error("Accept Invite Error:", error);
         // Handle unique constraint violation (already member)
-        if ((error as any).code === 'P2002') {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
             return NextResponse.json({ error: "You are already a member" }, { status: 409 });
         }
         return NextResponse.json({ error: "Failed to accept invite" }, { status: 500 });

@@ -32,6 +32,7 @@ export async function POST(request: NextRequest) {
                 select: {
                     orgId: true,
                     role: true,
+                    status: true,
                 },
             });
         } else {
@@ -39,15 +40,19 @@ export async function POST(request: NextRequest) {
             orgMember = await prisma.orgMember.findFirst({
                 where: {
                     userId: user.id,
+                    status: {
+                        in: ["ACTIVE", "PENDING_TEAM_ASSIGNMENT"],
+                    },
                 },
                 select: {
                     orgId: true,
                     role: true,
+                    status: true,
                 },
             });
         }
 
-        if (!orgMember || orgMember.role !== "ADMIN") {
+        if (!orgMember || !["ACTIVE", "PENDING_TEAM_ASSIGNMENT"].includes(orgMember.status) || orgMember.role !== "ADMIN") {
             return NextResponse.json(
                 { error: "Only organization admins can create teams" },
                 { status: 403 }
@@ -76,6 +81,7 @@ export async function POST(request: NextRequest) {
                 orgId,
                 name,
                 description,
+                isDefault: false,
             },
         });
 
@@ -116,12 +122,17 @@ export async function GET(request: NextRequest) {
                         userId: user.id,
                     },
                 },
-                select: { orgId: true },
+                select: { orgId: true, role: true, status: true, userId: true },
             });
         } else {
             orgMember = await prisma.orgMember.findFirst({
-                where: { userId: user.id },
-                select: { orgId: true },
+                where: {
+                    userId: user.id,
+                    status: {
+                        in: ["ACTIVE", "PENDING_TEAM_ASSIGNMENT"],
+                    },
+                },
+                select: { orgId: true, role: true, status: true, userId: true },
             });
         }
 
@@ -132,14 +143,28 @@ export async function GET(request: NextRequest) {
             );
         }
 
+        if (!["ACTIVE", "PENDING_TEAM_ASSIGNMENT"].includes(orgMember.status)) {
+            return NextResponse.json(
+                { error: "Inactive members cannot access team settings" },
+                { status: 403 }
+            );
+        }
+
         const teams = await prisma.team.findMany({
             where: {
                 orgId: orgMember.orgId,
             },
             include: {
-                _count: {
-                    select: {
-                        members: true,
+                members: {
+                    where: {
+                        user: {
+                            orgMemberships: {
+                                some: {
+                                    orgId: orgMember.orgId,
+                                    status: { in: ["ACTIVE", "PENDING_TEAM_ASSIGNMENT"] },
+                                },
+                            },
+                        },
                     },
                 },
             },
@@ -149,11 +174,13 @@ export async function GET(request: NextRequest) {
         });
 
         return NextResponse.json({
-            teams: teams.map((team: any) => ({
+            teams: teams.map((team) => ({
                 id: team.id,
+                orgId: team.orgId,
                 name: team.name,
                 description: team.description,
-                memberCount: team._count.members,
+                isDefault: team.isDefault,
+                memberCount: team.members.length,
                 createdAt: team.createdAt.toISOString(),
             })),
         });

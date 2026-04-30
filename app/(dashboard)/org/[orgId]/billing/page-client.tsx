@@ -171,7 +171,7 @@ export default function BillingPageClient({
             <div>
                 <h1 className="text-3xl font-bold">Billing</h1>
                 <p className="text-muted-foreground mt-2">
-                    Manage your organization's subscription and billing
+                    Manage your organization&apos;s subscription and billing
                 </p>
             </div>
 
@@ -217,7 +217,7 @@ export default function BillingPageClient({
                     {!isOrgPro && nodeCount >= NODE_LIMIT && (
                         <div className="bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg p-4">
                             <p className="text-sm font-medium text-red-800 dark:text-red-200">
-                                ⚠️ You've reached your limit
+                                ⚠️ You&apos;ve reached your limit
                             </p>
                             <p className="text-sm text-red-700 dark:text-red-300 mt-1">
                                 Upgrade to Pro to create unlimited nodes and continue growing your projects.
@@ -228,7 +228,7 @@ export default function BillingPageClient({
                     {!isOrgPro && nodeCount < NODE_LIMIT && nodeCount >= NODE_LIMIT * 0.8 && (
                         <div className="bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
                             <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-                                You're approaching the limit
+                                You&apos;re approaching the limit
                             </p>
                             <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
                                 You have {NODE_LIMIT - nodeCount} nodes remaining. Consider upgrading to Pro for
@@ -262,7 +262,7 @@ export default function BillingPageClient({
             <Card>
                 <CardHeader>
                     <CardTitle>Pro Plan Benefits</CardTitle>
-                    <CardDescription>Unlock the full potential of your organization</CardDescription>
+                    <CardDescription>Unlock the full potential of your organization&apos;s workspace</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <ul className="space-y-2">

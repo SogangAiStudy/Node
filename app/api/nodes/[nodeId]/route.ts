@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { requireAuth } from "@/lib/utils/auth";
 import { requireProjectView, requireProjectEdit } from "@/lib/utils/permissions";
+import { authOrPermissionErrorResponse } from "@/lib/utils/api-error-responses";
 import { createActivityLog } from "@/lib/utils/activity-log";
 import { z } from "zod";
 import { NodeType, ManualStatus } from "@/types";
@@ -9,6 +10,7 @@ import { triggerUnblockedNotifications, createNotification, triggerNodeAssignmen
 
 const UpdateNodeSchema = z.object({
   title: z.string().min(1).max(200).optional(),
+  parentNodeId: z.string().nullable().optional(),
   description: z.string().optional(),
   type: z.nativeEnum(NodeType).optional(),
   manualStatus: z.nativeEnum(ManualStatus).optional(),
@@ -21,6 +23,24 @@ const UpdateNodeSchema = z.object({
   positionX: z.number().optional(),
   positionY: z.number().optional(),
 });
+
+async function wouldCreateHierarchyCycle(nodeId: string, parentNodeId: string) {
+  let currentParentId: string | null = parentNodeId;
+
+  while (currentParentId) {
+    if (currentParentId === nodeId) {
+      return true;
+    }
+
+    const parent: { parentNodeId: string | null } | null = await prisma.node.findUnique({
+      where: { id: currentParentId },
+      select: { parentNodeId: true },
+    });
+    currentParentId = parent?.parentNodeId ?? null;
+  }
+
+  return false;
+}
 
 // PATCH /api/nodes/[nodeId] - Update node
 export async function PATCH(
@@ -50,6 +70,21 @@ export async function PATCH(
 
     await requireProjectEdit(existingNode.projectId, user.id);
 
+    if (validated.parentNodeId !== undefined && validated.parentNodeId !== null) {
+      const parentNode = await prisma.node.findUnique({
+        where: { id: validated.parentNodeId },
+        select: { projectId: true },
+      });
+
+      if (!parentNode || parentNode.projectId !== existingNode.projectId) {
+        return NextResponse.json({ error: "Parent node not found" }, { status: 404 });
+      }
+
+      if (await wouldCreateHierarchyCycle(nodeId, validated.parentNodeId)) {
+        return NextResponse.json({ error: "A node cannot contain itself or one of its ancestors" }, { status: 400 });
+      }
+    }
+
     // Verify all new owners are project members
     if (validated.ownerIds) {
       for (const oid of validated.ownerIds) {
@@ -64,6 +99,7 @@ export async function PATCH(
       where: { id: nodeId },
       data: {
         ...(validated.title !== undefined && { title: validated.title }),
+        ...(validated.parentNodeId !== undefined && { parentNodeId: validated.parentNodeId }),
         ...(validated.description !== undefined && { description: validated.description }),
         ...(validated.type !== undefined && { type: validated.type }),
         ...(validated.manualStatus !== undefined && { manualStatus: validated.manualStatus }),
@@ -93,6 +129,7 @@ export async function PATCH(
         team: { select: { name: true } },
         nodeTeams: { include: { team: { select: { id: true, name: true } } } },
         nodeOwners: { include: { user: { select: { id: true, name: true } } } },
+        _count: { select: { childNodes: true } },
       },
     });
 
@@ -179,6 +216,7 @@ export async function PATCH(
       id: node.id,
       orgId: node.orgId,
       projectId: node.projectId,
+      parentNodeId: node.parentNodeId,
       title: node.title,
       description: node.description,
       type: node.type,
@@ -187,24 +225,23 @@ export async function PATCH(
       ownerName: node.owner?.name || null,
       teamId: node.teamId,
       teamName: node.team?.name || null,
-      teams: node.nodeTeams.map((nt: any) => ({ id: nt.team.id, name: nt.team.name })),
-      owners: node.nodeOwners.map((no: any) => ({ id: no.user.id, name: no.user.name })),
+      teams: node.nodeTeams.map((nt) => ({ id: nt.team.id, name: nt.team.name })),
+      owners: node.nodeOwners.map((no) => ({ id: no.user.id, name: no.user.name })),
+      childCount: node._count.childNodes,
       priority: node.priority,
       dueAt: node.dueAt?.toISOString() || null,
       createdAt: node.createdAt.toISOString(),
       updatedAt: node.updatedAt.toISOString(),
     });
   } catch (error) {
-    console.error("PATCH /api/nodes/[nodeId] error:", error);
-
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "Invalid input", details: error.flatten() }, { status: 400 });
     }
 
-    if (error instanceof Error && error.message === "Not a member of this project") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const authResponse = authOrPermissionErrorResponse(error);
+    if (authResponse) return authResponse;
 
+    console.error("PATCH /api/nodes/[nodeId] error:", error);
     return NextResponse.json({ error: "Failed to update node" }, { status: 500 });
   }
 }
@@ -255,12 +292,10 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    const authResponse = authOrPermissionErrorResponse(error);
+    if (authResponse) return authResponse;
+
     console.error("DELETE /api/nodes/[nodeId] error:", error);
-
-    if (error instanceof Error && error.message === "Not a member of this project") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
     return NextResponse.json({ error: "Failed to delete node" }, { status: 500 });
   }
 }
